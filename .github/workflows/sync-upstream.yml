@@ -1,0 +1,104 @@
+# Weekly upstream sync for the AgentForge fork.
+# See docs/project/agentforge/fork-policy.md
+#
+# 1. Fast-forward origin/main from pingdotgg/t3code main (pure mirror).
+# 2. Open a merge PR of main → forge (AgentForge trunk).
+#
+# main must stay a pure upstream mirror: any direct commit to main makes the
+# fast-forward fail loudly so we notice before the tax compounds.
+
+name: Sync upstream
+
+on:
+  schedule:
+    # Mondays 08:00 UTC
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync main and open forge PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          # Need a token that can push main and open PRs against forge.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config rerere.enabled true
+          git config rerere.autoupdate true
+
+      - name: Fast-forward main from upstream
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/pingdotgg/t3code.git 2>/dev/null || \
+            git remote set-url upstream https://github.com/pingdotgg/t3code.git
+          git fetch upstream --prune
+          git fetch origin --prune
+
+          # Refuse to rewrite main if someone committed AgentForge work there.
+          if ! git merge-base --is-ancestor origin/main upstream/main; then
+            echo "::error::origin/main has commits not in upstream/main. main must stay a pure mirror. Move those commits to forge and reset main."
+            exit 1
+          fi
+
+          git push origin "refs/remotes/upstream/main:refs/heads/main"
+          echo "origin/main fast-forwarded to $(git rev-parse upstream/main)"
+
+      - name: Open merge PR into forge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          DATE="$(date -u +%Y-%m-%d)"
+          BRANCH="sync/upstream-${DATE}"
+          UPSTREAM_SHA="$(git rev-parse upstream/main)"
+          FORGE_SHA="$(git rev-parse origin/forge)"
+
+          if git merge-base --is-ancestor "$UPSTREAM_SHA" "$FORGE_SHA"; then
+            echo "forge already contains upstream/main (${UPSTREAM_SHA}). Nothing to merge."
+            exit 0
+          fi
+
+          git checkout -B "$BRANCH" origin/forge
+
+          if git merge --no-ff --no-edit origin/main; then
+            git push -u origin "$BRANCH"
+          else
+            echo "::error::Merge conflicts when merging main into forge. Resolve the sync branch manually."
+            git merge --abort || true
+            # Still publish an empty tip branch note via a failed job; do not push conflict state.
+            exit 1
+          fi
+
+          TITLE="chore(sync): upstream ${DATE}"
+          BODY="$(cat <<EOF
+          Weekly upstream sync.
+
+          - Mirror: \`main\` ← \`pingdotgg/t3code\` (\`${UPSTREAM_SHA:0:12}\`)
+          - Trunk: merge \`main\` into \`forge\`
+
+          Per [fork-policy](docs/project/agentforge/fork-policy.md): merge, never rebase \`forge\`. Treat a red sync as a build break.
+          EOF
+          )"
+
+          if gh pr list --base forge --head "$BRANCH" --state open --json number --jq 'length' | grep -qx '0'; then
+            gh pr create --base forge --head "$BRANCH" --title "$TITLE" --body "$BODY"
+          else
+            echo "Open PR for ${BRANCH} already exists."
+          fi
