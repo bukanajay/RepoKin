@@ -102,11 +102,13 @@ Then ~~add the `./team` subpath~~ to `packages/contracts/package.json` — not a
 
 ### M1.2 Repository store — `apps/server/src/team/`
 
-| File                                                    | Responsibility                                                                                                                                                                                                            |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Services/TeamFileStore.ts` + `Layers/TeamFileStore.ts` | Read and write `.agentforge/`. Atomic writes via [`atomicWrite.ts`](../../../apps/server/src/atomicWrite.ts).                                                                                                             |
-| `Services/LocalIdentityResolver.ts` + layer             | `git config user.name` / `user.email` via [`processRunner.ts`](../../../apps/server/src/processRunner.ts), cached like [`RepositoryIdentityResolver.ts`](../../../apps/server/src/project/RepositoryIdentityResolver.ts). |
-| `TeamPaths.ts`                                          | Path construction and slug derivation. Pure.                                                                                                                                                                              |
+**Status:** landed on `forge` (2026-07-30). Not yet wired into server layers/UI.
+
+| File                                                        | Responsibility                                                                                                                                                    |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~`Services/TeamFileStore.ts` + `Layers/TeamFileStore.ts`~~ | Read and write `.agentforge/`. Atomic writes; optional git commit scoped to pathspecs under `.agentforge/`. `readRosterFromRef` uses `git show` / `ls-tree` only. |
+| ~~`Services/LocalIdentityResolver.ts` + layer~~             | `git config user.name` / `user.email` via ProcessRunner, cached per repo root.                                                                                    |
+| ~~`TeamPaths.ts`~~                                          | Path construction and slug derivation. Pure.                                                                                                                      |
 
 Behavior notes that matter:
 
