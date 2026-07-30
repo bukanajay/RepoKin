@@ -30,8 +30,15 @@ export function AuthSurfaceShell({ children }: { readonly children: ReactNode })
             />
           )}
           <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_20%,rgba(7,18,55,0.46)_100%)]" />
-          <div className="relative h-full p-5 sm:p-6">
-            <p className="text-[10px] font-semibold tracking-[0.2em] text-white/80 uppercase">
+          <div className="relative flex h-full items-end gap-2.5 p-5 sm:p-6">
+            <img
+              alt=""
+              className="size-8 rounded-lg shadow-md ring-1 ring-white/20"
+              height={32}
+              src="/agentforge-mark.png"
+              width={32}
+            />
+            <p className="pb-1 text-[10px] font-semibold tracking-[0.2em] text-white/90 uppercase">
               {APP_DISPLAY_NAME}
             </p>
           </div>

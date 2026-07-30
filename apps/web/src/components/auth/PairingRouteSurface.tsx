@@ -24,10 +24,19 @@ export function PairingPendingSurface() {
       </div>
 
       <section className="relative w-full max-w-xl rounded-2xl border border-border/80 bg-card/90 p-6 shadow-2xl shadow-black/20 backdrop-blur-md sm:p-8">
-        <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-          {APP_DISPLAY_NAME}
-        </p>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">
+        <div className="mb-4 flex items-center gap-2.5">
+          <img
+            alt=""
+            className="size-8 rounded-lg shadow-sm"
+            height={32}
+            src="/agentforge-mark.png"
+            width={32}
+          />
+          <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+            {APP_DISPLAY_NAME}
+          </p>
+        </div>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
           Pairing with this environment
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -105,10 +114,19 @@ export function PairingRouteSurface({
       </div>
 
       <section className="relative w-full max-w-xl rounded-2xl border border-border/80 bg-card/90 p-6 shadow-2xl shadow-black/20 backdrop-blur-md sm:p-8">
-        <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-          {APP_DISPLAY_NAME}
-        </p>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">
+        <div className="mb-4 flex items-center gap-2.5">
+          <img
+            alt=""
+            className="size-8 rounded-lg shadow-sm"
+            height={32}
+            src="/agentforge-mark.png"
+            width={32}
+          />
+          <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+            {APP_DISPLAY_NAME}
+          </p>
+        </div>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
           Pair with this environment
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -241,10 +259,19 @@ export function HostedPairingRouteSurface() {
       </div>
 
       <section className="relative w-full max-w-xl rounded-2xl border border-border/80 bg-card/90 p-6 shadow-2xl shadow-black/20 backdrop-blur-md sm:p-8">
-        <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
-          {APP_DISPLAY_NAME}
-        </p>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">
+        <div className="mb-4 flex items-center gap-2.5">
+          <img
+            alt=""
+            className="size-8 rounded-lg shadow-sm"
+            height={32}
+            src="/agentforge-mark.png"
+            width={32}
+          />
+          <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
+            {APP_DISPLAY_NAME}
+          </p>
+        </div>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
           {status === "paired"
             ? "Backend paired"
             : status === "error"
