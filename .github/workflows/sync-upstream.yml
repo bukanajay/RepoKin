@@ -97,8 +97,16 @@ jobs:
           EOF
           )"
 
-          if gh pr list --base forge --head "$BRANCH" --state open --json number --jq 'length' | grep -qx '0'; then
-            gh pr create --base forge --head "$BRANCH" --title "$TITLE" --body "$BODY"
-          else
+          if ! gh pr list --base forge --head "$BRANCH" --state open --json number --jq 'length' | grep -qx '0'; then
             echo "Open PR for ${BRANCH} already exists."
+            exit 0
           fi
+
+          if gh pr create --base forge --head "$BRANCH" --title "$TITLE" --body "$BODY"; then
+            exit 0
+          fi
+
+          # GITHUB_TOKEN cannot create PRs when the repo's Actions workflow
+          # permissions are "Read repository contents". Branch is already pushed.
+          echo "::error::Branch ${BRANCH} was pushed but PR creation failed. Enable Settings → Actions → General → Workflow permissions → Read and write, or open: https://github.com/${{ github.repository }}/compare/forge...${BRANCH}?expand=1"
+          exit 1

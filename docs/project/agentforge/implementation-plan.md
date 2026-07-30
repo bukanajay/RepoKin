@@ -77,31 +77,28 @@ demonstrably changes their output, with attribution.
 
 ### M1.1 Contracts — `packages/contracts/src/team.ts`
 
+**Status:** landed on `forge` (2026-07-30).
+
 New file. Follow [`t3ProjectFile.ts`](../../../packages/contracts/src/t3ProjectFile.ts)
 precisely: annotations on the encoded side so they survive into the published
 JSON Schema, trimming and validation on decode.
 
 Define:
 
-- `MemberId`, `AgentId`, `HumanId` — branded slugs, same pattern as
-  `ProviderInstanceId`.
-- `Character` — the two halves from [PRD §6.3](./prd.md#63-character-p0--the-differentiator),
-  with `characterVersion: 1`.
-- `AgentProfile`, `HumanProfile`, `TeamFile`.
-- `CompiledCharacter` — the compiler's output, consumed by adapters.
-- Team commands, events, and read-model shapes (thin in M1; they carry weight in
-  M2).
+- ~~`MemberId`, `AgentId`, `HumanId`~~ branded slugs
+- ~~`Character`~~ expressive + mechanical halves, `characterVersion: 1`
+- ~~`AgentProfile`, `HumanProfile`, `TeamFile`~~
+- ~~`CompiledCharacter`~~ compiler output for adapters
+- ~~Team commands, events, and read-model shapes~~ (thin for M1)
 
-Then add the `./team` subpath to `packages/contracts/package.json` — a 4-line
-addition, not an `index.ts` edit.
+Then ~~add the `./team` subpath~~ to `packages/contracts/package.json` — not an
+`index.ts` edit.
 
-**Two invariants to encode structurally, not by convention:**
+**Two invariants (tests in `team.test.ts`):**
 
-- A profile schema has no field that can hold a secret. Add a test that
-  round-trips a `ProviderInstanceConfig` carrying a `sensitive` environment
-  variable through profile serialization and asserts the value cannot appear.
-- Unknown fields survive a decode → encode round trip. Test it. This is what
-  lets teammates on different builds coexist.
+- Profile schema has no field that can hold a secret; provider-instance
+  sensitive env values cannot appear in profile serialization.
+- Unknown fields survive decode → encode (`onExcessProperty: "preserve"`).
 
 ### M1.2 Repository store — `apps/server/src/team/`
 
