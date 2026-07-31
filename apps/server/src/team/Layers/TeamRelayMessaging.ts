@@ -1,4 +1,4 @@
-import { CommandId, type EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@t3tools/contracts";
 import type {
   MemberId,
   TeamRosterReadModel,
@@ -120,17 +120,11 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
 
       const relayClient = yield* makeRelayClient(relayConfig);
       yield* relayClient.server.deliverTeamMessage({ payload: { envelope } });
-
-      const deliverCommandId = yield* crypto.randomUUIDv4.pipe(
-        Effect.map((uuid) => CommandId.make(`server:team-relay-deliver:${uuid}`)),
-      );
-      yield* teamEngine.dispatch({
-        type: "team.message.deliver",
-        commandId: deliverCommandId,
-        projectId: input.projectId,
-        messageId: message.messageId,
-        metadata: { actorMemberId: message.recipientId },
-      });
+      // Deliberately not marked "delivered" here: handing off to the relay
+      // only means the recipient environment *can* pick it up, not that it
+      // has. The message stays queued locally so a genuine non-delivery
+      // (recipient never came online before the TTL) surfaces as a real
+      // expiry rather than a false "delivered" (M3.4).
     }).pipe(
       Effect.catch((error) =>
         Effect.logWarning("failed to forward queued team message through relay", {

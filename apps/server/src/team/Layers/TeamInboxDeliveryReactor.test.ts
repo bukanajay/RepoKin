@@ -7,18 +7,37 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
+import { EnvironmentId } from "@t3tools/contracts";
+import { ServerEnvironment } from "../../environment/ServerEnvironment.ts";
 import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
 import { TeamCommandReceiptRepositoryLive } from "./TeamCommandReceipts.ts";
 import { TeamEngineLive } from "./TeamEngine.ts";
 import { TeamEventStoreLive } from "./TeamEventStore.ts";
 import { TeamInboxDeliveryReactor } from "../Services/TeamInboxDeliveryReactor.ts";
 import { TeamEngineService } from "../Services/TeamEngine.ts";
+import { TeamFileStore } from "../Services/TeamFileStore.ts";
 import { TeamPresenceResolver } from "../Services/TeamPresenceResolver.ts";
 import {
   TeamInboxDeliveryReactorLive,
   resolveQueuedTeamMessageDelivery,
 } from "./TeamInboxDeliveryReactor.ts";
+
+const fakeProjectionSnapshotQuery = Layer.succeed(ProjectionSnapshotQuery, {
+  getShellSnapshot: () => Effect.succeed({ projects: [], threads: [] }),
+} as unknown as ProjectionSnapshotQuery["Service"]);
+const fakeServerEnvironment = Layer.succeed(ServerEnvironment, {
+  getEnvironmentId: Effect.succeed(EnvironmentId.make("env-local")),
+} as unknown as ServerEnvironment["Service"]);
+const fakeTeamFileStore = Layer.succeed(TeamFileStore, {
+  readRoster: () => Effect.succeed({ humans: [], agents: [], warnings: [] }),
+} as unknown as TeamFileStore["Service"]);
+const fakeRosterServices = Layer.mergeAll(
+  fakeProjectionSnapshotQuery,
+  fakeServerEnvironment,
+  fakeTeamFileStore,
+);
 
 const decodeHuman = Schema.decodeUnknownSync(HumanProfile);
 const decodeAgent = Schema.decodeUnknownSync(AgentProfile);
@@ -47,6 +66,7 @@ const reactorLayer = TeamInboxDeliveryReactorLive.pipe(
   Layer.provideMerge(teamEngineLayer),
   Layer.provide(fakePresenceResolver),
   Layer.provide(fakeOrchestrationEngine),
+  Layer.provide(fakeRosterServices),
 );
 const layer = it.layer(
   Layer.mergeAll(eventInfrastructure, teamEngineLayer, reactorLayer).pipe(
@@ -66,6 +86,7 @@ const mutablePresenceReactorLayer = TeamInboxDeliveryReactorLive.pipe(
   Layer.provideMerge(teamEngineLayer),
   Layer.provide(mutablePresenceResolver),
   Layer.provide(fakeOrchestrationEngine),
+  Layer.provide(fakeRosterServices),
 );
 const mutablePresenceLayer = it.layer(
   Layer.mergeAll(eventInfrastructure, teamEngineLayer, mutablePresenceReactorLayer).pipe(
@@ -221,6 +242,107 @@ mutablePresenceLayer("TeamInboxDeliveryReactor queued retry", (it) => {
           (entry) => entry.messageId === "message-delivery-retry",
         );
         expect(message?.state).toBe("delivered");
+      }),
+  );
+});
+
+const alwaysOnlinePresenceResolver = Layer.succeed(
+  TeamPresenceResolver,
+  TeamPresenceResolver.of({
+    resolveMemberPresence: () => Effect.succeed("online"),
+  }),
+);
+const remoteAgentTeamFileStore = Layer.succeed(TeamFileStore, {
+  readRoster: () =>
+    Effect.succeed({
+      humans: [],
+      agents: [{ id: "agent_aria", homeEnvironment: "env-remote" }],
+      warnings: [],
+    }),
+} as unknown as TeamFileStore["Service"]);
+const remoteAgentProjectionSnapshotQuery = Layer.succeed(ProjectionSnapshotQuery, {
+  getShellSnapshot: () =>
+    Effect.succeed({
+      projects: [{ id: "project-team-delivery-remote", workspaceRoot: "/tmp/remote-project" }],
+      threads: [],
+    }),
+} as unknown as ProjectionSnapshotQuery["Service"]);
+const remoteAgentRosterServices = Layer.mergeAll(
+  remoteAgentProjectionSnapshotQuery,
+  fakeServerEnvironment,
+  remoteAgentTeamFileStore,
+);
+const remoteAgentReactorLayer = TeamInboxDeliveryReactorLive.pipe(
+  Layer.provideMerge(teamEngineLayer),
+  Layer.provide(alwaysOnlinePresenceResolver),
+  Layer.provide(fakeOrchestrationEngine),
+  Layer.provide(remoteAgentRosterServices),
+);
+const remoteAgentLayer = it.layer(
+  Layer.mergeAll(eventInfrastructure, teamEngineLayer, remoteAgentReactorLayer).pipe(
+    Layer.provideMerge(SqlitePersistenceMemory),
+    Layer.provideMerge(NodeServices.layer),
+  ),
+);
+
+remoteAgentLayer("TeamInboxDeliveryReactor remote-home agent", (it) => {
+  it.effect(
+    "never delivers locally for a roster agent whose home environment is elsewhere, even when presence reports online",
+    () =>
+      Effect.gen(function* () {
+        const engine = yield* TeamEngineService;
+        const delivery = yield* TeamInboxDeliveryReactor;
+        const projectId = ProjectId.make("project-team-delivery-remote");
+
+        for (const command of [
+          decodeCommand({
+            commandId: CommandId.make("cmd-human-upsert-delivery-remote"),
+            projectId,
+            type: "team.member.upsert",
+            profile: decodeHuman({
+              schemaVersion: 1,
+              id: "human_julius",
+              type: "human",
+              displayName: "Julius",
+              gitEmails: ["julius@example.com"],
+            }),
+          }),
+          decodeCommand({
+            commandId: CommandId.make("cmd-agent-upsert-delivery-remote"),
+            projectId,
+            type: "team.member.upsert",
+            profile: decodeAgent({
+              schemaVersion: 1,
+              id: "agent_aria",
+              type: "agent",
+              name: "Aria",
+              owner: "human_julius",
+              character: { characterVersion: 1 },
+              createdAt: "2026-07-30T12:00:00.000Z",
+              updatedAt: "2026-07-30T12:00:00.000Z",
+            }),
+          }),
+          decodeCommand({
+            commandId: CommandId.make("cmd-message-send-delivery-remote"),
+            projectId,
+            type: "team.message.send",
+            messageId: "message-delivery-remote",
+            senderId: "human_julius",
+            recipientId: "agent_aria",
+            body: "This should only be forwarded through the relay, never delivered locally.",
+          }),
+        ]) {
+          yield* engine.dispatch(command);
+        }
+
+        yield* delivery.enqueueProject(projectId);
+        yield* delivery.drain;
+
+        const readModel = yield* engine.getReadModel;
+        const message = readModel.projects[0]?.inbox.find(
+          (entry) => entry.messageId === "message-delivery-remote",
+        );
+        expect(message?.state).toBe("queued");
       }),
   );
 });

@@ -376,12 +376,13 @@ environment-authenticated; `deliverTeamMessage` rejects envelopes whose
 claimed sender doesn't match the caller's authenticated environment.
 `TeamRelayMessaging.ts` forwards a locally queued message through the relay
 when its recipient is a roster agent whose `homeEnvironment` differs from
-this environment, marking it delivered locally once handed off; a 10s poll
-loop verifies inbound envelopes against the owning project's roster and
-dispatches accepted ones into the local team engine, dropping unverifiable
-ones without surfacing them. **Scoped for now:** only agent recipients route
-remotely — a human can have several linked environments and this environment
-has no cross-machine presence yet, so human recipients stay local until M3.3.
+this environment (M3.4 changed the local delivery bookkeeping around this —
+see below); a 10s poll loop verifies inbound envelopes against the owning
+project's roster and dispatches accepted ones into the local team engine,
+dropping unverifiable ones without surfacing them. **Scoped for now:** only
+agent recipients route remotely — a human can have several linked
+environments and this environment has no cross-machine presence yet, so
+human recipients stay local until M3.3.
 
 - Reuse the environment keypair from
   [`environmentKeys.ts`](../../../apps/server/src/cloud/environmentKeys.ts) and
@@ -415,6 +416,29 @@ Fan out through the existing relay aggregate
 the environment id so the UI can show `Aria (on julius-mbp)`.
 
 ### M3.4 Offline queue and borrowed agents
+
+**Status:** landed locally (2026-07-31). The relay's `relay_team_messages`
+queue is swept on the existing 5-minute cron alongside the agent-activity
+prune. `TeamRelayMessaging` no longer marks a forwarded message "delivered"
+on relay hand-off — handing off only means the recipient environment _can_
+pick it up, not that it has, so the message stays queued locally until
+either it's genuinely delivered or its own TTL expires (`team.message.expire`),
+giving honest visible expiry instead of an optimistic false-positive. Fixing
+that surfaced a real bug: since M3.3 made `TeamPresenceResolver` resolve a
+non-null presence for remote-home agents, `TeamInboxDeliveryReactor` would
+otherwise have started marking their messages "delivered" locally the moment
+the relay reported them online — wrong, since only `TeamRelayMessaging` can
+actually get a message to a remote agent. It now checks the recipient's
+roster `homeEnvironment` and only ever "wait"s or "expire"s a remote-home
+agent's message itself.
+
+Borrowed-agent visibility ships without any new state: M1.4's local
+agent-to-provider binding is already an explicit, environment-local opt-in,
+so a roster agent whose `homeEnvironment` differs from here _and_ that has a
+local binding here is being run from this machine right now. Settings ->
+AgentForge shows a "Borrowed here" badge for exactly that case — no new
+relay endpoint, no new settings key, no locking, no enforcement; unbinding
+the agent (already-existing UI) is the "way out."
 
 - Queue with TTL and visible expiry.
 - Home vs borrowed semantics with explicit local opt-in and permanent labeling.

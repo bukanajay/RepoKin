@@ -315,6 +315,22 @@ export function AgentForgeSettingsPanel() {
       ),
     [serverProviders, settings],
   );
+  // A roster agent whose home environment is elsewhere but that has a local
+  // runtime binding here is being run from this machine right now — the bind
+  // action itself is the explicit opt-in (M1.4), so no separate "borrow"
+  // setting is needed. No locking: this only makes the situation visible.
+  const locallyBoundAgentIds = useMemo(() => {
+    const bound = new Set<string>();
+    for (const agent of roster.data?.agents ?? []) {
+      const hasBinding = providerEntries.some((entry) =>
+        providerInstanceHasAgentBinding(settings.providerInstances, entry.instanceId, agent.id),
+      );
+      if (hasBinding) {
+        bound.add(agent.id);
+      }
+    }
+    return bound;
+  }, [providerEntries, roster.data?.agents, settings.providerInstances]);
   const currentBoundProviderEntry = useMemo(() => {
     if (normalizedAgentId.length === 0) {
       return null;
@@ -792,6 +808,10 @@ export function AgentForgeSettingsPanel() {
                     ? (remoteEnvironmentLabelByEnvironmentId.get(agent.homeEnvironment ?? "") ??
                       agent.homeEnvironment)
                     : null;
+                  const isBorrowedHere =
+                    agent.homeEnvironment !== undefined &&
+                    agent.homeEnvironment !== environmentId &&
+                    locallyBoundAgentIds.has(agent.id);
                   return (
                     <button
                       key={agent.id}
@@ -820,6 +840,11 @@ export function AgentForgeSettingsPanel() {
                             {presenceLabel(presenceState)}
                             {remoteEnvironmentLabel ? ` (on ${remoteEnvironmentLabel})` : null}
                           </span>
+                          {isBorrowedHere ? (
+                            <span className="inline-flex shrink-0 items-center rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[11px] leading-none text-amber-600 dark:text-amber-400">
+                              Borrowed here
+                            </span>
+                          ) : null}
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {agent.id} · {agent.character.runtimeMode ?? "approval-required"}

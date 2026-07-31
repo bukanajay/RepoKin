@@ -217,7 +217,7 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(ProviderCommandReactorLive),
   Layer.provideMerge(CheckpointReactorLive),
   Layer.provideMerge(ThreadDeletionReactorLive),
-  Layer.provideMerge(TeamInboxDeliveryReactorLive),
+  Layer.provideMerge(TeamInboxDeliveryReactorLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
   Layer.provideMerge(TeamRelayMessagingLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
   Layer.provideMerge(RuntimeReceiptBusLive),

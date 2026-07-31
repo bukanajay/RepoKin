@@ -7,8 +7,11 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
 
+import { ServerEnvironment } from "../../environment/ServerEnvironment.ts";
 import { OrchestrationEngineService } from "../../orchestration/Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { TeamEngineService } from "../Services/TeamEngine.ts";
+import { TeamFileStore } from "../Services/TeamFileStore.ts";
 import {
   TeamInboxDeliveryReactor,
   type TeamInboxDeliveryReactorShape,
@@ -32,6 +35,35 @@ function isAgentMember(memberId: string): boolean {
   return memberId.startsWith("agent_") || memberId.startsWith("agent-");
 }
 
+/**
+ * The local inbox can only *deliver* a message to an agent actually running
+ * in this environment. A roster agent whose home environment is elsewhere
+ * has no local presence to trust for that decision even though M3.3 lets
+ * TeamPresenceResolver report one (via the relay) — this reactor must still
+ * only ever "wait" or "expire" such a message; TeamRelayMessaging is the only
+ * path that forwards it to where it can actually be acted on.
+ */
+export function resolveIsRemoteHomeAgent(input: {
+  readonly recipientId: string;
+  readonly roster: {
+    readonly agents: ReadonlyArray<{
+      readonly id: string;
+      readonly homeEnvironment?: string | undefined;
+    }>;
+  };
+  readonly localEnvironmentId: string;
+}): boolean {
+  if (!isAgentMember(input.recipientId)) {
+    return false;
+  }
+  const agent = input.roster.agents.find((candidate) => candidate.id === input.recipientId);
+  return (
+    agent !== undefined &&
+    agent.homeEnvironment !== undefined &&
+    agent.homeEnvironment !== input.localEnvironmentId
+  );
+}
+
 function shouldRetryInboxDeliveryForOrchestrationEvent(eventType: string): boolean {
   switch (eventType) {
     case "thread.session-set":
@@ -49,6 +81,9 @@ const makeTeamInboxDeliveryReactor = Effect.gen(function* () {
   const teamEngine = yield* TeamEngineService;
   const presenceResolver = yield* TeamPresenceResolver;
   const orchestrationEngine = yield* OrchestrationEngineService;
+  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
+  const teamFileStore = yield* TeamFileStore;
+  const serverEnvironment = yield* ServerEnvironment;
   const crypto = yield* Crypto.Crypto;
 
   const serverCommandId = (tag: string) =>
@@ -71,9 +106,23 @@ const makeTeamInboxDeliveryReactor = Effect.gen(function* () {
               memberId: message.recipientId,
               nowMs,
             });
+      const localEnvironmentId = yield* serverEnvironment.getEnvironmentId;
+      const shellSnapshot = yield* projectionSnapshotQuery.getShellSnapshot();
+      const workspaceRoot = shellSnapshot.projects.find(
+        (candidate) => candidate.id === project.projectId,
+      )?.workspaceRoot;
+      const roster =
+        workspaceRoot === undefined ? null : yield* teamFileStore.readRoster(workspaceRoot);
+      const isRemoteHomeAgent =
+        roster !== null &&
+        resolveIsRemoteHomeAgent({
+          recipientId: message.recipientId,
+          roster,
+          localEnvironmentId,
+        });
       const decision = resolveQueuedTeamMessageDelivery({
         message,
-        recipientPresence,
+        recipientPresence: isRemoteHomeAgent ? "offline" : recipientPresence,
         nowMs,
       });
 
