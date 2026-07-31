@@ -4,6 +4,7 @@ import {
   EventId,
   type ModelSelection,
   type OrchestrationEvent,
+  type OrchestrationThread,
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
@@ -12,6 +13,7 @@ import {
   type RuntimeMode,
   type TurnId,
 } from "@t3tools/contracts";
+import { AgentId } from "@t3tools/contracts/team";
 import { isTemporaryWorktreeBranch, WORKTREE_BRANCH_PREFIX } from "@t3tools/shared/git";
 import * as Cache from "effect/Cache";
 import * as Cause from "effect/Cause";
@@ -32,6 +34,11 @@ import type { ProviderServiceError } from "../../provider/Errors.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
+import * as CharacterCompilerLayer from "../../team/Layers/CharacterCompiler.ts";
+import * as TeamFileStoreLayer from "../../team/Layers/TeamFileStore.ts";
+import { evaluateCharacterTrust } from "../../team/CharacterTrust.ts";
+import { CharacterCompiler } from "../../team/Services/CharacterCompiler.ts";
+import { TeamFileStore } from "../../team/Services/TeamFileStore.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
@@ -195,6 +202,8 @@ const make = Effect.gen(function* () {
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const providerService = yield* ProviderService;
   const providerRegistry = yield* ProviderRegistry;
+  const characterCompiler = yield* CharacterCompiler;
+  const teamFileStore = yield* TeamFileStore;
   const gitWorkflow = yield* GitWorkflowService;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const textGeneration = yield* TextGeneration;
@@ -325,6 +334,96 @@ const make = Effect.gen(function* () {
       .pipe(Effect.map(Option.getOrUndefined));
   });
 
+  const compileAgentforgeCharacterInstructions = Effect.fnUntraced(function* (input: {
+    readonly agentforgeAgentId: string | undefined;
+    readonly thread: OrchestrationThread;
+    readonly modelSelection: ModelSelection;
+  }) {
+    if (input.agentforgeAgentId === undefined) {
+      return undefined;
+    }
+    const project = yield* resolveProject(input.thread.projectId);
+    const effectiveCwd = resolveThreadWorkspaceCwd({
+      thread: input.thread,
+      projects: project ? [project] : [],
+    });
+    if (!effectiveCwd) {
+      return yield* new ProviderAdapterRequestError({
+        provider: providerErrorLabel(String(input.modelSelection.instanceId)),
+        method: "thread.turn.start",
+        detail: `AgentForge agent '${input.agentforgeAgentId}' cannot be resolved because thread '${input.thread.id}' has no workspace path.`,
+      });
+    }
+
+    const instanceInfo = yield* providerService
+      .getInstanceInfo(input.modelSelection.instanceId)
+      .pipe(
+        Effect.mapError(
+          () =>
+            new ProviderAdapterRequestError({
+              provider: providerErrorLabel(String(input.modelSelection.instanceId)),
+              method: "thread.turn.start",
+              detail: `AgentForge agent '${input.agentforgeAgentId}' references unknown provider instance '${input.modelSelection.instanceId}'.`,
+            }),
+        ),
+      );
+    const roster = yield* teamFileStore.readRoster(effectiveCwd);
+    const agentId = AgentId.make(input.agentforgeAgentId);
+    const agent = roster.agents.find((candidate) => candidate.id === agentId);
+    if (agent === undefined) {
+      return yield* new ProviderAdapterRequestError({
+        provider: providerErrorLabel(String(input.modelSelection.instanceId)),
+        method: "thread.turn.start",
+        detail: `AgentForge agent '${input.agentforgeAgentId}' was not found in '${effectiveCwd}'.`,
+      });
+    }
+    const compiled = yield* characterCompiler.compile(agent).pipe(
+      Effect.mapError(
+        () =>
+          new ProviderAdapterRequestError({
+            provider: providerErrorLabel(String(input.modelSelection.instanceId)),
+            method: "thread.turn.start",
+            detail: `Failed to compile AgentForge agent '${input.agentforgeAgentId}'.`,
+          }),
+      ),
+    );
+    const settings = yield* serverSettingsService.getSettings.pipe(
+      Effect.mapError(
+        () =>
+          new ProviderAdapterRequestError({
+            provider: providerErrorLabel(String(input.modelSelection.instanceId)),
+            method: "thread.turn.start",
+            detail: `Failed to read AgentForge trust settings for agent '${input.agentforgeAgentId}'.`,
+          }),
+      ),
+    );
+    const trustStatus = evaluateCharacterTrust({
+      trustedMechanics: settings.agentforge.trustedMechanics,
+      projectKey: effectiveCwd,
+      agentId,
+      mechanicalHash: compiled.mechanicalHash,
+    });
+    if (trustStatus !== "trusted") {
+      return yield* new ProviderAdapterRequestError({
+        provider: providerErrorLabel(String(input.modelSelection.instanceId)),
+        method: "thread.turn.start",
+        detail:
+          trustStatus === "changed"
+            ? `AgentForge agent '${input.agentforgeAgentId}' has changed mechanical settings. Preview and trust the new mechanics before starting a turn.`
+            : `AgentForge agent '${input.agentforgeAgentId}' has untrusted mechanical settings. Preview and trust the mechanics before starting a turn.`,
+      });
+    }
+    const instructions = compiled.instructionsByDriver[instanceInfo.driverKind];
+    if (!instructions) {
+      return yield* new ProviderAdapterRequestError({
+        provider: providerErrorLabel(String(input.modelSelection.instanceId)),
+        method: "thread.turn.start",
+        detail: `AgentForge agent '${input.agentforgeAgentId}' has no instructions for provider driver '${instanceInfo.driverKind}'.`,
+      });
+    }
+    return instructions;
+  });
+
   const rejectStartedThreadModelChangeIfRequired = Effect.fnUntraced(function* (input: {
     readonly threadId: ThreadId;
     readonly currentModelSelection: ModelSelection;
@@ -363,6 +462,7 @@ const make = Effect.gen(function* () {
     options?: {
       readonly modelSelection?: ModelSelection;
       readonly pendingTurnStart?: boolean;
+      readonly agentforgeCharacterInstructions?: string;
     },
   ) {
     const thread = yield* resolveThread(threadId);
@@ -399,7 +499,7 @@ const make = Effect.gen(function* () {
       activeSession !== undefined &&
       activeSession.providerInstanceId !== undefined
         ? activeSession.providerInstanceId
-        : thread.modelSelection.instanceId;
+        : (thread.session?.providerInstanceId ?? thread.modelSelection.instanceId);
     const desiredModelSelection = requestedModelSelection ?? thread.modelSelection;
     const desiredInstanceId = desiredModelSelection.instanceId;
     const currentInfo = yield* providerService.getInstanceInfo(currentInstanceId).pipe(
@@ -508,6 +608,9 @@ const make = Effect.gen(function* () {
         modelSelection: desiredModelSelection,
         ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
         runtimeMode: desiredRuntimeMode,
+        ...(options?.agentforgeCharacterInstructions !== undefined
+          ? { agentforgeCharacterInstructions: options.agentforgeCharacterInstructions }
+          : {}),
       });
 
     const bindSessionToThread = (session: ProviderSession) =>
@@ -617,6 +720,7 @@ const make = Effect.gen(function* () {
     readonly attachments?: ReadonlyArray<ChatAttachment>;
     readonly modelSelection?: ModelSelection;
     readonly interactionMode?: "default" | "plan";
+    readonly agentforgeAgentId?: string;
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThread(input.threadId);
@@ -625,9 +729,17 @@ const make = Effect.gen(function* () {
         new Error(`Thread '${input.threadId}' was not found in read model.`),
       );
     }
+    const requestedModelSelection =
+      input.modelSelection ?? threadModelSelections.get(input.threadId) ?? thread.modelSelection;
+    const agentforgeCharacterInstructions = yield* compileAgentforgeCharacterInstructions({
+      agentforgeAgentId: input.agentforgeAgentId,
+      thread,
+      modelSelection: requestedModelSelection,
+    });
     yield* ensureSessionForThread(input.threadId, input.createdAt, {
       ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
       pendingTurnStart: true,
+      ...(agentforgeCharacterInstructions !== undefined ? { agentforgeCharacterInstructions } : {}),
     });
     if (input.modelSelection !== undefined) {
       threadModelSelections.set(input.threadId, input.modelSelection);
@@ -650,8 +762,6 @@ const make = Effect.gen(function* () {
             })
           : (yield* providerService.getCapabilities(activeSession.providerInstanceId))
               .sessionModelSwitch;
-    const requestedModelSelection =
-      input.modelSelection ?? threadModelSelections.get(input.threadId) ?? thread.modelSelection;
     const modelForTurn =
       sessionModelSwitch === "unsupported" && input.modelSelection === undefined
         ? activeSession?.model !== undefined
@@ -668,6 +778,7 @@ const make = Effect.gen(function* () {
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
+      ...(agentforgeCharacterInstructions !== undefined ? { agentforgeCharacterInstructions } : {}),
     };
   });
 
@@ -876,6 +987,9 @@ const make = Effect.gen(function* () {
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
       ...(event.payload.modelSelection !== undefined
         ? { modelSelection: event.payload.modelSelection }
+        : {}),
+      ...(event.payload.agentforgeAgentId !== undefined
+        ? { agentforgeAgentId: event.payload.agentforgeAgentId }
         : {}),
       interactionMode: event.payload.interactionMode,
       createdAt: event.payload.createdAt,
@@ -1118,4 +1232,7 @@ const make = Effect.gen(function* () {
   } satisfies ProviderCommandReactorShape;
 });
 
-export const ProviderCommandReactorLive = Layer.effect(ProviderCommandReactor, make);
+export const ProviderCommandReactorLive = Layer.effect(ProviderCommandReactor, make).pipe(
+  Layer.provide(CharacterCompilerLayer.layer),
+  Layer.provide(TeamFileStoreLayer.layer),
+);

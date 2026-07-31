@@ -1411,6 +1411,9 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
             ? { model: input.modelSelection.model }
             : {}),
           ...(serviceTier ? { serviceTier } : {}),
+          ...(input.agentforgeCharacterInstructions
+            ? { agentforgeCharacterInstructions: input.agentforgeCharacterInstructions }
+            : {}),
           ...(mcpSession
             ? {
                 environment: {
@@ -1557,6 +1560,9 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           : {}),
         ...(serviceTier ? { serviceTier } : {}),
         ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
+        ...(input.agentforgeCharacterInstructions
+          ? { agentforgeCharacterInstructions: input.agentforgeCharacterInstructions }
+          : {}),
         ...(codexAttachments.length > 0 ? { attachments: codexAttachments } : {}),
       })
       .pipe(Effect.mapError((cause) => mapCodexRuntimeError(input.threadId, "turn/start", cause)));

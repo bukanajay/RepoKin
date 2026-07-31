@@ -291,6 +291,19 @@ describe("buildCodexDeveloperInstructions", () => {
     NodeAssert.match(instructions, /as gpt 5\.3 codex with high effort reasoning effort/);
     NodeAssert.doesNotMatch(instructions, /<runtime_info>[^<]*\n/);
   });
+
+  it("appends AgentForge character instructions before runtime info", () => {
+    const instructions = buildCodexDeveloperInstructions("default", {
+      model: "gpt-5.3-codex",
+      reasoningEffort: "medium",
+      agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+    });
+
+    NodeAssert.match(instructions, /<agentforge_character>Aria<\/agentforge_character>/);
+    NodeAssert.ok(
+      instructions.indexOf("<agentforge_character>") < instructions.indexOf("<runtime_info>"),
+    );
+  });
 });
 
 describe("T3 browser developer instructions", () => {

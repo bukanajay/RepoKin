@@ -898,6 +898,38 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     }).pipe(Effect.provide(adapterLayer));
   });
 
+  it.effect("sends AgentForge character instructions through the OpenCode system field", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-agentforge-character");
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "approval-required",
+        modelSelection: createModelSelection(
+          ProviderInstanceId.make("opencode"),
+          "anthropic/claude-sonnet-4-5",
+        ),
+      });
+
+      yield* adapter.sendTurn({
+        threadId,
+        input: "Fix it",
+        agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+      });
+
+      NodeAssert.deepEqual(runtimeMock.state.promptCalls.at(-1), {
+        sessionID: "http://127.0.0.1:9999/session",
+        model: {
+          providerID: "anthropic",
+          modelID: "claude-sonnet-4-5",
+        },
+        system: "<agentforge_character>Aria</agentforge_character>",
+        parts: [{ type: "text", text: "Fix it" }],
+      });
+    }),
+  );
+
   it.effect("rejects sendTurn model selections for another instance id", () => {
     const instanceId = ProviderInstanceId.make("opencode_zen");
     const adapterLayer = Layer.effect(

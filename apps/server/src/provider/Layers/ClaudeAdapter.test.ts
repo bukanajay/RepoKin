@@ -3432,6 +3432,29 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
+  it.effect("appends AgentForge character instructions to the Claude Code preset", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "approval-required",
+        agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+      });
+
+      assert.deepEqual(harness.getLastCreateQueryInput()?.options.systemPrompt, {
+        type: "preset",
+        preset: "claude_code",
+        append: "<agentforge_character>Aria</agentforge_character>",
+      });
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
   it.effect("captures ExitPlanMode as a proposed plan and denies auto-exit", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {

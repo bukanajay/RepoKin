@@ -29,6 +29,7 @@ import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { normalizeAgentforgeCharacterInstructions } from "../../team/ProviderCharacterInstructions.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import {
   ProviderAdapterProcessError,
@@ -1481,12 +1482,16 @@ export function makeOpenCodeAdapter(
         });
       }
 
+      const agentforgeCharacterInstructions = normalizeAgentforgeCharacterInstructions(
+        input.agentforgeCharacterInstructions,
+      );
       yield* runOpenCodeSdk("session.promptAsync", () =>
         context.client.session.promptAsync({
           sessionID: context.openCodeSessionId,
           model: parsedModel,
           ...(context.activeAgent ? { agent: context.activeAgent } : {}),
           ...(context.activeVariant ? { variant: context.activeVariant } : {}),
+          ...(agentforgeCharacterInstructions ? { system: agentforgeCharacterInstructions } : {}),
           parts: [...(text ? [{ type: "text" as const, text }] : []), ...fileParts],
         }),
       ).pipe(

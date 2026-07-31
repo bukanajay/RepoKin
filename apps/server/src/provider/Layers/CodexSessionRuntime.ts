@@ -104,6 +104,7 @@ export interface CodexSessionRuntimeOptions {
   readonly runtimeMode: RuntimeMode;
   readonly model?: string;
   readonly serviceTier?: CodexServiceTier | undefined;
+  readonly agentforgeCharacterInstructions?: string;
   readonly resumeCursor?: CodexResumeCursor;
   readonly appServerArgs?: ReadonlyArray<string>;
 }
@@ -118,6 +119,7 @@ export interface CodexSessionRuntimeSendTurnInput {
   readonly serviceTier?: CodexServiceTier | undefined;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort | undefined;
   readonly interactionMode?: ProviderInteractionMode;
+  readonly agentforgeCharacterInstructions?: string;
 }
 
 export interface CodexThreadTurnSnapshot {
@@ -339,6 +341,7 @@ function buildCodexCollaborationMode(input: {
   readonly interactionMode?: ProviderInteractionMode;
   readonly model?: string;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort;
+  readonly agentforgeCharacterInstructions?: string;
 }): EffectCodexSchema.V2TurnStartParams__CollaborationMode | undefined {
   if (input.interactionMode === undefined) {
     return undefined;
@@ -353,6 +356,9 @@ function buildCodexCollaborationMode(input: {
       developer_instructions: buildCodexDeveloperInstructions(input.interactionMode, {
         model,
         reasoningEffort,
+        ...(input.agentforgeCharacterInstructions
+          ? { agentforgeCharacterInstructions: input.agentforgeCharacterInstructions }
+          : {}),
       }),
     },
   };
@@ -370,6 +376,7 @@ export function buildTurnStartParams(input: {
   readonly serviceTier?: CodexServiceTier;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort;
   readonly interactionMode?: ProviderInteractionMode;
+  readonly agentforgeCharacterInstructions?: string;
 }): Effect.Effect<
   CodexTurnStartParamsWithCollaborationMode,
   CodexErrors.CodexAppServerProtocolParseError
@@ -390,6 +397,9 @@ export function buildTurnStartParams(input: {
     ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
     ...(input.model ? { model: input.model } : {}),
     ...(input.effort ? { effort: input.effort } : {}),
+    ...(input.agentforgeCharacterInstructions
+      ? { agentforgeCharacterInstructions: input.agentforgeCharacterInstructions }
+      : {}),
   });
 
   return decodeCodexTurnStartParamsWithCollaborationMode({
@@ -1301,6 +1311,13 @@ export const makeCodexSessionRuntime = (
             ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
             ...(input.effort ? { effort: input.effort } : {}),
             ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
+            ...((input.agentforgeCharacterInstructions ?? options.agentforgeCharacterInstructions)
+              ? {
+                  agentforgeCharacterInstructions:
+                    input.agentforgeCharacterInstructions ??
+                    options.agentforgeCharacterInstructions,
+                }
+              : {}),
           });
           const rawResponse = yield* client.raw.request("turn/start", params);
           const response = yield* decodeV2TurnStartResponse(rawResponse).pipe(

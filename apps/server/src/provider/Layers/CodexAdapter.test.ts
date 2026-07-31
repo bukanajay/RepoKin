@@ -360,6 +360,38 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
     }),
   );
 
+  it.effect("passes AgentForge character instructions into the session runtime", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CodexAdapter;
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("sess-agentforge-character"),
+        runtimeMode: "approval-required",
+        agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+      });
+      const runtime = sessionRuntimeFactory.lastRuntime;
+      NodeAssert.equal(
+        runtime?.options.agentforgeCharacterInstructions,
+        "<agentforge_character>Aria</agentforge_character>",
+      );
+
+      runtime?.sendTurnImpl.mockClear();
+      yield* Effect.ignore(
+        adapter.sendTurn({
+          threadId: asThreadId("sess-agentforge-character"),
+          input: "hello",
+          agentforgeCharacterInstructions: "<agentforge_character>Override</agentforge_character>",
+          attachments: [],
+        }),
+      );
+
+      NodeAssert.equal(
+        runtime?.sendTurnImpl.mock.calls[0]?.[0].agentforgeCharacterInstructions,
+        "<agentforge_character>Override</agentforge_character>",
+      );
+    }),
+  );
+
   it.effect("passes configured launch args into the session runtime", () => {
     const runtimeFactory = makeRuntimeFactory();
     const layer = Layer.effect(

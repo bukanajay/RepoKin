@@ -28,6 +28,7 @@ import {
 import { ServerConfig } from "../../config.ts";
 import { grokPromptSettlementBelongsToContext, makeGrokAdapter } from "./GrokAdapter.ts";
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
+const encodeUnknownJsonString = Schema.encodeEffect(Schema.UnknownFromJsonString);
 
 const __dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
 const mockAgentPath = NodePath.join(__dirname, "../../../scripts/acp-mock-agent.ts");
@@ -183,6 +184,46 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
       if (delta?.type === "content.delta") {
         assert.equal(delta.payload.delta, "hello from mock");
       }
+
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("prepends AgentForge character instructions to ACP prompt text", () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("grok-agentforge-character-probe");
+      const tempDir = yield* Effect.promise(() =>
+        NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "grok-acp-")),
+      );
+      const requestLogPath = NodePath.join(tempDir, "requests.ndjson");
+      const wrapperPath = yield* Effect.promise(() =>
+        makeMockGrokWrapper({
+          T3_ACP_REQUEST_LOG_PATH: requestLogPath,
+        }),
+      );
+      const adapter = yield* makeTestAdapter(wrapperPath);
+
+      yield* adapter.startSession({
+        threadId,
+        provider: ProviderDriverKind.make("grok"),
+        cwd: process.cwd(),
+        runtimeMode: "approval-required",
+      });
+
+      yield* adapter.sendTurn({
+        threadId,
+        input: "fix the navbar",
+        attachments: [],
+        agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+      });
+
+      const requests = yield* Effect.promise(() => readJsonLines(requestLogPath));
+      const promptRequest = requests.find((entry) => entry.method === "session/prompt");
+      assert.isDefined(promptRequest);
+      const promptPayload = yield* encodeUnknownJsonString(promptRequest?.params);
+      assert.include(promptPayload, "<agentforge_character>Aria</agentforge_character>");
+      assert.include(promptPayload, "<user_prompt>");
+      assert.include(promptPayload, "fix the navbar");
 
       yield* adapter.stopSession(threadId);
     }),

@@ -55,6 +55,7 @@ import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
+import { normalizeAgentforgeCharacterInstructions } from "../../team/ProviderCharacterInstructions.ts";
 const isModelSelection = Schema.is(ModelSelection);
 
 /**
@@ -123,6 +124,7 @@ function toRuntimePayloadFromSession(
   session: ProviderSession,
   extra?: {
     readonly modelSelection?: unknown;
+    readonly agentforgeCharacterInstructions?: string;
     readonly lastRuntimeEvent?: string;
     readonly lastRuntimeEventAt?: string;
   },
@@ -133,6 +135,9 @@ function toRuntimePayloadFromSession(
     activeTurnId: session.activeTurnId ?? null,
     lastError: session.lastError ?? null,
     ...(extra?.modelSelection !== undefined ? { modelSelection: extra.modelSelection } : {}),
+    ...(extra?.agentforgeCharacterInstructions !== undefined
+      ? { agentforgeCharacterInstructions: extra.agentforgeCharacterInstructions }
+      : {}),
     ...(extra?.lastRuntimeEvent !== undefined ? { lastRuntimeEvent: extra.lastRuntimeEvent } : {}),
     ...(extra?.lastRuntimeEventAt !== undefined
       ? { lastRuntimeEventAt: extra.lastRuntimeEventAt }
@@ -160,6 +165,19 @@ function readPersistedCwd(
   if (typeof rawCwd !== "string") return undefined;
   const trimmed = rawCwd.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readPersistedAgentforgeCharacterInstructions(
+  runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
+): string | undefined {
+  if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
+    return undefined;
+  }
+  const raw =
+    "agentforgeCharacterInstructions" in runtimePayload
+      ? runtimePayload.agentforgeCharacterInstructions
+      : undefined;
+  return typeof raw === "string" ? normalizeAgentforgeCharacterInstructions(raw) : undefined;
 }
 
 const dieOnMissingBindingInstanceId = (
@@ -261,6 +279,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     threadId: ThreadId,
     extra?: {
       readonly modelSelection?: unknown;
+      readonly agentforgeCharacterInstructions?: string;
       readonly lastRuntimeEvent?: string;
       readonly lastRuntimeEventAt?: string;
     },
@@ -396,6 +415,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 
       const persistedCwd = readPersistedCwd(input.binding.runtimePayload);
       const persistedModelSelection = readPersistedModelSelection(input.binding.runtimePayload);
+      const persistedAgentforgeCharacterInstructions = readPersistedAgentforgeCharacterInstructions(
+        input.binding.runtimePayload,
+      );
 
       yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
       const resumed = yield* adapter
@@ -405,6 +427,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           providerInstanceId: bindingInstanceId,
           ...(persistedCwd ? { cwd: persistedCwd } : {}),
           ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
+          ...(persistedAgentforgeCharacterInstructions
+            ? { agentforgeCharacterInstructions: persistedAgentforgeCharacterInstructions }
+            : {}),
           ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
           runtimeMode: input.binding.runtimeMode ?? "full-access",
         })
@@ -460,6 +485,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         instanceId,
         threadId: input.threadId,
         isActive: true,
+        binding,
       } as const;
     }
 
@@ -469,6 +495,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         instanceId,
         threadId: input.threadId,
         isActive: false,
+        binding,
       } as const;
     }
 
@@ -481,6 +508,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       instanceId,
       threadId: input.threadId,
       isActive: true,
+      binding,
     } as const;
   });
 
@@ -618,6 +646,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         });
         yield* upsertSessionBinding(sessionWithInstance, threadId, {
           modelSelection: input.modelSelection,
+          ...(input.agentforgeCharacterInstructions
+            ? { agentforgeCharacterInstructions: input.agentforgeCharacterInstructions }
+            : {}),
         });
         yield* analytics.record("provider.session.started", {
           provider: sessionWithInstance.provider,
@@ -685,7 +716,15 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       // rather than issuing a new one: sessions that go a long time between
       // browser tool calls used to lose the toolkit outright.
       yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
-      const turn = yield* routed.adapter.sendTurn(input);
+      const effectiveAgentforgeCharacterInstructions =
+        input.agentforgeCharacterInstructions ??
+        readPersistedAgentforgeCharacterInstructions(routed.binding.runtimePayload);
+      const turn = yield* routed.adapter.sendTurn({
+        ...input,
+        ...(effectiveAgentforgeCharacterInstructions
+          ? { agentforgeCharacterInstructions: effectiveAgentforgeCharacterInstructions }
+          : {}),
+      });
       yield* directory.upsert({
         threadId: input.threadId,
         provider: routed.adapter.provider,
@@ -694,6 +733,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         ...(turn.resumeCursor !== undefined ? { resumeCursor: turn.resumeCursor } : {}),
         runtimePayload: {
           ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
+          ...(effectiveAgentforgeCharacterInstructions
+            ? { agentforgeCharacterInstructions: effectiveAgentforgeCharacterInstructions }
+            : {}),
           activeTurnId: turn.turnId,
           lastRuntimeEvent: "provider.sendTurn",
           lastRuntimeEventAt: yield* nowIso,

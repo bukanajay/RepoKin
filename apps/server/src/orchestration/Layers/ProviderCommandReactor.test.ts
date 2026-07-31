@@ -61,6 +61,8 @@ import * as Clock from "effect/Clock";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import * as GitWorkflowService from "../../git/GitWorkflowService.ts";
+import { compileCharacter } from "../../team/CharacterCompiler.ts";
+import { AgentId, HumanId, type AgentProfile } from "@t3tools/contracts/team";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
 const asApprovalRequestId = (value: string): ApprovalRequestId => ApprovalRequestId.make(value);
@@ -143,9 +145,11 @@ describe("ProviderCommandReactor", () => {
 
   async function createHarness(input?: {
     readonly baseDir?: string;
+    readonly workspaceRoot?: string;
     readonly threadModelSelection?: ModelSelection;
     readonly sessionModelSwitch?: "unsupported" | "in-session";
     readonly requiresNewThreadForModelChange?: boolean;
+    readonly serverSettings?: Parameters<typeof ServerSettingsService.layerTest>[0];
     readonly startSessionEffect?: (
       session: ProviderSession,
     ) => Effect.Effect<ProviderSession, ProviderAdapterRequestError>;
@@ -156,6 +160,7 @@ describe("ProviderCommandReactor", () => {
     createdBaseDirs.add(baseDir);
     const { stateDir } = deriveServerPathsSync(baseDir, undefined);
     createdStateDirs.add(stateDir);
+    const workspaceRoot = input?.workspaceRoot ?? "/tmp/provider-project";
     const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
     let nextSessionIndex = 1;
     const runtimeSessions: Array<ProviderSession> = [];
@@ -378,7 +383,7 @@ describe("ProviderCommandReactor", () => {
           generateThreadTitle,
         }),
       ),
-      Layer.provideMerge(ServerSettingsService.layerTest()),
+      Layer.provideMerge(ServerSettingsService.layerTest(input?.serverSettings)),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), baseDir)),
       Layer.provideMerge(NodeServices.layer),
     );
@@ -397,7 +402,7 @@ describe("ProviderCommandReactor", () => {
         commandId: CommandId.make("cmd-project-create"),
         projectId: asProjectId("project-1"),
         title: "Provider Project",
-        workspaceRoot: "/tmp/provider-project",
+        workspaceRoot,
         defaultModelSelection: modelSelection,
         createdAt: now,
       }),
@@ -433,7 +438,39 @@ describe("ProviderCommandReactor", () => {
       generateThreadTitle,
       runtimeSessions,
       stateDir,
+      workspaceRoot,
       drain,
+    };
+  }
+
+  function writeAgentforgeTestProfile(workspaceRoot: string): {
+    readonly profile: AgentProfile;
+    readonly trustedHash: string;
+  } {
+    const agentsDir = NodePath.join(workspaceRoot, ".agentforge", "agents");
+    NodeFS.mkdirSync(agentsDir, { recursive: true });
+    const profile: AgentProfile = {
+      schemaVersion: 1,
+      id: AgentId.make("agent_aria"),
+      type: "agent",
+      name: "Aria",
+      owner: HumanId.make("human_local"),
+      character: {
+        characterVersion: 1,
+        persona: "Direct reviewer focused on correctness and small changes.",
+        expertise: ["TypeScript", "Effect"],
+        conventions: ["Lead with risks before summaries."],
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+      },
+    };
+    NodeFS.writeFileSync(
+      NodePath.join(agentsDir, "agent_aria.json"),
+      JSON.stringify(profile, null, 2),
+    );
+    return {
+      profile,
+      trustedHash: compileCharacter({ agent: profile }).mechanicalHash,
     };
   }
 
@@ -475,6 +512,97 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.status).toBe("starting");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
+  });
+
+  it("injects selected AgentForge character instructions into provider start and turn", async () => {
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-reactor-"));
+    const workspaceRoot = NodePath.join(baseDir, "workspace");
+    const { trustedHash } = writeAgentforgeTestProfile(workspaceRoot);
+    const harness = await createHarness({
+      baseDir,
+      workspaceRoot,
+      serverSettings: {
+        agentforge: {
+          trustedMechanics: {
+            [workspaceRoot]: {
+              agent_aria: trustedHash,
+            },
+          },
+        },
+      },
+    });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-agentforge"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-agentforge"),
+          role: "user",
+          text: "review this patch",
+          attachments: [],
+        },
+        agentforgeAgentId: "agent_aria",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.startSession.mock.calls.length === 1);
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    const startInput = harness.startSession.mock.calls[0]?.[1] as
+      | { agentforgeCharacterInstructions?: string }
+      | undefined;
+    const sendInput = harness.sendTurn.mock.calls[0]?.[0] as
+      | { agentforgeCharacterInstructions?: string }
+      | undefined;
+
+    expect(startInput?.agentforgeCharacterInstructions).toContain("Aria");
+    expect(startInput?.agentforgeCharacterInstructions).toContain("Direct reviewer");
+    expect(sendInput?.agentforgeCharacterInstructions).toContain("Aria");
+    expect(sendInput?.agentforgeCharacterInstructions).toContain("Lead with risks");
+  });
+
+  it("rejects selected AgentForge character mechanics before trust", async () => {
+    const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-reactor-"));
+    const workspaceRoot = NodePath.join(baseDir, "workspace");
+    writeAgentforgeTestProfile(workspaceRoot);
+    const harness = await createHarness({ baseDir, workspaceRoot });
+    const now = "2026-01-01T00:00:00.000Z";
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-agentforge-untrusted"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-agentforge-untrusted"),
+          role: "user",
+          text: "review this patch",
+          attachments: [],
+        },
+        agentforgeAgentId: "agent_aria",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(async () => {
+      const readModel = await harness.readModel();
+      return (
+        readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"))?.session
+          ?.status === "error"
+      );
+    });
+    expect(harness.startSession).not.toHaveBeenCalled();
+    expect(harness.sendTurn).not.toHaveBeenCalled();
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+    expect(thread?.session?.lastError).toContain("untrusted mechanical settings");
   });
 
   effectIt.effect("projects starting before a slow provider session finishes", () =>

@@ -30,6 +30,7 @@ import { ServerSettingsService } from "../../serverSettings.ts";
 import type { CursorAdapterShape } from "../Services/CursorAdapter.ts";
 import { makeCursorAdapter } from "./CursorAdapter.ts";
 const decodeCursorSettings = Schema.decodeSync(CursorSettings);
+const encodeUnknownJsonString = Schema.encodeEffect(Schema.UnknownFromJsonString);
 
 // Test-local service tag so the rest of the file can keep using `yield* CursorAdapter`.
 class CursorAdapter extends Context.Service<CursorAdapter, CursorAdapterShape>()(
@@ -479,6 +480,47 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
             (modeRequest?.params as Record<string, unknown> | undefined)?.value,
         ),
       );
+    }),
+  );
+
+  it.effect("prepends AgentForge character instructions to ACP prompt text", () =>
+    Effect.gen(function* () {
+      const adapter = yield* CursorAdapter;
+      const serverSettings = yield* ServerSettingsService;
+      const threadId = ThreadId.make("cursor-agentforge-character-probe");
+      const tempDir = yield* Effect.promise(() =>
+        NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "cursor-acp-")),
+      );
+      const requestLogPath = NodePath.join(tempDir, "requests.ndjson");
+      const argvLogPath = NodePath.join(tempDir, "argv.txt");
+      yield* Effect.promise(() => NodeFSP.writeFile(requestLogPath, "", "utf8"));
+      const wrapperPath = yield* Effect.promise(() =>
+        makeProbeWrapper(requestLogPath, argvLogPath),
+      );
+      yield* serverSettings.updateSettings({ providers: { cursor: { binaryPath: wrapperPath } } });
+
+      yield* adapter.startSession({
+        threadId,
+        provider: ProviderDriverKind.make("cursor"),
+        cwd: process.cwd(),
+        runtimeMode: "approval-required",
+      });
+
+      yield* adapter.sendTurn({
+        threadId,
+        input: "fix the navbar",
+        attachments: [],
+        agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+      });
+      yield* adapter.stopSession(threadId);
+
+      const requests = yield* Effect.promise(() => readJsonLines(requestLogPath));
+      const promptRequest = requests.find((entry) => entry.method === "session/prompt");
+      assert.isDefined(promptRequest);
+      const promptPayload = yield* encodeUnknownJsonString(promptRequest?.params);
+      assert.include(promptPayload, "<agentforge_character>Aria</agentforge_character>");
+      assert.include(promptPayload, "<user_prompt>");
+      assert.include(promptPayload, "fix the navbar");
     }),
   );
 

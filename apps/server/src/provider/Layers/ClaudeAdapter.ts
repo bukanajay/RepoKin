@@ -70,6 +70,7 @@ import * as Stream from "effect/Stream";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { normalizeAgentforgeCharacterInstructions } from "../../team/ProviderCharacterInstructions.ts";
 import { resolveClaudeSdkExecutablePath } from "../Drivers/ClaudeExecutable.ts";
 import { makeClaudeEnvironment } from "../Drivers/ClaudeHome.ts";
 import {
@@ -3521,11 +3522,18 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(ultracode ? { ultracode: true } : {}),
       };
       const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
+      const agentforgeCharacterInstructions = normalizeAgentforgeCharacterInstructions(
+        input.agentforgeCharacterInstructions,
+      );
       const queryOptions: ClaudeQueryOptions = {
         ...(input.cwd ? { cwd: input.cwd } : {}),
         ...(apiModelId ? { model: apiModelId } : {}),
         pathToClaudeCodeExecutable: claudeBinaryPath,
-        systemPrompt: { type: "preset", preset: "claude_code" },
+        systemPrompt: {
+          type: "preset",
+          preset: "claude_code",
+          ...(agentforgeCharacterInstructions ? { append: agentforgeCharacterInstructions } : {}),
+        },
         settingSources: [...CLAUDE_SETTING_SOURCES],
         // `ultracode` is a Claude Code setting, not an API effort level. It is
         // normalized to `xhigh` above and paired with `settings.ultracode`.
