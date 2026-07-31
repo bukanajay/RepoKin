@@ -3,6 +3,7 @@ import type {
   RelayAgentActivityState,
   RelayAgentAwarenessPreferences,
 } from "@t3tools/contracts/relay";
+import type { TeamSignedMessageEnvelope } from "@t3tools/contracts/team";
 import {
   boolean,
   index,
@@ -172,6 +173,22 @@ export const relayDeliveryAttempts = pgTable(
       table.createdAt,
     ),
     uniqueIndex("idx_relay_delivery_attempts_source_job").on(table.sourceJobId),
+  ],
+);
+
+export const relayTeamMessages = pgTable(
+  "relay_team_messages",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    recipientEnvironmentId: varchar("recipient_environment_id", { length: 191 }).notNull(),
+    senderEnvironmentId: varchar("sender_environment_id", { length: 191 }).notNull(),
+    envelopeJson: jsonb("envelope_json").notNull().$type<TeamSignedMessageEnvelope>(),
+    expiresAt: varchar("expires_at", { length: 64 }).notNull(),
+    createdAt: varchar("created_at", { length: 64 }).notNull(),
+  },
+  (table) => [
+    index("idx_relay_team_messages_recipient").on(table.recipientEnvironmentId, table.createdAt),
+    index("idx_relay_team_messages_expires_at").on(table.expiresAt),
   ],
 );
 

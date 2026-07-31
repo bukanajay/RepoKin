@@ -10,6 +10,7 @@ import * as OpenApi from "effect/unstable/httpapi/OpenApi";
 
 import { EnvironmentId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
+import { TeamSignedMessageEnvelope } from "./team.ts";
 
 export const RelayAgentAwarenessPlatform = Schema.Literal("ios");
 export type RelayAgentAwarenessPlatform = typeof RelayAgentAwarenessPlatform.Type;
@@ -537,6 +538,8 @@ const RelayAgentActivityPublishErrors = [
   RelayInternalError,
 ] as const;
 
+const RelayTeamMessageErrors = [RelayAuthInvalidError, RelayInternalError] as const;
+
 export class RelayClientPrincipal extends Context.Service<
   RelayClientPrincipal,
   {
@@ -841,6 +844,25 @@ export const RelayPublishResponse = Schema.Struct({
 });
 export type RelayPublishResponse = typeof RelayPublishResponse.Type;
 
+export const RelayTeamMessageDeliveryRequest = Schema.Struct({
+  envelope: TeamSignedMessageEnvelope,
+}).annotate({
+  description:
+    "Opaque signed team message envelope. The relay transports it; receiving environments verify it against the roster.",
+});
+export type RelayTeamMessageDeliveryRequest = typeof RelayTeamMessageDeliveryRequest.Type;
+
+export const RelayTeamMessageDeliveryResponse = Schema.Struct({
+  ok: Schema.Boolean,
+  queued: Schema.Boolean,
+});
+export type RelayTeamMessageDeliveryResponse = typeof RelayTeamMessageDeliveryResponse.Type;
+
+export const RelayTeamMessagePollResponse = Schema.Struct({
+  envelopes: Schema.Array(TeamSignedMessageEnvelope),
+});
+export type RelayTeamMessagePollResponse = typeof RelayTeamMessagePollResponse.Type;
+
 export const RelayHealthResponse = Schema.Struct({
   ok: Schema.Boolean,
   service: Schema.Literal("relay"),
@@ -1048,8 +1070,22 @@ export const RelayServerGroup = HttpApiGroup.make("server")
         error: RelayAgentActivityPublishErrors,
       },
     ).annotate(OpenApi.Summary, "Publish agent activity"),
+    HttpApiEndpoint.post("deliverTeamMessage", "/v1/team/messages", {
+      payload: RelayTeamMessageDeliveryRequest,
+      success: RelayTeamMessageDeliveryResponse,
+      error: RelayTeamMessageErrors,
+    }).annotate(OpenApi.Summary, "Deliver a signed team message envelope"),
+    HttpApiEndpoint.get("pollTeamMessages", "/v1/team/messages", {
+      success: RelayTeamMessagePollResponse,
+      error: RelayTeamMessageErrors,
+    })
+      .annotate(OpenApi.Summary, "Poll and drain signed team messages queued for this environment")
+      .annotate(
+        OpenApi.Description,
+        "Returns every envelope currently queued for the caller's environment and removes them from the queue. At-least-once delivery is not guaranteed across concurrent pollers from the same environment.",
+      ),
   )
-  .annotate(OpenApi.Description, "Environment-authenticated activity publication.")
+  .annotate(OpenApi.Description, "Environment-authenticated activity and team message transport.")
   .middleware(RelayEnvironmentAuth);
 
 export const RelayApi = HttpApi.make("RelayApi")
