@@ -8,8 +8,14 @@ import type {
   TurnId,
 } from "@t3tools/contracts";
 import { ProviderInstanceId } from "@t3tools/contracts";
+import type { MemberId } from "@t3tools/contracts/team";
 
-import { projectThreadAwareness } from "./agentAwareness.ts";
+import {
+  TEAM_PRESENCE_STALENESS_MS,
+  projectAgentThreadPresence,
+  projectThreadAwareness,
+  resolveMemberPresenceState,
+} from "./agentAwareness.ts";
 
 const NOW = "2026-05-22T12:00:00.000Z";
 
@@ -39,6 +45,7 @@ function thread(
     updatedAt: NOW,
     hasPendingApprovals: false,
     hasPendingUserInput: false,
+    agentforgeAgentId: null,
     ...overrides,
   };
 }
@@ -95,6 +102,7 @@ describe("projectThreadAwareness", () => {
 
     expect(state).toMatchObject({
       phase: "running",
+      agentforgeAgentId: null,
       headline: "Agent is working",
       detail: "Codex is active.",
       modelTitle: "gpt-5.4",
@@ -176,5 +184,48 @@ describe("projectThreadAwareness", () => {
       headline: "Agent failed",
       detail: "Provider process exited.",
     });
+  });
+
+  it("maps attributed thread awareness to local member presence", () => {
+    const state = projectThreadAwareness({
+      environmentId: "env-1" as EnvironmentId,
+      project,
+      thread: thread({
+        agentforgeAgentId: "agent_aria",
+        session: {
+          threadId: "thread-1" as ThreadId,
+          status: "running",
+          providerName: "Codex",
+          runtimeMode: "approval-required",
+          activeTurnId: "turn-1" as TurnId,
+          lastError: null,
+          updatedAt: NOW,
+        },
+      }),
+    });
+
+    expect(state?.agentforgeAgentId).toBe("agent_aria");
+    expect(
+      projectAgentThreadPresence({
+        memberId: "agent_aria" as MemberId,
+        awareness: state!,
+        nowMs: Date.parse(NOW) + 1_000,
+      }),
+    ).toMatchObject({
+      memberId: "agent_aria",
+      state: "busy",
+      threadId: "thread-1",
+      headline: "Agent is working",
+    });
+  });
+
+  it("marks stale member presence offline after the horizon", () => {
+    expect(
+      resolveMemberPresenceState({
+        phase: "running",
+        updatedAt: NOW,
+        nowMs: Date.parse(NOW) + TEAM_PRESENCE_STALENESS_MS + 1,
+      }),
+    ).toBe("offline");
   });
 });

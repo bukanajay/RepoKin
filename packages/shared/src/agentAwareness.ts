@@ -4,6 +4,7 @@ import type {
   OrchestrationThreadShell,
   ThreadId,
 } from "@t3tools/contracts";
+import type { MemberId, MemberPresenceState } from "@t3tools/contracts/team";
 
 export type AgentAwarenessPhase =
   | "starting"
@@ -17,6 +18,7 @@ export type AgentAwarenessPhase =
 export interface AgentAwarenessState {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
+  readonly agentforgeAgentId: string | null;
   readonly projectTitle: string;
   readonly threadTitle: string;
   readonly phase: AgentAwarenessPhase;
@@ -40,7 +42,21 @@ export interface ProjectThreadAwarenessInput {
     | "updatedAt"
     | "hasPendingApprovals"
     | "hasPendingUserInput"
+    | "agentforgeAgentId"
   >;
+}
+
+export const TEAM_PRESENCE_STALENESS_MS = 30_000;
+
+export interface TeamMemberPresence {
+  readonly memberId: MemberId;
+  readonly environmentId: EnvironmentId;
+  readonly state: MemberPresenceState;
+  readonly updatedAt: string;
+  readonly staleAfterMs: number;
+  readonly threadId: ThreadId | null;
+  readonly headline: string;
+  readonly detail?: string;
 }
 
 export function buildAgentAwarenessDeepLink(input: {
@@ -63,6 +79,7 @@ export function projectThreadAwareness(
   return {
     environmentId,
     threadId: thread.id,
+    agentforgeAgentId: thread.agentforgeAgentId ?? null,
     projectTitle: project.title,
     threadTitle: thread.title,
     phase,
@@ -71,6 +88,64 @@ export function projectThreadAwareness(
     modelTitle: thread.modelSelection.model,
     updatedAt: thread.updatedAt,
     deepLink: buildAgentAwarenessDeepLink({ environmentId, threadId: thread.id }),
+  };
+}
+
+export function memberPresenceStateForAwarenessPhase(
+  phase: AgentAwarenessPhase,
+): Exclude<MemberPresenceState, "offline"> {
+  switch (phase) {
+    case "starting":
+    case "running":
+    case "waiting_for_approval":
+    case "waiting_for_input":
+      return "busy";
+    case "completed":
+      return "online";
+    case "failed":
+    case "stale":
+      return "away";
+  }
+}
+
+export function resolveMemberPresenceState(input: {
+  readonly phase: AgentAwarenessPhase;
+  readonly updatedAt: string;
+  readonly nowMs: number;
+  readonly staleAfterMs?: number;
+}): MemberPresenceState {
+  const staleAfterMs = input.staleAfterMs ?? TEAM_PRESENCE_STALENESS_MS;
+  const updatedAtMs = Date.parse(input.updatedAt);
+  if (!Number.isFinite(updatedAtMs) || input.nowMs - updatedAtMs > staleAfterMs) {
+    return "offline";
+  }
+  return memberPresenceStateForAwarenessPhase(input.phase);
+}
+
+export function projectAgentThreadPresence(input: {
+  readonly memberId: MemberId;
+  readonly awareness: AgentAwarenessState;
+  readonly nowMs: number;
+  readonly staleAfterMs?: number;
+}): TeamMemberPresence {
+  const staleAfterMs = input.staleAfterMs ?? TEAM_PRESENCE_STALENESS_MS;
+  const state = resolveMemberPresenceState({
+    phase: input.awareness.phase,
+    updatedAt: input.awareness.updatedAt,
+    nowMs: input.nowMs,
+    staleAfterMs,
+  });
+  return {
+    memberId: input.memberId,
+    environmentId: input.awareness.environmentId,
+    state,
+    updatedAt: input.awareness.updatedAt,
+    staleAfterMs,
+    threadId: state === "offline" ? null : input.awareness.threadId,
+    headline: state === "offline" ? "Offline" : input.awareness.headline,
+    ...(state === "offline" || input.awareness.detail === undefined
+      ? {}
+      : { detail: input.awareness.detail }),
   };
 }
 
