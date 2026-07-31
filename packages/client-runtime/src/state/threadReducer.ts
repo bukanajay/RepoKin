@@ -63,6 +63,7 @@ export function applyThreadDetailEvent(
           id: event.payload.threadId,
           projectId: event.payload.projectId,
           title: event.payload.title,
+          agentforgeAgentId: null,
           modelSelection: event.payload.modelSelection,
           runtimeMode: event.payload.runtimeMode,
           interactionMode: event.payload.interactionMode,
@@ -194,6 +195,9 @@ export function applyThreadDetailEvent(
           ...thread,
           ...(event.payload.modelSelection !== undefined
             ? { modelSelection: event.payload.modelSelection }
+            : {}),
+          ...(event.payload.agentforgeAgentId !== undefined
+            ? { agentforgeAgentId: event.payload.agentforgeAgentId }
             : {}),
           runtimeMode: event.payload.runtimeMode,
           interactionMode: event.payload.interactionMode,

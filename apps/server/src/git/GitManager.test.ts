@@ -584,6 +584,7 @@ function runStackedAction(
     action: "commit" | "push" | "create_pr" | "commit_push" | "commit_push_pr";
     actionId?: string;
     commitMessage?: string;
+    agentforgeAgentId?: string;
     featureBranch?: boolean;
     filePaths?: readonly string[];
   },
@@ -1744,6 +1745,29 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
           Effect.map((result) => result.stdout.trim()),
         ),
       ).toContain("- details from user");
+    }),
+  );
+
+  it.effect("adds AgentForge attribution trailer to commits", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      NodeFS.writeFileSync(NodePath.join(repoDir, "README.md"), "hello\nagentforge\n");
+
+      const { manager } = yield* makeManager();
+      const result = yield* runStackedAction(manager, {
+        cwd: repoDir,
+        action: "commit",
+        commitMessage: "feat: agent-owned change\n\n- details from user",
+        agentforgeAgentId: "agent_aria",
+      });
+
+      expect(result.commit.status).toBe("created");
+      expect(
+        yield* runGit(repoDir, ["log", "-1", "--pretty=%b"]).pipe(
+          Effect.map((logResult) => logResult.stdout.trim()),
+        ),
+      ).toContain("AgentForge-Agent: agent_aria");
     }),
   );
 

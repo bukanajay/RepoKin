@@ -8,6 +8,7 @@ import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
 import type { ScopedThreadRef, TurnId } from "@t3tools/contracts";
 import {
   ArrowRightIcon,
+  BotIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -213,6 +214,9 @@ export default function DiffPanel({
   });
   const activeThreadId = routeThreadRef?.threadId ?? null;
   const activeThread = useThread(routeThreadRef);
+  const activeAgentForgeAgentLabel = activeThread?.agentforgeAgentId
+    ? `@${activeThread.agentforgeAgentId}`
+    : null;
   const activeProjectId = activeThread?.projectId ?? null;
   const activeProject = useProject(
     activeThread && activeProjectId
@@ -591,6 +595,12 @@ export default function DiffPanel({
                       onClick={() => selectTurn(summary.turnId)}
                     >
                       <span>Turn {turnCount}</span>
+                      {activeAgentForgeAgentLabel ? (
+                        <span className="ml-2 inline-flex max-w-24 items-center gap-1 truncate text-[10px] text-muted-foreground">
+                          <BotIcon className="size-3 shrink-0" />
+                          <span className="truncate">{activeAgentForgeAgentLabel}</span>
+                        </span>
+                      ) : null}
                       <span className="ml-auto text-xs tabular-nums text-muted-foreground">
                         {formatShortTimestamp(summary.completedAt, settings.timestampFormat)}
                       </span>
@@ -601,6 +611,21 @@ export default function DiffPanel({
             </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
+        {activeAgentForgeAgentLabel ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span className="inline-flex max-w-32 shrink-0 items-center gap-1 rounded-sm border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
+                  <BotIcon className="size-3" />
+                  <span className="min-w-0 truncate">{activeAgentForgeAgentLabel}</span>
+                </span>
+              }
+            />
+            <TooltipPopup side="top">
+              Turn diffs attributed to {activeAgentForgeAgentLabel}
+            </TooltipPopup>
+          </Tooltip>
+        ) : null}
         {selectedTurnId === null && selectedGitScope === "branch" && selectedGitSource?.baseRef && (
           <div
             className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden text-xs text-muted-foreground"

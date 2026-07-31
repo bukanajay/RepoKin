@@ -11,6 +11,7 @@ describe("ChangedFilesCard", () => {
         turnId={TurnId.make("turn-1")}
         files={[{ path: "README.md", kind: "modified", additions: 2, deletions: 1 }]}
         expanded
+        agentForgeAgentLabel={null}
         showCompactPreview={false}
         allDirectoriesExpanded
         resolvedTheme="light"
@@ -48,6 +49,7 @@ describe("ChangedFilesCard", () => {
           { path: "README.md", kind: "modified", additions: 3, deletions: 0 },
         ]}
         expanded={false}
+        agentForgeAgentLabel={null}
         showCompactPreview
         allDirectoriesExpanded={false}
         resolvedTheme="light"
@@ -76,6 +78,7 @@ describe("ChangedFilesCard", () => {
         turnId={TurnId.make("turn-1")}
         files={[{ path: "apps/web/src/App.tsx", kind: "modified", additions: 120, deletions: 20 }]}
         expanded={false}
+        agentForgeAgentLabel="@agent_aria"
         showCompactPreview={false}
         allDirectoriesExpanded={false}
         resolvedTheme="light"
@@ -86,6 +89,7 @@ describe("ChangedFilesCard", () => {
     );
 
     expect(markup).toContain('data-changed-files-state="collapsed"');
+    expect(markup).toContain("@agent_aria");
     expect(markup).toContain("1 changed file");
     expect(markup).not.toContain("Show all");
     expect(markup).not.toContain("App.tsx");
