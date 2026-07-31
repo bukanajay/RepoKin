@@ -15,7 +15,17 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
-import { EnvironmentId, IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import {
+  CommandId,
+  EnvironmentId,
+  EventId,
+  IsoDateTime,
+  MessageId,
+  NonNegativeInt,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
 import {
   DEFAULT_PROVIDER_INTERACTION_MODE,
   ProviderInteractionMode,
@@ -476,6 +486,61 @@ export const CompiledCharacter = Schema.Struct({
 });
 export type CompiledCharacter = typeof CompiledCharacter.Type;
 
+export const TeamInstructionPreviewInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  agentId: AgentId,
+  driver: ProviderDriverKind,
+}).annotate({
+  description: "Preview the provider-specific instruction text compiled for one AgentForge agent.",
+});
+export type TeamInstructionPreviewInput = typeof TeamInstructionPreviewInput.Type;
+
+export const TeamInstructionPreviewResult = Schema.Struct({
+  agentId: AgentId,
+  characterVersion: CharacterVersion,
+  driver: ProviderDriverKind,
+  instructions: TrimmedNonEmptyString,
+  mechanics: CompiledCharacterMechanics,
+  mechanicalHash: TrimmedNonEmptyString,
+}).annotate({
+  description:
+    "Provider-specific AgentForge instruction preview plus the mechanical settings/hash for trust UI.",
+});
+export type TeamInstructionPreviewResult = typeof TeamInstructionPreviewResult.Type;
+
+export class TeamInstructionPreviewError extends Schema.TaggedErrorClass<TeamInstructionPreviewError>()(
+  "TeamInstructionPreviewError",
+  {
+    reason: Schema.Literals([
+      "roster-read-failed",
+      "agent-not-found",
+      "driver-unsupported",
+      "compile-failed",
+    ]),
+    cwd: Schema.String,
+    agentId: AgentId,
+    driver: ProviderDriverKind,
+    message: Schema.String,
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
+) {}
+
+export const TeamRosterReadInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+}).annotate({
+  description: "Read the AgentForge roster from one working-tree repository.",
+});
+export type TeamRosterReadInput = typeof TeamRosterReadInput.Type;
+
+export class TeamRosterReadError extends Schema.TaggedErrorClass<TeamRosterReadError>()(
+  "TeamRosterReadError",
+  {
+    cwd: Schema.String,
+    message: Schema.String,
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
+) {}
+
 // ---------------------------------------------------------------------------
 // Thin team domain shapes (M1 read models / M2 commands) — schema only
 // ---------------------------------------------------------------------------
@@ -503,13 +568,225 @@ export const TeamRosterReadModel = Schema.Struct({
 });
 export type TeamRosterReadModel = typeof TeamRosterReadModel.Type;
 
-/** Presence states for M2+; defined early so the UI can soft-depend. */
+export const TeamProfileWriteResult = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  committed: Schema.Boolean,
+}).annotate({
+  description: "Result of writing one AgentForge profile file.",
+});
+export type TeamProfileWriteResult = typeof TeamProfileWriteResult.Type;
+
+export const TeamAgentUpsertInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  profile: AgentProfile,
+  /**
+   * UI writes default to local-only. Committed roster publishing becomes an
+   * explicit M1.7/M3 action instead of a surprise side effect.
+   */
+  commit: Schema.optionalKey(Schema.Boolean),
+}).annotate({
+  description: "Create or update one agent profile in the selected repository's .agentforge tree.",
+});
+export type TeamAgentUpsertInput = typeof TeamAgentUpsertInput.Type;
+
+export const TeamAgentUpsertResult = Schema.Struct({
+  write: TeamProfileWriteResult,
+  roster: TeamRosterReadModel,
+}).annotate({
+  description: "Profile write metadata plus the refreshed AgentForge roster.",
+});
+export type TeamAgentUpsertResult = typeof TeamAgentUpsertResult.Type;
+
+export class TeamAgentUpsertError extends Schema.TaggedErrorClass<TeamAgentUpsertError>()(
+  "TeamAgentUpsertError",
+  {
+    reason: Schema.Literals(["write-failed", "roster-read-failed"]),
+    cwd: Schema.String,
+    agentId: AgentId,
+    message: Schema.String,
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
+) {}
+
+export const TeamFileUpdateInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  team: TeamFile,
+  commit: Schema.optionalKey(Schema.Boolean),
+}).annotate({
+  description: "Create or update the selected repository's .agentforge/team.json file.",
+});
+export type TeamFileUpdateInput = typeof TeamFileUpdateInput.Type;
+
+export const TeamFileUpdateResult = Schema.Struct({
+  write: TeamProfileWriteResult,
+  roster: TeamRosterReadModel,
+}).annotate({
+  description: "Team file write metadata plus the refreshed AgentForge roster.",
+});
+export type TeamFileUpdateResult = typeof TeamFileUpdateResult.Type;
+
+export class TeamFileUpdateError extends Schema.TaggedErrorClass<TeamFileUpdateError>()(
+  "TeamFileUpdateError",
+  {
+    reason: Schema.Literals(["write-failed", "roster-read-failed"]),
+    cwd: Schema.String,
+    message: Schema.String,
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
+) {}
+
+export const TeamRosterSyncInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+}).annotate({
+  description: "Fetch and read the explicitly configured AgentForge team remote roster.",
+});
+export type TeamRosterSyncInput = typeof TeamRosterSyncInput.Type;
+
+export const TeamRosterSyncResult = Schema.Struct({
+  remote: TrimmedNonEmptyString,
+  branch: TrimmedNonEmptyString,
+  ref: TrimmedNonEmptyString,
+  roster: TeamRosterReadModel,
+}).annotate({
+  description: "Fetched remote roster details plus the decoded AgentForge roster.",
+});
+export type TeamRosterSyncResult = typeof TeamRosterSyncResult.Type;
+
+export class TeamRosterSyncError extends Schema.TaggedErrorClass<TeamRosterSyncError>()(
+  "TeamRosterSyncError",
+  {
+    reason: Schema.Literals([
+      "team-remote-missing",
+      "default-branch-unresolved",
+      "fetch-failed",
+      "roster-read-failed",
+    ]),
+    cwd: Schema.String,
+    remote: Schema.optionalKey(Schema.String),
+    branch: Schema.optionalKey(Schema.String),
+    message: Schema.String,
+    cause: Schema.optionalKey(Schema.Defect()),
+  },
+) {}
+
+const TeamSignedJwtRegisteredClaims = {
+  iss: TrimmedNonEmptyString,
+  aud: TrimmedNonEmptyString,
+  sub: TrimmedNonEmptyString,
+  jti: TrimmedNonEmptyString,
+  iat: Schema.Int,
+  exp: Schema.Int,
+} as const;
+
+export const TeamSignedMessagePayload = Schema.Struct({
+  projectId: ProjectId,
+  messageId: MessageId,
+  senderId: MemberId,
+  senderEnvironmentId: EnvironmentId,
+  recipientId: MemberId,
+  recipientEnvironmentId: EnvironmentId,
+  body: trimmedNonEmpty({
+    description: "Direct message body carried over the signed team transport.",
+  }),
+  threadId: Schema.optionalKey(ThreadId),
+  sentAt: IsoDateTime,
+  expiresAt: Schema.optionalKey(IsoDateTime),
+}).annotate({
+  description: "Environment-to-environment team message covered by an environment signature.",
+});
+export type TeamSignedMessagePayload = typeof TeamSignedMessagePayload.Type;
+
+export const TeamSignedMessageProofPayload = Schema.Struct({
+  ...TeamSignedJwtRegisteredClaims,
+  senderEnvironmentId: EnvironmentId,
+  recipientEnvironmentId: EnvironmentId,
+  message: TeamSignedMessagePayload,
+}).annotate({
+  description: "JWT payload signed by the sender environment for a team message.",
+});
+export type TeamSignedMessageProofPayload = typeof TeamSignedMessageProofPayload.Type;
+
+export const TeamSignedMessageEnvelope = Schema.Struct({
+  payload: TeamSignedMessagePayload,
+  proof: TrimmedNonEmptyString,
+}).annotate({
+  description: "Relay-transported signed team message envelope.",
+});
+export type TeamSignedMessageEnvelope = typeof TeamSignedMessageEnvelope.Type;
+
+// ---------------------------------------------------------------------------
+// M2 local team domain — event-sourced, environment-local coordination.
+// ---------------------------------------------------------------------------
+
+/** Presence states for M2+; never committed to Git. */
 export const MemberPresenceState = Schema.Literals(["online", "busy", "away", "offline"]).annotate({
   description: "Presence state for a member in an environment. Never committed to Git.",
 });
 export type MemberPresenceState = typeof MemberPresenceState.Type;
 
+export const TeamMessageDeliveryState = Schema.Literals([
+  "queued",
+  "delivered",
+  "read",
+  "expired",
+]).annotate({
+  description: "Environment-local delivery state for a direct team message.",
+});
+export type TeamMessageDeliveryState = typeof TeamMessageDeliveryState.Type;
+
+export const TeamRequestState = Schema.Literals([
+  "open",
+  "accepted",
+  "declined",
+  "expired",
+]).annotate({
+  description: "Environment-local lifecycle state for a team request.",
+});
+export type TeamRequestState = typeof TeamRequestState.Type;
+
+export const TeamRequestResponse = Schema.Literals(["accepted", "declined"]).annotate({
+  description: "Explicit human or agent response to a team request.",
+});
+export type TeamRequestResponse = typeof TeamRequestResponse.Type;
+
+export const TeamRequestKind = Schema.Literals(["handoff", "review"]).annotate({
+  description: "Structured request types supported by the local M2 inbox.",
+});
+export type TeamRequestKind = typeof TeamRequestKind.Type;
+
+export const TeamActivityKind = Schema.Literals([
+  "member.upserted",
+  "thread.assigned",
+  "message.queued",
+  "message.delivered",
+  "message.read",
+  "message.expired",
+  "request.created",
+  "request.responded",
+]).annotate({
+  description: "Timeline-visible activity emitted by the local team domain.",
+});
+export type TeamActivityKind = typeof TeamActivityKind.Type;
+
+export const TeamCommandMetadata = preserveUnknownFields(
+  Schema.Struct({
+    actorMemberId: Schema.optionalKey(MemberId),
+    environmentId: Schema.optionalKey(EnvironmentId),
+  }).annotate({
+    description: "Environment-local metadata for a team command.",
+  }),
+);
+export type TeamCommandMetadata = typeof TeamCommandMetadata.Type;
+
+export const TeamCommandBase = Schema.Struct({
+  commandId: CommandId,
+  projectId: ProjectId,
+  metadata: Schema.optionalKey(TeamCommandMetadata),
+});
+export type TeamCommandBase = typeof TeamCommandBase.Type;
+
 export const TeamMemberUpsertCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
   type: Schema.Literal("team.member.upsert"),
   profile: MemberProfile,
 }).annotate({
@@ -518,36 +795,397 @@ export const TeamMemberUpsertCommand = Schema.Struct({
 export type TeamMemberUpsertCommand = typeof TeamMemberUpsertCommand.Type;
 
 export const TeamAgentAssignCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
   type: Schema.Literal("team.agent.assign"),
-  agentId: AgentId,
-  providerInstanceId: ProviderInstanceId,
+  threadId: ThreadId,
+  assigneeId: MemberId,
+  assignedById: MemberId,
+  note: Schema.optionalKey(
+    trimmedNonEmpty({
+      description: "Optional handoff or assignment note preserved in local team activity.",
+    }),
+  ),
 }).annotate({
-  description: "Bind an agent to a local provider instance (environment-local).",
+  description: "Assign or hand off a thread to a local team member.",
 });
 export type TeamAgentAssignCommand = typeof TeamAgentAssignCommand.Type;
 
-export const TeamCommand = Schema.Union([TeamMemberUpsertCommand, TeamAgentAssignCommand]);
+export const TeamMessageSendCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.message.send"),
+  messageId: MessageId,
+  senderId: MemberId,
+  recipientId: MemberId,
+  body: trimmedNonEmpty(
+    {
+      description: "Direct message body. Lives only in the environment-local event store.",
+    },
+    20_000,
+  ),
+  threadId: Schema.optionalKey(ThreadId),
+  expiresAt: Schema.optionalKey(IsoDateTime),
+}).annotate({
+  description: "Send a direct local team message. Busy/offline delivery remains queued.",
+});
+export type TeamMessageSendCommand = typeof TeamMessageSendCommand.Type;
+
+export const TeamMessageDeliverCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.message.deliver"),
+  messageId: MessageId,
+}).annotate({
+  description: "Internal command: mark a queued local team message delivered.",
+});
+export type TeamMessageDeliverCommand = typeof TeamMessageDeliverCommand.Type;
+
+export const TeamMessageMarkReadCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.message.markRead"),
+  messageId: MessageId,
+  readerId: MemberId,
+}).annotate({
+  description: "Mark a delivered local team message read.",
+});
+export type TeamMessageMarkReadCommand = typeof TeamMessageMarkReadCommand.Type;
+
+export const TeamMessageExpireCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.message.expire"),
+  messageId: MessageId,
+}).annotate({
+  description: "Internal command: expire a queued local team message whose TTL elapsed.",
+});
+export type TeamMessageExpireCommand = typeof TeamMessageExpireCommand.Type;
+
+export const TeamRequestRespondCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.request.respond"),
+  requestId: MessageId,
+  responderId: MemberId,
+  response: TeamRequestResponse,
+  message: Schema.optionalKey(
+    trimmedNonEmpty({
+      description: "Optional response note for the request audit trail.",
+    }),
+  ),
+}).annotate({
+  description: "Accept or decline a local team request from the inbox.",
+});
+export type TeamRequestRespondCommand = typeof TeamRequestRespondCommand.Type;
+
+export const TeamCommand = Schema.Union([
+  TeamMemberUpsertCommand,
+  TeamAgentAssignCommand,
+  TeamMessageSendCommand,
+  TeamMessageDeliverCommand,
+  TeamMessageMarkReadCommand,
+  TeamMessageExpireCommand,
+  TeamRequestRespondCommand,
+]);
 export type TeamCommand = typeof TeamCommand.Type;
 
+export const TeamEventMetadata = preserveUnknownFields(
+  Schema.Struct({
+    actorMemberId: Schema.optionalKey(MemberId),
+    environmentId: Schema.optionalKey(EnvironmentId),
+  }).annotate({
+    description: "Environment-local metadata attached to a persisted team event.",
+  }),
+);
+export type TeamEventMetadata = typeof TeamEventMetadata.Type;
+
+export const TeamEventType = Schema.Literals([
+  "team.member.upserted",
+  "team.agent.assigned",
+  "team.message.queued",
+  "team.message.delivered",
+  "team.message.read",
+  "team.message.expired",
+  "team.request.created",
+  "team.request.responded",
+]).annotate({
+  description: "Persisted local team-domain event type.",
+});
+export type TeamEventType = typeof TeamEventType.Type;
+
 export const TeamMemberUpsertedEvent = Schema.Struct({
+  sequence: NonNegativeInt,
+  eventId: EventId,
+  aggregateKind: Schema.Literal("project"),
+  aggregateId: ProjectId,
   type: Schema.Literal("team.member.upserted"),
+  commandId: CommandId,
+  causationEventId: Schema.NullOr(EventId),
+  correlationId: Schema.NullOr(CommandId),
   memberId: MemberId,
   memberType: MemberType,
+  profile: MemberProfile,
   at: IsoDateTime,
+  metadata: TeamEventMetadata,
 }).annotate({
   description: "A member profile was written under .agentforge/.",
 });
 export type TeamMemberUpsertedEvent = typeof TeamMemberUpsertedEvent.Type;
 
 export const TeamAgentAssignedEvent = Schema.Struct({
+  sequence: NonNegativeInt,
+  eventId: EventId,
+  aggregateKind: Schema.Literal("project"),
+  aggregateId: ProjectId,
   type: Schema.Literal("team.agent.assigned"),
-  agentId: AgentId,
-  providerInstanceId: ProviderInstanceId,
+  commandId: CommandId,
+  causationEventId: Schema.NullOr(EventId),
+  correlationId: Schema.NullOr(CommandId),
+  threadId: ThreadId,
+  assigneeId: MemberId,
+  assignedById: MemberId,
+  note: Schema.NullOr(Schema.String),
   at: IsoDateTime,
+  metadata: TeamEventMetadata,
 }).annotate({
-  description: "An agent was bound to a local provider instance.",
+  description: "A thread was assigned or handed off to a team member.",
 });
 export type TeamAgentAssignedEvent = typeof TeamAgentAssignedEvent.Type;
 
-export const TeamEvent = Schema.Union([TeamMemberUpsertedEvent, TeamAgentAssignedEvent]);
+export const TeamMessageQueuedEvent = Schema.Struct({
+  sequence: NonNegativeInt,
+  eventId: EventId,
+  aggregateKind: Schema.Literal("project"),
+  aggregateId: ProjectId,
+  type: Schema.Literal("team.message.queued"),
+  commandId: CommandId,
+  causationEventId: Schema.NullOr(EventId),
+  correlationId: Schema.NullOr(CommandId),
+  messageId: MessageId,
+  senderId: MemberId,
+  recipientId: MemberId,
+  body: Schema.String,
+  threadId: Schema.NullOr(ThreadId),
+  sentAt: IsoDateTime,
+  expiresAt: Schema.NullOr(IsoDateTime),
+  metadata: TeamEventMetadata,
+}).annotate({
+  description: "A direct team message entered the durable local inbox queue.",
+});
+export type TeamMessageQueuedEvent = typeof TeamMessageQueuedEvent.Type;
+
+export const TeamMessageDeliveredEvent = Schema.Struct({
+  sequence: NonNegativeInt,
+  eventId: EventId,
+  aggregateKind: Schema.Literal("project"),
+  aggregateId: ProjectId,
+  type: Schema.Literal("team.message.delivered"),
+  commandId: CommandId,
+  causationEventId: Schema.NullOr(EventId),
+  correlationId: Schema.NullOr(CommandId),
+  messageId: MessageId,
+  deliveredAt: IsoDateTime,
+  metadata: TeamEventMetadata,
+}).annotate({
+  description: "A queued local team message was delivered.",
+});
+export type TeamMessageDeliveredEvent = typeof TeamMessageDeliveredEvent.Type;
+
+export const TeamMessageReadEvent = Schema.Struct({
+  sequence: NonNegativeInt,
+  eventId: EventId,
+  aggregateKind: Schema.Literal("project"),
+  aggregateId: ProjectId,
+  type: Schema.Literal("team.message.read"),
+  commandId: CommandId,
+  causationEventId: Schema.NullOr(EventId),
+  correlationId: Schema.NullOr(CommandId),
+  messageId: MessageId,
+  readerId: MemberId,
+  readAt: IsoDateTime,
+  metadata: TeamEventMetadata,
+}).annotate({
+  description: "A delivered local team message was marked read.",
+});
+export type TeamMessageReadEvent = typeof TeamMessageReadEvent.Type;
+
+export const TeamMessageExpiredEvent = Schema.Struct({
+  sequence: NonNegativeInt,
+  eventId: EventId,
+  aggregateKind: Schema.Literal("project"),
+  aggregateId: ProjectId,
+  type: Schema.Literal("team.message.expired"),
+  commandId: CommandId,
+  causationEventId: Schema.NullOr(EventId),
+  correlationId: Schema.NullOr(CommandId),
+  messageId: MessageId,
+  expiredAt: IsoDateTime,
+  metadata: TeamEventMetadata,
+}).annotate({
+  description: "A queued local team message expired before delivery.",
+});
+export type TeamMessageExpiredEvent = typeof TeamMessageExpiredEvent.Type;
+
+export const TeamRequestCreatedEvent = Schema.Struct({
+  sequence: NonNegativeInt,
+  eventId: EventId,
+  aggregateKind: Schema.Literal("project"),
+  aggregateId: ProjectId,
+  type: Schema.Literal("team.request.created"),
+  commandId: CommandId,
+  causationEventId: Schema.NullOr(EventId),
+  correlationId: Schema.NullOr(CommandId),
+  requestId: MessageId,
+  kind: TeamRequestKind,
+  fromMemberId: MemberId,
+  toMemberId: MemberId,
+  threadId: ThreadId,
+  message: Schema.NullOr(Schema.String),
+  createdAt: IsoDateTime,
+  expiresAt: Schema.NullOr(IsoDateTime),
+  metadata: TeamEventMetadata,
+}).annotate({
+  description: "A structured local request was created in a member inbox.",
+});
+export type TeamRequestCreatedEvent = typeof TeamRequestCreatedEvent.Type;
+
+export const TeamRequestRespondedEvent = Schema.Struct({
+  sequence: NonNegativeInt,
+  eventId: EventId,
+  aggregateKind: Schema.Literal("project"),
+  aggregateId: ProjectId,
+  type: Schema.Literal("team.request.responded"),
+  commandId: CommandId,
+  causationEventId: Schema.NullOr(EventId),
+  correlationId: Schema.NullOr(CommandId),
+  requestId: MessageId,
+  responderId: MemberId,
+  response: TeamRequestResponse,
+  message: Schema.NullOr(Schema.String),
+  respondedAt: IsoDateTime,
+  metadata: TeamEventMetadata,
+}).annotate({
+  description: "A member accepted or declined a local team request.",
+});
+export type TeamRequestRespondedEvent = typeof TeamRequestRespondedEvent.Type;
+
+export const TeamEvent = Schema.Union([
+  TeamMemberUpsertedEvent,
+  TeamAgentAssignedEvent,
+  TeamMessageQueuedEvent,
+  TeamMessageDeliveredEvent,
+  TeamMessageReadEvent,
+  TeamMessageExpiredEvent,
+  TeamRequestCreatedEvent,
+  TeamRequestRespondedEvent,
+]);
 export type TeamEvent = typeof TeamEvent.Type;
+export type PlannedTeamEvent = TeamEvent extends infer Event
+  ? Event extends TeamEvent
+    ? Omit<Event, "sequence">
+    : never
+  : never;
+
+export const TeamMemberReadModel = Schema.Struct({
+  memberId: MemberId,
+  memberType: MemberType,
+  profile: MemberProfile,
+  updatedAt: IsoDateTime,
+});
+export type TeamMemberReadModel = typeof TeamMemberReadModel.Type;
+
+export const TeamThreadAssignment = Schema.Struct({
+  threadId: ThreadId,
+  assigneeId: MemberId,
+  assignedById: MemberId,
+  assignedAt: IsoDateTime,
+  note: Schema.NullOr(Schema.String),
+});
+export type TeamThreadAssignment = typeof TeamThreadAssignment.Type;
+
+export const TeamInboxMessage = Schema.Struct({
+  messageId: MessageId,
+  senderId: MemberId,
+  recipientId: MemberId,
+  body: Schema.String,
+  threadId: Schema.NullOr(ThreadId),
+  sentAt: IsoDateTime,
+  expiresAt: Schema.NullOr(IsoDateTime),
+  state: TeamMessageDeliveryState,
+  deliveredAt: Schema.NullOr(IsoDateTime),
+  readAt: Schema.NullOr(IsoDateTime),
+  expiredAt: Schema.NullOr(IsoDateTime),
+});
+export type TeamInboxMessage = typeof TeamInboxMessage.Type;
+
+export const TeamRequestReadModel = Schema.Struct({
+  requestId: MessageId,
+  kind: TeamRequestKind,
+  fromMemberId: MemberId,
+  toMemberId: MemberId,
+  threadId: ThreadId,
+  message: Schema.NullOr(Schema.String),
+  state: TeamRequestState,
+  createdAt: IsoDateTime,
+  expiresAt: Schema.NullOr(IsoDateTime),
+  respondedAt: Schema.NullOr(IsoDateTime),
+  response: Schema.NullOr(TeamRequestResponse),
+  responseMessage: Schema.NullOr(Schema.String),
+});
+export type TeamRequestReadModel = typeof TeamRequestReadModel.Type;
+
+export const TeamActivity = Schema.Struct({
+  eventId: EventId,
+  kind: TeamActivityKind,
+  occurredAt: IsoDateTime,
+  actorMemberId: Schema.NullOr(MemberId),
+  subjectMemberId: Schema.NullOr(MemberId),
+  threadId: Schema.NullOr(ThreadId),
+  messageId: Schema.NullOr(MessageId),
+  requestId: Schema.NullOr(MessageId),
+  summary: TrimmedNonEmptyString,
+});
+export type TeamActivity = typeof TeamActivity.Type;
+
+export const TeamProjectReadModel = Schema.Struct({
+  projectId: ProjectId,
+  members: Schema.Array(TeamMemberReadModel),
+  assignments: Schema.Array(TeamThreadAssignment),
+  inbox: Schema.Array(TeamInboxMessage),
+  requests: Schema.Array(TeamRequestReadModel),
+  activities: Schema.Array(TeamActivity),
+  updatedAt: IsoDateTime,
+});
+export type TeamProjectReadModel = typeof TeamProjectReadModel.Type;
+
+export const TeamDomainReadModel = Schema.Struct({
+  snapshotSequence: NonNegativeInt,
+  projects: Schema.Array(TeamProjectReadModel),
+  updatedAt: IsoDateTime,
+});
+export type TeamDomainReadModel = typeof TeamDomainReadModel.Type;
+
+export const TeamLocalStateReadInput = Schema.Struct({
+  projectId: ProjectId,
+}).annotate({
+  description: "Read the environment-local team coordination state for a project.",
+});
+export type TeamLocalStateReadInput = typeof TeamLocalStateReadInput.Type;
+
+export const TeamLocalStateReadResult = Schema.Struct({
+  snapshotSequence: NonNegativeInt,
+  project: Schema.NullOr(TeamProjectReadModel),
+}).annotate({
+  description: "Environment-local team coordination state for one project.",
+});
+export type TeamLocalStateReadResult = typeof TeamLocalStateReadResult.Type;
+
+export const TeamCommandDispatchResult = Schema.Struct({
+  sequence: NonNegativeInt,
+}).annotate({
+  description: "Committed team event sequence returned after dispatch.",
+});
+export type TeamCommandDispatchResult = typeof TeamCommandDispatchResult.Type;
+
+export class TeamDispatchCommandError extends Schema.TaggedErrorClass<TeamDispatchCommandError>()(
+  "TeamDispatchCommandError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}

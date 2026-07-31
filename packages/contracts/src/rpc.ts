@@ -49,6 +49,28 @@ import {
   ReviewDiffPreviewInput,
   ReviewDiffPreviewResult,
 } from "./review.ts";
+import {
+  TeamAgentUpsertError,
+  TeamAgentUpsertInput,
+  TeamAgentUpsertResult,
+  TeamCommand,
+  TeamCommandDispatchResult,
+  TeamDispatchCommandError,
+  TeamFileUpdateError,
+  TeamFileUpdateInput,
+  TeamFileUpdateResult,
+  TeamInstructionPreviewError,
+  TeamInstructionPreviewInput,
+  TeamInstructionPreviewResult,
+  TeamLocalStateReadInput,
+  TeamLocalStateReadResult,
+  TeamRosterReadError,
+  TeamRosterReadInput,
+  TeamRosterReadModel,
+  TeamRosterSyncError,
+  TeamRosterSyncInput,
+  TeamRosterSyncResult,
+} from "./team.ts";
 import { KeybindingsConfigError } from "./keybindings.ts";
 import {
   ClientOrchestrationCommand,
@@ -190,6 +212,15 @@ export const WS_METHODS = {
 
   // Review methods
   reviewGetDiffPreview: "review.getDiffPreview",
+
+  // AgentForge team methods
+  teamReadRoster: "team.readRoster",
+  teamUpsertAgent: "team.upsertAgent",
+  teamUpdateTeamFile: "team.updateTeamFile",
+  teamPreviewInstructions: "team.previewInstructions",
+  teamSyncRoster: "team.syncRoster",
+  teamReadLocalState: "team.readLocalState",
+  teamDispatchCommand: "team.dispatchCommand",
 
   // Terminal methods
   terminalOpen: "terminal.open",
@@ -542,6 +573,48 @@ export const WsReviewGetDiffPreviewRpc = Rpc.make(WS_METHODS.reviewGetDiffPrevie
   error: Schema.Union([ReviewDiffPreviewError, EnvironmentAuthorizationError]),
 });
 
+export const WsTeamPreviewInstructionsRpc = Rpc.make(WS_METHODS.teamPreviewInstructions, {
+  payload: TeamInstructionPreviewInput,
+  success: TeamInstructionPreviewResult,
+  error: Schema.Union([TeamInstructionPreviewError, EnvironmentAuthorizationError]),
+});
+
+export const WsTeamReadRosterRpc = Rpc.make(WS_METHODS.teamReadRoster, {
+  payload: TeamRosterReadInput,
+  success: TeamRosterReadModel,
+  error: Schema.Union([TeamRosterReadError, EnvironmentAuthorizationError]),
+});
+
+export const WsTeamUpsertAgentRpc = Rpc.make(WS_METHODS.teamUpsertAgent, {
+  payload: TeamAgentUpsertInput,
+  success: TeamAgentUpsertResult,
+  error: Schema.Union([TeamAgentUpsertError, EnvironmentAuthorizationError]),
+});
+
+export const WsTeamUpdateTeamFileRpc = Rpc.make(WS_METHODS.teamUpdateTeamFile, {
+  payload: TeamFileUpdateInput,
+  success: TeamFileUpdateResult,
+  error: Schema.Union([TeamFileUpdateError, EnvironmentAuthorizationError]),
+});
+
+export const WsTeamSyncRosterRpc = Rpc.make(WS_METHODS.teamSyncRoster, {
+  payload: TeamRosterSyncInput,
+  success: TeamRosterSyncResult,
+  error: Schema.Union([TeamRosterSyncError, EnvironmentAuthorizationError]),
+});
+
+export const WsTeamReadLocalStateRpc = Rpc.make(WS_METHODS.teamReadLocalState, {
+  payload: TeamLocalStateReadInput,
+  success: TeamLocalStateReadResult,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsTeamDispatchCommandRpc = Rpc.make(WS_METHODS.teamDispatchCommand, {
+  payload: TeamCommand,
+  success: TeamCommandDispatchResult,
+  error: Schema.Union([TeamDispatchCommandError, EnvironmentAuthorizationError]),
+});
+
 export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
   payload: TerminalOpenInput,
   success: TerminalSessionSnapshot,
@@ -798,6 +871,13 @@ export const WsRpcGroup = RpcGroup.make(
   WsVcsSwitchRefRpc,
   WsVcsInitRpc,
   WsReviewGetDiffPreviewRpc,
+  WsTeamReadRosterRpc,
+  WsTeamUpsertAgentRpc,
+  WsTeamUpdateTeamFileRpc,
+  WsTeamPreviewInstructionsRpc,
+  WsTeamSyncRosterRpc,
+  WsTeamReadLocalStateRpc,
+  WsTeamDispatchCommandRpc,
   WsTerminalOpenRpc,
   WsTerminalAttachRpc,
   WsTerminalWriteRpc,

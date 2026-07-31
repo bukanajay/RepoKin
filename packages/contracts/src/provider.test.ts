@@ -112,6 +112,19 @@ describe("ProviderSessionStartInput", () => {
     expect(parsed.providerInstanceId).toBe("ollama_local");
     expect(parsed.modelSelection?.instanceId).toBe("ollama_local");
   });
+
+  it("accepts AgentForge character instructions", () => {
+    const parsed = decodeProviderSessionStartInput({
+      threadId: "thread-1",
+      providerInstanceId: "codex",
+      runtimeMode: "approval-required",
+      agentforgeCharacterInstructions: " <agentforge_character>Aria</agentforge_character> ",
+    });
+
+    expect(parsed.agentforgeCharacterInstructions).toBe(
+      "<agentforge_character>Aria</agentforge_character>",
+    );
+  });
 });
 
 describe("ProviderSendTurnInput", () => {
@@ -150,6 +163,18 @@ describe("ProviderSendTurnInput", () => {
     expect(parsed.modelSelection?.instanceId).toBe("claudeAgent");
     expect(getOptionValue(parsed.modelSelection?.options, "effort")).toBe("ultrathink");
     expect(getOptionValue(parsed.modelSelection?.options, "fastMode")).toBe(true);
+  });
+
+  it("accepts per-turn AgentForge character instructions", () => {
+    const parsed = decodeProviderSendTurnInput({
+      threadId: "thread-1",
+      input: "hello",
+      agentforgeCharacterInstructions: " <agentforge_character>Docs</agentforge_character> ",
+    });
+
+    expect(parsed.agentforgeCharacterInstructions).toBe(
+      "<agentforge_character>Docs</agentforge_character>",
+    );
   });
 });
 

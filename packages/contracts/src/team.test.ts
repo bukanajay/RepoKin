@@ -14,8 +14,17 @@ import {
   HumanId,
   HumanProfile,
   MemberId,
+  TeamCommand,
+  TeamDomainReadModel,
+  TeamEvent,
+  TeamAgentUpsertResult,
+  TeamInstructionPreviewResult,
   TeamFile,
+  TeamFileUpdateInput,
+  TeamRosterSyncResult,
   TeamRosterReadModel,
+  TeamSignedMessageEnvelope,
+  TeamSignedMessageProofPayload,
   isAgentId,
   isHumanId,
   isMemberId,
@@ -29,8 +38,17 @@ const decodeCharacter = Schema.decodeUnknownSync(Character);
 const encodeCharacter = Schema.encodeUnknownSync(Character);
 const decodeTeamFile = Schema.decodeUnknownSync(TeamFile);
 const encodeTeamFile = Schema.encodeUnknownSync(TeamFile);
+const decodeTeamFileUpdateInput = Schema.decodeUnknownSync(TeamFileUpdateInput);
+const decodeTeamRosterSyncResult = Schema.decodeUnknownSync(TeamRosterSyncResult);
+const decodeTeamSignedMessageEnvelope = Schema.decodeUnknownSync(TeamSignedMessageEnvelope);
+const decodeTeamSignedMessageProofPayload = Schema.decodeUnknownSync(TeamSignedMessageProofPayload);
 const decodeCompiled = Schema.decodeUnknownSync(CompiledCharacter);
+const decodeAgentUpsertResult = Schema.decodeUnknownSync(TeamAgentUpsertResult);
+const decodeInstructionPreview = Schema.decodeUnknownSync(TeamInstructionPreviewResult);
 const decodeRoster = Schema.decodeUnknownSync(TeamRosterReadModel);
+const decodeTeamCommand = Schema.decodeUnknownSync(TeamCommand);
+const decodeTeamEvent = Schema.decodeUnknownSync(TeamEvent);
+const decodeTeamDomainReadModel = Schema.decodeUnknownSync(TeamDomainReadModel);
 const decodeProviderInstanceConfig = Schema.decodeUnknownSync(ProviderInstanceConfig);
 const encodeProviderInstanceConfig = Schema.encodeUnknownSync(ProviderInstanceConfig);
 
@@ -235,6 +253,82 @@ describe("TeamFile", () => {
       futureTeamSetting: true,
     });
   });
+
+  it("decodes M3 roster sync RPC shapes", () => {
+    expect(
+      decodeTeamFileUpdateInput({
+        cwd: "/repo",
+        team: { schemaVersion: 1, teamRemote: "upstream" },
+        commit: false,
+      }),
+    ).toMatchObject({
+      cwd: "/repo",
+      team: { teamRemote: "upstream" },
+      commit: false,
+    });
+
+    expect(
+      decodeTeamRosterSyncResult({
+        remote: "upstream",
+        branch: "main",
+        ref: "refs/agentforge/rosters/abc123",
+        roster: {
+          team: { schemaVersion: 1, teamRemote: "upstream" },
+          humans: [],
+          agents: [],
+          warnings: [],
+        },
+      }),
+    ).toMatchObject({
+      remote: "upstream",
+      branch: "main",
+      roster: { humans: [], agents: [] },
+    });
+  });
+
+  it("decodes M3 signed message envelope shapes", () => {
+    const message = {
+      projectId: "project-1",
+      messageId: "message-1",
+      senderId: "human_julius",
+      senderEnvironmentId: "env_sender",
+      recipientId: "human_maya",
+      recipientEnvironmentId: "env_recipient",
+      body: "Can you take the review?",
+      threadId: "thread-1",
+      sentAt: "2026-07-30T00:00:00.000Z",
+    };
+
+    expect(
+      decodeTeamSignedMessageEnvelope({
+        payload: message,
+        proof: "signed.jwt",
+      }),
+    ).toMatchObject({
+      payload: {
+        senderId: "human_julius",
+        recipientId: "human_maya",
+      },
+      proof: "signed.jwt",
+    });
+
+    expect(
+      decodeTeamSignedMessageProofPayload({
+        iss: "t3-env:env_sender",
+        aud: "https://relay.example.test",
+        sub: "env_sender",
+        jti: "jti-1",
+        iat: 100,
+        exp: 200,
+        senderEnvironmentId: "env_sender",
+        recipientEnvironmentId: "env_recipient",
+        message,
+      }),
+    ).toMatchObject({
+      senderEnvironmentId: "env_sender",
+      message: { messageId: "message-1" },
+    });
+  });
 });
 
 describe("CompiledCharacter", () => {
@@ -255,6 +349,131 @@ describe("CompiledCharacter", () => {
   });
 });
 
+describe("M2 team domain contracts", () => {
+  it("decodes local assignment and message commands with project scope", () => {
+    expect(
+      decodeTeamCommand({
+        commandId: "cmd-assign-1",
+        projectId: "project-1",
+        type: "team.agent.assign",
+        threadId: "thread-1",
+        assigneeId: "agent_aria",
+        assignedById: "human_julius",
+        note: "handoff after setup",
+      }),
+    ).toMatchObject({
+      commandId: "cmd-assign-1",
+      projectId: "project-1",
+      type: "team.agent.assign",
+      assigneeId: "agent_aria",
+    });
+
+    expect(
+      decodeTeamCommand({
+        commandId: "cmd-message-1",
+        projectId: "project-1",
+        type: "team.message.send",
+        messageId: "msg-1",
+        senderId: "human_julius",
+        recipientId: "agent_aria",
+        body: "Please take this thread next.",
+        threadId: "thread-1",
+        expiresAt: "2026-07-30T13:00:00.000Z",
+      }),
+    ).toMatchObject({
+      type: "team.message.send",
+      body: "Please take this thread next.",
+      threadId: "thread-1",
+    });
+  });
+
+  it("decodes durable inbox events and projected delivery state", () => {
+    const event = decodeTeamEvent({
+      sequence: 1,
+      eventId: "evt-message-queued-1",
+      aggregateKind: "project",
+      aggregateId: "project-1",
+      type: "team.message.queued",
+      commandId: "cmd-message-1",
+      causationEventId: null,
+      correlationId: "cmd-message-1",
+      messageId: "msg-1",
+      senderId: "human_julius",
+      recipientId: "agent_aria",
+      body: "Please take this thread next.",
+      threadId: "thread-1",
+      sentAt: "2026-07-30T12:00:00.000Z",
+      expiresAt: null,
+      metadata: { actorMemberId: "human_julius" },
+    });
+    expect(event.type).toBe("team.message.queued");
+
+    const readModel = decodeTeamDomainReadModel({
+      snapshotSequence: 1,
+      updatedAt: "2026-07-30T12:00:00.000Z",
+      projects: [
+        {
+          projectId: "project-1",
+          updatedAt: "2026-07-30T12:00:00.000Z",
+          members: [],
+          assignments: [],
+          inbox: [
+            {
+              messageId: "msg-1",
+              senderId: "human_julius",
+              recipientId: "agent_aria",
+              body: "Please take this thread next.",
+              threadId: "thread-1",
+              sentAt: "2026-07-30T12:00:00.000Z",
+              expiresAt: null,
+              state: "queued",
+              deliveredAt: null,
+              readAt: null,
+              expiredAt: null,
+            },
+          ],
+          requests: [],
+          activities: [
+            {
+              eventId: "evt-message-queued-1",
+              kind: "message.queued",
+              occurredAt: "2026-07-30T12:00:00.000Z",
+              actorMemberId: "human_julius",
+              subjectMemberId: "agent_aria",
+              threadId: "thread-1",
+              messageId: "msg-1",
+              requestId: null,
+              summary: "human_julius messaged agent_aria",
+            },
+          ],
+        },
+      ],
+    });
+    expect(readModel.projects[0]?.inbox[0]?.state).toBe("queued");
+  });
+});
+
+describe("TeamInstructionPreviewResult", () => {
+  it("decodes instructions with mechanical trust metadata", () => {
+    const decoded = decodeInstructionPreview({
+      agentId: "agent_aria",
+      characterVersion: 1,
+      driver: "codex",
+      instructions: "You are Aria.",
+      mechanics: {
+        runtimeMode: "approval-required",
+        interactionMode: "default",
+      },
+      mechanicalHash: "sha256:abc",
+    });
+
+    expect(decoded.driver).toBe("codex");
+    expect(decoded.instructions).toContain("Aria");
+    expect(decoded.mechanics.runtimeMode).toBe("approval-required");
+    expect(decoded.mechanicalHash).toBe("sha256:abc");
+  });
+});
+
 describe("TeamRosterReadModel", () => {
   it("decodes a roster with warnings defaulting to empty", () => {
     const decoded = decodeRoster({
@@ -265,6 +484,25 @@ describe("TeamRosterReadModel", () => {
     expect(decoded.humans).toHaveLength(1);
     expect(decoded.agents).toHaveLength(1);
     expect(decoded.warnings).toEqual([]);
+  });
+});
+
+describe("TeamAgentUpsertResult", () => {
+  it("decodes write metadata with a refreshed roster", () => {
+    const decoded = decodeAgentUpsertResult({
+      write: {
+        path: "/tmp/repo/.agentforge/agents/agent_aria.json",
+        committed: false,
+      },
+      roster: {
+        humans: [juliusProfile],
+        agents: [ariaProfile],
+      },
+    });
+
+    expect(decoded.write.committed).toBe(false);
+    expect(decoded.roster.agents[0]?.id).toBe("agent_aria");
+    expect(decoded.roster.warnings).toEqual([]);
   });
 });
 
