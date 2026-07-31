@@ -180,6 +180,7 @@ function buildProps() {
     runningTurnId: null,
     turnDiffSummaryByAssistantMessageId: new Map(),
     routeThreadKey: "environment-local:thread-1",
+    agentForgeAgentLabel: null,
     onOpenTurnDiff: () => {},
     revertTurnCountByUserMessageId: new Map(),
     onRevertUserMessage: () => {},

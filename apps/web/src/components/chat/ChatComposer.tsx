@@ -1,3 +1,9 @@
+import {
+  AgentId,
+  type AgentProfile,
+  type CompiledCharacterMechanics,
+  type TeamRosterReadModel,
+} from "@t3tools/contracts/team";
 import type {
   ApprovalRequestId,
   EnvironmentId,
@@ -77,6 +83,10 @@ import {
 } from "../../lib/terminalContext";
 import { useComposerPathSearch } from "../../lib/composerPathSearchState";
 import { type ElementContextDraft } from "../../lib/elementContext";
+import { useEnvironmentQuery } from "../../state/query";
+import { serverEnvironment } from "../../state/server";
+import { teamEnvironment } from "../../state/team";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { ComposerPendingElementContexts } from "./ComposerPendingElementContexts";
 import { ComposerPendingReviewComments } from "./ComposerPendingReviewComments";
 import { ComposerPreviewAnnotationCards } from "./ComposerPreviewAnnotationCards";
@@ -178,11 +188,13 @@ import {
   LockIcon,
   LockOpenIcon,
   PenLineIcon,
+  ShieldCheckIcon,
   SparklesIcon,
   XIcon,
 } from "lucide-react";
 import { proposedPlanTitle } from "../../proposedPlan";
 import { getProviderDisplayName, getProviderInteractionModeToggle } from "../../providerModels";
+import { providerInstanceHasAgentBinding } from "../../agentforgeBindings";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
@@ -235,6 +247,7 @@ const runtimeModeConfig: Record<
 };
 
 const runtimeModeOptions = Object.keys(runtimeModeConfig) as RuntimeMode[];
+const NO_AGENTFORGE_AGENT_VALUE = "__agentforge_none__";
 const COMPOSER_FLOATING_LAYER_SELECTOR = [
   '[data-slot="popover-popup"]',
   '[data-slot="menu-popup"]',
@@ -273,6 +286,29 @@ const terminalContextIdListsEqual = (
 
 function isInsideComposerFloatingLayer(element: Element): boolean {
   return element.closest(COMPOSER_FLOATING_LAYER_SELECTOR) !== null;
+}
+
+function summarizeAgentForgeMechanics(mechanics: CompiledCharacterMechanics): readonly string[] {
+  return [
+    `Runtime: ${runtimeModeConfig[mechanics.runtimeMode]?.label ?? mechanics.runtimeMode}`,
+    `Mode: ${mechanics.interactionMode}`,
+    ...(mechanics.provider
+      ? [
+          `Provider: ${mechanics.provider.driver}${
+            mechanics.provider.model ? ` / ${mechanics.provider.model}` : ""
+          }`,
+        ]
+      : []),
+    ...(mechanics.pathScope && mechanics.pathScope.length > 0
+      ? [`Path scope: ${mechanics.pathScope.join(", ")}`]
+      : []),
+    ...(mechanics.toolPolicy?.allow && mechanics.toolPolicy.allow.length > 0
+      ? [`Allowed tools: ${mechanics.toolPolicy.allow.join(", ")}`]
+      : []),
+    ...(mechanics.toolPolicy?.deny && mechanics.toolPolicy.deny.length > 0
+      ? [`Denied tools: ${mechanics.toolPolicy.deny.join(", ")}`]
+      : []),
+  ];
 }
 
 const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
@@ -404,6 +440,114 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
   );
 });
 
+const AgentForgeComposerPicker = memo(function AgentForgeComposerPicker(props: {
+  compact: boolean;
+  agents: readonly AgentProfile[];
+  selectedAgentId: string;
+  roster: TeamRosterReadModel | null;
+  rosterError: string | null;
+  onAgentSelect: (agentId: string) => void;
+}) {
+  const selectedAgent = props.agents.find((agent) => agent.id === props.selectedAgentId) ?? null;
+  const label =
+    selectedAgent?.name ??
+    (props.rosterError
+      ? "Agents unavailable"
+      : props.roster === null
+        ? "Agents"
+        : props.agents.length === 0
+          ? "No agents"
+          : "Agent");
+  const tooltip =
+    selectedAgent === null
+      ? (props.rosterError ?? "Choose an AgentForge agent for this composer.")
+      : `${selectedAgent.name} · ${selectedAgent.character.runtimeMode ?? "approval-required"}`;
+
+  return (
+    <Tooltip>
+      <Select
+        value={props.selectedAgentId}
+        onValueChange={(value) => {
+          if (value !== null) {
+            props.onAgentSelect(value);
+          }
+        }}
+      >
+        <TooltipTrigger
+          render={
+            <ComposerSelectControl
+              aria-label="AgentForge agent"
+              className={cn(
+                "shrink-0",
+                selectedAgent !== null
+                  ? "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary"
+                  : undefined,
+              )}
+            />
+          }
+        >
+          <ComposerControlIcon icon={BotIcon} opticalSize="large" />
+          <SelectValue>
+            <span className={cn("truncate", props.compact ? "sr-only" : undefined)}>{label}</span>
+          </SelectValue>
+        </TooltipTrigger>
+        <SelectPopup alignItemWithTrigger={false} className="min-w-56">
+          <SelectItem hideIndicator value={NO_AGENTFORGE_AGENT_VALUE}>
+            Default agent
+          </SelectItem>
+          {props.agents.map((agent) => (
+            <SelectItem hideIndicator key={agent.id} value={agent.id}>
+              <div className="grid min-w-0 gap-0.5">
+                <span className="truncate font-medium text-foreground">{agent.name}</span>
+                <span className="truncate text-muted-foreground text-xs">
+                  {agent.id} · {agent.character.runtimeMode ?? "approval-required"}
+                </span>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+      <TooltipPopup side="top">{tooltip}</TooltipPopup>
+    </Tooltip>
+  );
+});
+
+const AgentForgeTrustPrompt = memo(function AgentForgeTrustPrompt(props: {
+  agent: AgentProfile;
+  status: "untrusted" | "changed";
+  mechanicalHash: string;
+  mechanics: CompiledCharacterMechanics;
+  isTrusting: boolean;
+  onTrust: () => void;
+}) {
+  const summary = summarizeAgentForgeMechanics(props.mechanics);
+  return (
+    <div className="mb-3 rounded-lg border border-amber-500/35 bg-amber-500/8 px-3 py-2.5 text-sm">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-medium text-foreground">
+            {props.status === "changed" ? "Agent mechanics changed" : "Trust agent mechanics"}
+          </div>
+          <div className="mt-0.5 break-all text-muted-foreground text-xs">
+            {props.agent.name} · {props.mechanicalHash}
+          </div>
+        </div>
+        <Button size="sm" disabled={props.isTrusting} onClick={props.onTrust}>
+          <ShieldCheckIcon className="size-3.5" />
+          Trust and apply
+        </Button>
+      </div>
+      <div className="mt-2 grid gap-1 text-muted-foreground text-xs sm:grid-cols-2">
+        {summary.map((line) => (
+          <div key={line} className="min-w-0 truncate">
+            {line}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+
 const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(props: {
   compact: boolean;
   activeContextWindow: ReturnType<typeof deriveLatestContextWindowSnapshot>;
@@ -497,6 +641,7 @@ export interface ChatComposerHandle {
     selectedPromptEffort: string | null;
     selectedModelOptionsForDispatch: unknown;
     selectedModelSelection: ModelSelection;
+    agentforgeAgentId: string | null;
     providerAvailable: boolean;
     selectedProvider: ProviderDriverKind;
     selectedModel: string;
@@ -695,6 +840,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onExpandImage,
   } = props;
   const isSendDisabled = sendDisabledReason !== null;
+  const updateServerSettings = useAtomCommand(serverEnvironment.updateSettings, {
+    label: "trust AgentForge mechanics",
+    reportFailure: true,
+  });
 
   // ------------------------------------------------------------------
   // Store subscriptions (prompt / images / terminal contexts)
@@ -972,6 +1121,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const [isComposerFooterCompact, setIsComposerFooterCompact] = useState(false);
   const [isComposerPrimaryActionsCompact, setIsComposerPrimaryActionsCompact] = useState(false);
   const [isComposerModelPickerOpen, setIsComposerModelPickerOpen] = useState(false);
+  const [selectedAgentForgeAgentId, setSelectedAgentForgeAgentId] =
+    useState(NO_AGENTFORGE_AGENT_VALUE);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [composerMenuAnchor, setComposerMenuAnchor] = useState<HTMLDivElement | null>(null);
   const [isStashMenuOpen, setIsStashMenuOpen] = useState(false);
@@ -982,6 +1133,211 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const isMobileViewport = useMediaQuery("max-sm");
   const isComposerCollapsedMobile =
     isMobileViewport && !forceExpandedOnMobile && !isComposerFocused;
+  const agentForgeRosterAtom =
+    gitCwd === null
+      ? null
+      : teamEnvironment.roster({
+          environmentId,
+          input: { cwd: gitCwd },
+        });
+  const agentForgeRoster = useEnvironmentQuery(agentForgeRosterAtom);
+  const agentForgeAgents = agentForgeRoster.data?.agents ?? [];
+  const selectedAgentForgeAgent = useMemo(
+    () =>
+      selectedAgentForgeAgentId === NO_AGENTFORGE_AGENT_VALUE
+        ? null
+        : (agentForgeAgents.find((agent) => agent.id === selectedAgentForgeAgentId) ?? null),
+    [agentForgeAgents, selectedAgentForgeAgentId],
+  );
+  const selectedAgentForgeBoundProviderEntry = useMemo(() => {
+    if (selectedAgentForgeAgent === null) {
+      return null;
+    }
+    return (
+      providerInstanceEntries.find(
+        (entry) =>
+          entry.enabled &&
+          entry.isAvailable &&
+          entry.status !== "error" &&
+          providerInstanceHasAgentBinding(
+            settings.providerInstances,
+            entry.instanceId,
+            selectedAgentForgeAgent.id,
+          ),
+      ) ?? null
+    );
+  }, [providerInstanceEntries, selectedAgentForgeAgent, settings.providerInstances]);
+  const selectedAgentForgeTargetProviderEntry = useMemo(() => {
+    if (selectedAgentForgeAgent === null) {
+      return null;
+    }
+    const profileProvider = selectedAgentForgeAgent.character.provider;
+    return (
+      selectedAgentForgeBoundProviderEntry ??
+      (profileProvider === undefined
+        ? selectedProviderEntry
+        : selectedProviderEntry?.driverKind === profileProvider.driver
+          ? selectedProviderEntry
+          : (providerInstanceEntries.find(
+              (entry) =>
+                entry.driverKind === profileProvider.driver && entry.enabled && entry.isAvailable,
+            ) ?? null)) ??
+      null
+    );
+  }, [
+    providerInstanceEntries,
+    selectedAgentForgeAgent,
+    selectedAgentForgeBoundProviderEntry,
+    selectedProviderEntry,
+  ]);
+  const selectedAgentForgePreviewDriver =
+    selectedAgentForgeTargetProviderEntry?.driverKind ??
+    selectedAgentForgeAgent?.character.provider?.driver ??
+    selectedProvider;
+  const agentForgePreviewAtom =
+    gitCwd === null || selectedAgentForgeAgent === null
+      ? null
+      : teamEnvironment.instructionPreview({
+          environmentId,
+          input: {
+            cwd: gitCwd,
+            agentId: AgentId.make(selectedAgentForgeAgent.id),
+            driver: selectedAgentForgePreviewDriver,
+          },
+        });
+  const agentForgePreview = useEnvironmentQuery(agentForgePreviewAtom);
+  const selectedAgentForgeTrustedHash =
+    gitCwd === null || selectedAgentForgeAgent === null
+      ? undefined
+      : settings.agentforge.trustedMechanics[gitCwd]?.[selectedAgentForgeAgent.id];
+  const selectedAgentForgeTrustStatus =
+    selectedAgentForgeAgent === null || agentForgePreview.data == null
+      ? null
+      : selectedAgentForgeTrustedHash === undefined
+        ? "untrusted"
+        : selectedAgentForgeTrustedHash === agentForgePreview.data.mechanicalHash
+          ? "trusted"
+          : "changed";
+  const selectedAgentForgeTrustBlocking =
+    selectedAgentForgeAgent !== null &&
+    (agentForgePreview.isPending ||
+      agentForgePreview.error !== null ||
+      selectedAgentForgeTrustStatus !== "trusted");
+  const [trustedAgentForgeMechanicsKey, setTrustedAgentForgeMechanicsKey] = useState<string | null>(
+    null,
+  );
+  const [isTrustingAgentForgeMechanics, setIsTrustingAgentForgeMechanics] = useState(false);
+
+  useEffect(() => {
+    if (
+      selectedAgentForgeAgentId !== NO_AGENTFORGE_AGENT_VALUE &&
+      !agentForgeAgents.some((agent) => agent.id === selectedAgentForgeAgentId)
+    ) {
+      setSelectedAgentForgeAgentId(NO_AGENTFORGE_AGENT_VALUE);
+    }
+  }, [agentForgeAgents, selectedAgentForgeAgentId]);
+
+  const applyAgentForgeMechanics = useCallback(
+    (agent: AgentProfile) => {
+      const profileProvider = agent.character.provider;
+      const preferredInstance = selectedAgentForgeTargetProviderEntry;
+      if (preferredInstance !== null) {
+        const preferredModel =
+          profileProvider?.model ??
+          modelOptionsByInstance.get(preferredInstance.instanceId)?.[0]?.slug ??
+          selectedModel;
+        onProviderModelSelect(preferredInstance.instanceId, preferredModel);
+      } else if (profileProvider?.model) {
+        onProviderModelSelect(selectedInstanceId, profileProvider.model);
+      }
+
+      handleRuntimeModeChange(agent.character.runtimeMode ?? "approval-required");
+      handleInteractionModeChange(agent.character.interactionMode ?? "default");
+    },
+    [
+      handleInteractionModeChange,
+      handleRuntimeModeChange,
+      modelOptionsByInstance,
+      onProviderModelSelect,
+      selectedAgentForgeTargetProviderEntry,
+      selectedInstanceId,
+      selectedModel,
+    ],
+  );
+
+  const handleAgentForgeAgentSelect = useCallback((agentId: string) => {
+    setSelectedAgentForgeAgentId(agentId);
+    setTrustedAgentForgeMechanicsKey(null);
+  }, []);
+
+  const selectedAgentForgeMechanicsKey =
+    selectedAgentForgeAgent !== null && agentForgePreview.data != null
+      ? `${selectedAgentForgeAgent.id}:${agentForgePreview.data?.mechanicalHash ?? ""}`
+      : null;
+
+  useEffect(() => {
+    if (
+      selectedAgentForgeAgent === null ||
+      selectedAgentForgeTrustStatus !== "trusted" ||
+      selectedAgentForgeMechanicsKey === null ||
+      trustedAgentForgeMechanicsKey === selectedAgentForgeMechanicsKey
+    ) {
+      return;
+    }
+    applyAgentForgeMechanics(selectedAgentForgeAgent);
+    setTrustedAgentForgeMechanicsKey(selectedAgentForgeMechanicsKey);
+  }, [
+    applyAgentForgeMechanics,
+    selectedAgentForgeAgent,
+    selectedAgentForgeMechanicsKey,
+    selectedAgentForgeTrustStatus,
+    trustedAgentForgeMechanicsKey,
+  ]);
+
+  const trustSelectedAgentForgeMechanics = useCallback(async () => {
+    if (
+      gitCwd === null ||
+      selectedAgentForgeAgent === null ||
+      agentForgePreview.data == null ||
+      isTrustingAgentForgeMechanics
+    ) {
+      return;
+    }
+    setIsTrustingAgentForgeMechanics(true);
+    const result = await updateServerSettings({
+      environmentId,
+      input: {
+        patch: {
+          agentforge: {
+            trustedMechanics: {
+              ...settings.agentforge.trustedMechanics,
+              [gitCwd]: {
+                ...(settings.agentforge.trustedMechanics[gitCwd] ?? {}),
+                [selectedAgentForgeAgent.id]: agentForgePreview.data.mechanicalHash,
+              },
+            },
+          },
+        },
+      },
+    });
+    setIsTrustingAgentForgeMechanics(false);
+    if (result._tag !== "Success") {
+      return;
+    }
+    applyAgentForgeMechanics(selectedAgentForgeAgent);
+    setTrustedAgentForgeMechanicsKey(
+      `${selectedAgentForgeAgent.id}:${agentForgePreview.data.mechanicalHash}`,
+    );
+  }, [
+    agentForgePreview.data,
+    applyAgentForgeMechanics,
+    environmentId,
+    gitCwd,
+    isTrustingAgentForgeMechanics,
+    selectedAgentForgeAgent,
+    settings.agentforge.trustedMechanics,
+    updateServerSettings,
+  ]);
 
   // ------------------------------------------------------------------
   // Refs
@@ -1147,6 +1503,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const hasComposerHeader =
     isComposerApprovalState ||
     pendingUserInputs.length > 0 ||
+    selectedAgentForgeTrustBlocking ||
     (showPlanFollowUpPrompt && activeProposedPlan !== null);
   const showCollapsedMobilePromptRow =
     isComposerCollapsedMobile && !isComposerApprovalState && pendingUserInputs.length === 0;
@@ -1821,6 +2178,19 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         event?.preventDefault();
         return;
       }
+      if (selectedAgentForgeTrustBlocking) {
+        event?.preventDefault();
+        toastManager.add({
+          type: "warning",
+          title: "Trust AgentForge mechanics first",
+          description:
+            agentForgePreview.error ??
+            (agentForgePreview.isPending
+              ? "AgentForge is still checking this agent's mechanical settings."
+              : "Trust this agent's mechanical settings before starting the turn."),
+        });
+        return;
+      }
       onSend(event);
       if (shouldBlurMobileComposerOnSubmit()) {
         blurMobileComposerAfterSend();
@@ -1831,6 +2201,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       isSendDisabled,
       noProviderAvailable,
       onSend,
+      agentForgePreview.error,
+      agentForgePreview.isPending,
+      selectedAgentForgeTrustBlocking,
       shouldBlurMobileComposerOnSubmit,
     ],
   );
@@ -2565,6 +2938,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         selectedPromptEffort,
         selectedModelOptionsForDispatch,
         selectedModelSelection,
+        agentforgeAgentId:
+          selectedAgentForgeAgentId === NO_AGENTFORGE_AGENT_VALUE
+            ? null
+            : selectedAgentForgeAgentId,
         providerAvailable: !noProviderAvailable,
         selectedProvider,
         selectedModel,
@@ -2593,6 +2970,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       selectedModel,
       selectedModelOptionsForDispatch,
       selectedModelSelection,
+      selectedAgentForgeAgentId,
       noProviderAvailable,
       selectedPromptEffort,
       selectedProvider,
@@ -2853,6 +3231,25 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             {!isComposerCollapsedMobile &&
               !isComposerApprovalState &&
               pendingUserInputs.length === 0 &&
+              selectedAgentForgeAgent !== null &&
+              agentForgePreview.data != null &&
+              (selectedAgentForgeTrustStatus === "untrusted" ||
+                selectedAgentForgeTrustStatus === "changed") && (
+                <AgentForgeTrustPrompt
+                  agent={selectedAgentForgeAgent}
+                  status={selectedAgentForgeTrustStatus}
+                  mechanicalHash={agentForgePreview.data.mechanicalHash}
+                  mechanics={agentForgePreview.data.mechanics}
+                  isTrusting={isTrustingAgentForgeMechanics}
+                  onTrust={() => {
+                    void trustSelectedAgentForgeMechanics();
+                  }}
+                />
+              )}
+
+            {!isComposerCollapsedMobile &&
+              !isComposerApprovalState &&
+              pendingUserInputs.length === 0 &&
               composerPreviewAnnotations.length > 0 && (
                 <ComposerPreviewAnnotationCards
                   annotations={composerPreviewAnnotations}
@@ -3063,6 +3460,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               )}
             >
               <div className="-m-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <AgentForgeComposerPicker
+                  compact={isComposerFooterCompact}
+                  agents={agentForgeAgents}
+                  selectedAgentId={selectedAgentForgeAgentId}
+                  roster={agentForgeRoster.data}
+                  rosterError={agentForgeRoster.error}
+                  onAgentSelect={handleAgentForgeAgentSelect}
+                />
+
                 {noProviderAvailable ? (
                   <Button
                     type="button"
