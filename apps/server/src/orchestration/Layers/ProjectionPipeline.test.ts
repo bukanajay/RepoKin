@@ -172,6 +172,36 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         assert.equal(row.lastAppliedSequence, 3);
       }
 
+      yield* eventStore.append({
+        type: "thread.turn-start-requested",
+        eventId: EventId.make("evt-agentforge-owner-1"),
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        occurredAt: "2026-01-01T00:00:00.500Z",
+        commandId: CommandId.make("cmd-agentforge-owner-1"),
+        causationEventId: null,
+        correlationId: CommandId.make("cmd-agentforge-owner-1"),
+        metadata: {},
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          messageId: MessageId.make("message-agentforge-owner-1"),
+          agentforgeAgentId: "agent_aria",
+          runtimeMode: "approval-required",
+          interactionMode: "default",
+          createdAt: "2026-01-01T00:00:00.500Z",
+        },
+      });
+      yield* projectionPipeline.bootstrap;
+
+      const agentForgeThreadRows = yield* sql<{
+        readonly agentforgeAgentId: string | null;
+      }>`
+        SELECT agentforge_agent_id AS "agentforgeAgentId"
+        FROM projection_threads
+        WHERE thread_id = 'thread-1'
+      `;
+      assert.deepEqual(agentForgeThreadRows, [{ agentforgeAgentId: "agent_aria" }]);
+
       // Settled lifecycle through the DB pipeline: thread.settled writes the
       // override + timestamp, thread.unsettled(user) flips to the active pin.
       yield* eventStore.append({

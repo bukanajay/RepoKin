@@ -47,6 +47,8 @@ import Migration0031 from "./Migrations/031_AuthAuthorizationScopes.ts";
 import Migration0032 from "./Migrations/032_AuthPairingProofKeyThumbprint.ts";
 import Migration0033 from "./Migrations/033_ProjectionThreadsSettled.ts";
 import Migration0034 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
+import Migration0035 from "./Migrations/035_ProjectionThreadsAgentForgeAttribution.ts";
+import Migration0100 from "./Migrations/100_TeamMembers.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -93,6 +95,8 @@ export const migrationEntries = [
   [32, "AuthPairingProofKeyThumbprint", Migration0032],
   [33, "ProjectionThreadsSettled", Migration0033],
   [34, "ProjectionThreadsSnoozed", Migration0034],
+  [35, "ProjectionThreadsAgentForgeAttribution", Migration0035],
+  [100, "TeamMembers", Migration0100],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>
