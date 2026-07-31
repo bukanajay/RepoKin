@@ -100,6 +100,8 @@ import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import { TeamLayerLive } from "./team/runtimeLayer.ts";
 import { TeamInboxDeliveryReactorLive } from "./team/Layers/TeamInboxDeliveryReactor.ts";
+import { TeamRelayMessagingLive } from "./team/Layers/TeamRelayMessaging.ts";
+import * as TeamFileStoreLayer from "./team/Layers/TeamFileStore.ts";
 import {
   clearPersistedServerRuntimeState,
   makePersistedServerRuntimeState,
@@ -216,6 +218,7 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(CheckpointReactorLive),
   Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(TeamInboxDeliveryReactorLive),
+  Layer.provideMerge(TeamRelayMessagingLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
   Layer.provideMerge(RuntimeReceiptBusLive),
 );

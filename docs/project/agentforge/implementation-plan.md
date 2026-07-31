@@ -367,6 +367,22 @@ per cwd, off the interaction path, and gated by `BackgroundPolicy` scoped work.
 
 ### M3.2 Signed environment-to-environment messaging
 
+**Status:** landed locally (2026-07-31). `SignedMessaging.ts` signs and
+verifies envelopes using the environment keypair from `environmentKeys.ts` and
+the signed-proof pattern from `AgentAwarenessRelay.ts`. The relay gained a
+durable `relay_team_messages` queue (`infra/relay/src/teamMessages/`) behind
+`deliverTeamMessage` (POST) and `pollTeamMessages` (GET), both
+environment-authenticated; `deliverTeamMessage` rejects envelopes whose
+claimed sender doesn't match the caller's authenticated environment.
+`TeamRelayMessaging.ts` forwards a locally queued message through the relay
+when its recipient is a roster agent whose `homeEnvironment` differs from
+this environment, marking it delivered locally once handed off; a 10s poll
+loop verifies inbound envelopes against the owning project's roster and
+dispatches accepted ones into the local team engine, dropping unverifiable
+ones without surfacing them. **Scoped for now:** only agent recipients route
+remotely — a human can have several linked environments and this environment
+has no cross-machine presence yet, so human recipients stay local until M3.3.
+
 - Reuse the environment keypair from
   [`environmentKeys.ts`](../../../apps/server/src/cloud/environmentKeys.ts) and
   the signed-proof pattern already used by
