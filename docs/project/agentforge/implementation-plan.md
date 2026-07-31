@@ -120,6 +120,17 @@ Behavior notes that matter:
 
 ### M1.3 Character compiler — the heart of M1
 
+**Status:** started on `forge` (2026-07-30). Landed the pure compiler, thin
+service/layer, deterministic mechanical hash, and per-driver instruction preview
+for Codex, Claude Code, Cursor, Grok, and OpenCode. Adapter/provider wiring is
+landed for Codex, Claude Code, Cursor, Grok, and OpenCode. Typed preview API
+exposure is in place through `team.previewInstructions`; roster read exposure is
+in place through `team.readRoster`; local agent profile writes are exposed
+through `team.upsertAgent`; all three have client-runtime atoms. Composer
+selection now passes `agentforgeAgentId` through orchestration and provider
+reactors so compiled instructions are supplied at provider session start and
+send-turn time. M1.6 attribution polish is now landed locally.
+
 `apps/server/src/team/CharacterCompiler.ts` (pure) plus a thin service for
 adapter access.
 
@@ -159,6 +170,12 @@ cannot debug, and this will be the single most-used feature during development.
 
 ### M1.4 Agent → runtime binding
 
+**Status:** landed locally (2026-07-30). Settings → AgentForge stores local
+agent bindings under `ProviderInstanceConfig.config.agentforge.agentIds`, and
+the composer picker prefers that machine-local binding before falling back to an
+agent profile's provider preference. Unavailable/error provider instances are
+shown but cannot be saved as a binding.
+
 An agent's runtime is a provider instance. The binding
 (`agentId → providerInstanceId`) is **machine-specific and stays out of Git** —
 it lives in local settings, namespaced under `config.agentforge` inside
@@ -170,6 +187,15 @@ this kind of fork payload.
   than failing — mirroring how upstream already degrades unknown drivers.
 
 ### M1.5 Trust prompt (PRD §6.5)
+
+**Status:** landed locally (2026-07-30). Added environment-local
+`settings.agentforge.trustedMechanics`, pure trust evaluation helpers, and a
+Settings → AgentForge preview affordance, and composer send-flow prompt to mark
+the currently compiled mechanical hash trusted for a workspace/agent. Provider
+turns with untrusted or changed AgentForge mechanics are rejected before
+provider session start. The current prompt summarizes the mechanical settings in
+plain language; richer before/after copy can continue as UX polish outside the
+M1 gate.
 
 `apps/server/src/team/CharacterTrust.ts` + UI.
 
@@ -187,23 +213,26 @@ chain hole. It ships with M1, not after.
 
 ### M1.6 Attribution
 
-- Project the owning agent onto threads from the existing
-  `session.providerInstanceId`.
+- **Status:** landed locally (2026-07-30). `agentforgeAgentId` is projected
+  onto thread rows from turn-start events, emitted in thread/shell snapshots,
+  shown as a compact `@agent` chip in web thread rows, surfaced on checkpoint
+  changed-file cards and turn-diff headers, and forwarded through web/mobile git
+  actions for commit trailers.
 - Add agent trailers to commits produced through
   [`GitManager.ts`](../../../apps/server/src/git/GitManager.ts) — the commit
   message construction path already exists and already takes a writing style.
-- Surface the agent on thread rows, checkpoints, and turn diffs.
+  **Landed:** `AgentForge-Agent: <agentId>` trailer on attributed commits.
 
 ### M1.7 UI
 
 **Web (primary):**
 
-- Team panel: roster of humans and agents, per-project.
-- Agent editor: character form, split visually into "how it behaves" (expressive)
-  and "what it may do" (mechanical), with the mechanical half clearly marked as
-  enforced.
-- Instruction preview.
-- Agent picker in the composer.
+- [x] Team panel: roster of humans and agents, per-project.
+- [x] Agent editor: local profile create/edit form for expressive character and
+      enforced runtime defaults.
+- [x] Instruction preview.
+- [x] Agent picker in the composer: reads the active project roster and applies
+      profile provider/runtime/interaction defaults to the current draft controls.
 - Publish affordance: "N team changes to publish" (PRD Q2 — explicit, never
   automatic).
 
@@ -243,6 +272,14 @@ rather than shipping a half-working form.
 
 ### M2.1 Team domain
 
+**Status:** started locally (2026-07-30). Landed typed M2 command/event/read
+models in `packages/contracts/src/team.ts`, pure
+`apps/server/src/team/decider.ts` / `projector.ts` /
+`commandInvariants.ts`, SQLite `team_events` + `team_command_receipts`
+migration `100_TeamMembers.ts`, `TeamEventStore`, command receipts, and
+`Layers/TeamEngine.ts` with serial dispatch and idempotent command receipts.
+Current scope is local-only and not yet exposed through WebSocket/UI.
+
 Mirror the orchestration pattern exactly — `decider.ts` (pure), `projector.ts`,
 `commandInvariants.ts`, `Layers/TeamEngine.ts`. Reusing the shape means reusing
 the team's intuition and the existing test ergonomics.
@@ -255,12 +292,28 @@ the team's intuition and the existing test ergonomics.
 
 ### M2.2 Presence
 
+**Status:** started locally (2026-07-30). Extended
+`packages/shared/src/agentAwareness.ts` with local member presence projection:
+awareness phases map to `online` / `busy` / `away` / `offline`, with a
+30-second staleness horizon. Settings → AgentForge now shows non-animated
+presence chips for roster agents when thread shells are attributed with
+`agentforgeAgentId`. Human presence and durable presence events are still
+pending.
+
 Extend [`agentAwareness.ts`](../../../packages/shared/src/agentAwareness.ts)
 rather than adding a parallel model. Map existing session phases onto
 `online`/`busy`/`away`/`offline`, add a staleness horizon, and make sure the
 indicator never animates continuously.
 
 ### M2.3 Inbox
+
+**Status:** started locally (2026-07-30). Added local inbox command/event
+schemas and WebSocket RPCs, exposed `team.readLocalState` /
+`team.dispatchCommand` through client runtime atoms, and added a visible
+Settings -> AgentForge local inbox control for sending messages to the selected
+agent and marking delivered messages read. Server-side delivery now uses
+`TeamInboxDeliveryReactorLive` with presence-aware queued/delivered/expired
+decisions and focused tests for domain transitions plus online delivery.
 
 - Durable queue in the team event store, drained by a reactor built on
   [`DrainableWorker`](../../../packages/shared/src/DrainableWorker.ts) so tests
@@ -269,6 +322,12 @@ indicator never animates continuously.
 - Local delivery only in M2 — no relay yet.
 
 ### M2.4 Handoff
+
+**Status:** started locally (2026-07-30). The local team domain already records
+`team.agent.assign` as a durable assignment plus `thread.assigned` activity.
+Settings -> AgentForge now exposes a local handoff control that selects a
+project thread, assigns it to the selected agent, refreshes the team read model,
+and shows current assignments plus recent team activity.
 
 Assign or claim a thread for an agent; hand off preserving history; record the
 handoff as an activity so it shows in the timeline.
@@ -292,6 +351,13 @@ Plan for slip; do not let M1 or M2 depend on this landing on time.
 ### M3.1 Roster sync
 
 `apps/server/src/team/Layers/RosterSync.ts`:
+
+**Status:** landed locally (2026-07-30). Added the explicit `teamRemote` save
+path, manual Settings -> AgentForge roster sync, upstream-then-origin suggestion
+helper, default-branch resolution, fetch into AgentForge-owned refs, and
+`git show`/`ls-tree` roster reads from the fetched ref without checkout. Roster
+sync is also retained by visible VCS status subscriptions: one coalesced poller
+per cwd, off the interaction path, and gated by `BackgroundPolicy` scoped work.
 
 - Periodic `git fetch <teamRemote> <defaultBranch>` — coalesced, off the
   interaction path, skipped when the project is not visible.
