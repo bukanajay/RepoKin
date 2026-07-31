@@ -65,6 +65,7 @@ function makeAgentActivityRows(
     pruneTerminal: () => Effect.void,
     listForUser: () => Effect.succeed([state]),
     getForUserThread: () => Effect.succeed(state),
+    getPresenceForEnvironments: () => Effect.succeed([]),
     ...overrides,
   };
 }

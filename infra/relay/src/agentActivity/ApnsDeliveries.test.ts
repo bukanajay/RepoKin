@@ -192,6 +192,7 @@ function makeLayer(input: {
                   current.environmentId === environmentId && current.threadId === threadId,
               ) ?? null,
             ),
+          getPresenceForEnvironments: () => Effect.succeed([]),
         } satisfies AgentActivityRows.AgentActivityRows["Service"]),
         Layer.succeed(ApnsDeliveryQueue.ApnsDeliveryQueueSender, {
           send: (body) =>

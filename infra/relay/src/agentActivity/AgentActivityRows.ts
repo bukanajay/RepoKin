@@ -1,3 +1,4 @@
+import { EnvironmentId } from "@t3tools/contracts";
 import type { RelayAgentActivityState } from "@t3tools/contracts/relay";
 import { RelayAgentActivityState as RelayAgentActivityStateSchema } from "@t3tools/contracts/relay";
 import * as Context from "effect/Context";
@@ -7,7 +8,7 @@ import * as Function from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { and, desc, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import * as RelayDb from "../db.ts";
 import { relayAgentActivityRows, relayEnvironmentLinks } from "../persistence/schema.ts";
@@ -62,6 +63,24 @@ export class AgentActivityRowListPersistenceError extends Schema.TaggedErrorClas
   }
 }
 
+export class AgentActivityRowPresencePersistenceError extends Schema.TaggedErrorClass<AgentActivityRowPresencePersistenceError>()(
+  "AgentActivityRowPresencePersistenceError",
+  {
+    environmentCount: Schema.Int,
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return `Failed to read presence for ${this.environmentCount} environment(s).`;
+  }
+}
+
+export interface AgentActivityEnvironmentPresence {
+  readonly environmentId: EnvironmentId;
+  readonly phase: RelayAgentActivityState["phase"];
+  readonly updatedAt: string;
+}
+
 export class AgentActivityRows extends Context.Service<
   AgentActivityRows,
   {
@@ -88,6 +107,12 @@ export class AgentActivityRows extends Context.Service<
       readonly environmentId: string;
       readonly threadId: string;
     }) => Effect.Effect<RelayAgentActivityState | null, AgentActivityRowListPersistenceError>;
+    readonly getPresenceForEnvironments: (input: {
+      readonly environmentIds: ReadonlyArray<string>;
+    }) => Effect.Effect<
+      ReadonlyArray<AgentActivityEnvironmentPresence>,
+      AgentActivityRowPresencePersistenceError
+    >;
   }
 >()("t3code-relay/agentActivity/AgentActivityRows") {}
 
@@ -293,6 +318,62 @@ export const make = Effect.gen(function* () {
               }),
           ),
         );
+    }),
+
+    getPresenceForEnvironments: Effect.fn(
+      "relay.agent_activity_rows.get_presence_for_environments",
+    )(function* (input) {
+      const rows = yield* db
+        .select({
+          environmentId: relayAgentActivityRows.environmentId,
+          stateJson: relayAgentActivityRows.stateJson,
+          updatedAt: relayAgentActivityRows.updatedAt,
+        })
+        .from(relayAgentActivityRows)
+        .where(inArray(relayAgentActivityRows.environmentId, input.environmentIds))
+        .orderBy(desc(relayAgentActivityRows.updatedAt))
+        .pipe(
+          Effect.mapError(
+            (cause) =>
+              new AgentActivityRowPresencePersistenceError({
+                environmentCount: input.environmentIds.length,
+                cause,
+              }),
+          ),
+        );
+
+      const mostRecentByEnvironment = new Map<string, AgentActivityEnvironmentPresence>();
+      yield* Effect.forEach(
+        rows,
+        (row) =>
+          Effect.gen(function* () {
+            if (mostRecentByEnvironment.has(row.environmentId)) {
+              // Already ordered by updatedAt desc: the first row seen per
+              // environment is its most recent activity.
+              return;
+            }
+            const encoded = yield* encodeJsonValue(row.stateJson);
+            const decoded = decodeRelayAgentActivityStateJson(encoded);
+            if (Option.isNone(decoded)) {
+              return;
+            }
+            mostRecentByEnvironment.set(row.environmentId, {
+              environmentId: EnvironmentId.make(row.environmentId),
+              phase: decoded.value.phase,
+              updatedAt: row.updatedAt,
+            });
+          }),
+        { discard: true },
+      ).pipe(
+        Effect.mapError(
+          (cause) =>
+            new AgentActivityRowPresencePersistenceError({
+              environmentCount: input.environmentIds.length,
+              cause,
+            }),
+        ),
+      );
+      return [...mostRecentByEnvironment.values()];
     }),
   });
 });

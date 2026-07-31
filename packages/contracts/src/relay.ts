@@ -538,7 +538,7 @@ const RelayAgentActivityPublishErrors = [
   RelayInternalError,
 ] as const;
 
-const RelayTeamMessageErrors = [RelayAuthInvalidError, RelayInternalError] as const;
+const RelayTeamErrors = [RelayAuthInvalidError, RelayInternalError] as const;
 
 export class RelayClientPrincipal extends Context.Service<
   RelayClientPrincipal,
@@ -863,6 +863,26 @@ export const RelayTeamMessagePollResponse = Schema.Struct({
 });
 export type RelayTeamMessagePollResponse = typeof RelayTeamMessagePollResponse.Type;
 
+export const RelayEnvironmentPresenceRequest = Schema.Struct({
+  environmentIds: Schema.Array(EnvironmentId).check(Schema.isMinLength(1), Schema.isMaxLength(200)),
+}).annotate({
+  description:
+    "Environment ids to look up. Presence is derived from activity this environment already published; only the coarse phase and its timestamp are returned, never thread or project detail.",
+});
+export type RelayEnvironmentPresenceRequest = typeof RelayEnvironmentPresenceRequest.Type;
+
+export const RelayEnvironmentPresenceEntry = Schema.Struct({
+  environmentId: EnvironmentId,
+  phase: RelayAgentAwarenessPhase,
+  updatedAt: TrimmedNonEmptyString,
+});
+export type RelayEnvironmentPresenceEntry = typeof RelayEnvironmentPresenceEntry.Type;
+
+export const RelayEnvironmentPresenceResponse = Schema.Struct({
+  presences: Schema.Array(RelayEnvironmentPresenceEntry),
+});
+export type RelayEnvironmentPresenceResponse = typeof RelayEnvironmentPresenceResponse.Type;
+
 export const RelayHealthResponse = Schema.Struct({
   ok: Schema.Boolean,
   service: Schema.Literal("relay"),
@@ -1073,16 +1093,26 @@ export const RelayServerGroup = HttpApiGroup.make("server")
     HttpApiEndpoint.post("deliverTeamMessage", "/v1/team/messages", {
       payload: RelayTeamMessageDeliveryRequest,
       success: RelayTeamMessageDeliveryResponse,
-      error: RelayTeamMessageErrors,
+      error: RelayTeamErrors,
     }).annotate(OpenApi.Summary, "Deliver a signed team message envelope"),
     HttpApiEndpoint.get("pollTeamMessages", "/v1/team/messages", {
       success: RelayTeamMessagePollResponse,
-      error: RelayTeamMessageErrors,
+      error: RelayTeamErrors,
     })
       .annotate(OpenApi.Summary, "Poll and drain signed team messages queued for this environment")
       .annotate(
         OpenApi.Description,
         "Returns every envelope currently queued for the caller's environment and removes them from the queue. At-least-once delivery is not guaranteed across concurrent pollers from the same environment.",
+      ),
+    HttpApiEndpoint.post("getEnvironmentPresence", "/v1/team/presence", {
+      payload: RelayEnvironmentPresenceRequest,
+      success: RelayEnvironmentPresenceResponse,
+      error: RelayTeamErrors,
+    })
+      .annotate(OpenApi.Summary, "Read coarse presence for roster environments")
+      .annotate(
+        OpenApi.Description,
+        "Derived from agent activity those environments already published to this relay. Only a coarse phase and its timestamp are returned — never thread or project titles. Environments with no recent activity are omitted.",
       ),
   )
   .annotate(OpenApi.Description, "Environment-authenticated activity and team message transport.")

@@ -856,6 +856,7 @@ export const serverApi = HttpApiBuilder.group(
     const publisher = yield* AgentActivityPublisher.AgentActivityPublisher;
     const publishSignatures = yield* EnvironmentPublishSignatures.EnvironmentPublishSignatures;
     const teamMessages = yield* TeamMessageRows.TeamMessageRows;
+    const agentActivityRows = yield* AgentActivityRows.AgentActivityRows;
     const crypto = yield* Crypto.Crypto;
     return handlers
       .handle(
@@ -1023,6 +1024,15 @@ export const serverApi = HttpApiBuilder.group(
           });
           return { envelopes };
         }, mapRelayCommonApiErrors("not_authorized")),
+      )
+      .handle(
+        "getEnvironmentPresence",
+        Effect.fn("relay.api.server.getEnvironmentPresence")(function* (args) {
+          const presences = yield* agentActivityRows.getPresenceForEnvironments({
+            environmentIds: args.payload.environmentIds,
+          });
+          return { presences };
+        }, mapRelayCommonApiErrors("not_authorized")),
       );
   }),
 );
@@ -1067,6 +1077,7 @@ const RelayCommonPersistenceError = Schema.Union([
   DeliveryAttempts.DeliveryAttemptRecordPersistenceError,
   TeamMessageRows.TeamMessageEnqueuePersistenceError,
   TeamMessageRows.TeamMessageDrainPersistenceError,
+  AgentActivityRows.AgentActivityRowPresencePersistenceError,
 ]);
 type RelayCommonPersistenceError = typeof RelayCommonPersistenceError.Type;
 const isRelayCommonPersistenceError = Schema.is(RelayCommonPersistenceError);

@@ -87,6 +87,7 @@ function makeAgentActivityRows(
       return Effect.succeed([activeState]);
     },
     getForUserThread: () => Effect.succeed(null),
+    getPresenceForEnvironments: () => Effect.succeed([]),
     ...overrides,
   };
 }
