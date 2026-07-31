@@ -110,6 +110,8 @@ import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
+import * as TeamEngine from "./team/Services/TeamEngine.ts";
+import { createEmptyTeamReadModel } from "./team/projector.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts";
@@ -345,6 +347,7 @@ const buildAppUnderTest = (options?: {
       ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]
     >;
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
+    teamEngine?: Partial<TeamEngine.TeamEngineService["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
     checkpointDiffQuery?: Partial<CheckpointDiffQuery.CheckpointDiffQuery["Service"]>;
@@ -703,13 +706,23 @@ const buildAppUnderTest = (options?: {
         ),
       ),
       Layer.provide(
-        Layer.mock(OrchestrationEngine.OrchestrationEngineService)({
-          readEvents: () => Stream.empty,
-          dispatch: () => Effect.succeed({ sequence: 0 }),
-          streamDomainEvents: Stream.empty,
-          latestSequence: Effect.succeed(0),
-          ...options?.layers?.orchestrationEngine,
-        }),
+        Layer.mergeAll(
+          Layer.mock(TeamEngine.TeamEngineService)({
+            dispatch: () => Effect.succeed({ sequence: 0 }),
+            readEvents: () => Stream.empty,
+            latestSequence: Effect.succeed(0),
+            getReadModel: Effect.succeed(createEmptyTeamReadModel("1970-01-01T00:00:00.000Z")),
+            streamDomainEvents: Stream.empty,
+            ...options?.layers?.teamEngine,
+          }),
+          Layer.mock(OrchestrationEngine.OrchestrationEngineService)({
+            readEvents: () => Stream.empty,
+            dispatch: () => Effect.succeed({ sequence: 0 }),
+            streamDomainEvents: Stream.empty,
+            latestSequence: Effect.succeed(0),
+            ...options?.layers?.orchestrationEngine,
+          }),
+        ),
       ),
       Layer.provide(
         Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({

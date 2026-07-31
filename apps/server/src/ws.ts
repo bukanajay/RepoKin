@@ -54,6 +54,7 @@ import {
   WS_METHODS,
   WsRpcGroup,
 } from "@t3tools/contracts";
+import { TeamDispatchCommandError, TeamRosterSyncError } from "@t3tools/contracts/team";
 import { resolveServerBackgroundActivitySettings } from "@t3tools/shared/backgroundActivitySettings";
 import { HttpRouter, HttpServerRequest, HttpServerRespondable } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
@@ -62,6 +63,7 @@ import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as ServerConfig from "./config.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
+import * as ProcessRunner from "./processRunner.ts";
 import {
   projectActivityEvent,
   projectThreadDetailSnapshot,
@@ -108,6 +110,16 @@ import * as BitbucketApi from "./sourceControl/BitbucketApi.ts";
 import * as GitHubCli from "./sourceControl/GitHubCli.ts";
 import * as GitLabCli from "./sourceControl/GitLabCli.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
+import { upsertTeamAgent } from "./team/AgentUpsert.ts";
+import { previewTeamInstructions } from "./team/InstructionPreview.ts";
+import * as CharacterCompiler from "./team/Layers/CharacterCompiler.ts";
+import * as RosterSyncLayer from "./team/Layers/RosterSync.ts";
+import * as TeamFileStore from "./team/Layers/TeamFileStore.ts";
+import { readTeamRoster } from "./team/RosterRead.ts";
+import { isTeamRosterSyncOperationError } from "./team/Services/RosterSync.ts";
+import { RosterSync } from "./team/Services/RosterSync.ts";
+import { TeamEngineService } from "./team/Services/TeamEngine.ts";
+import { updateTeamFile } from "./team/TeamFileUpdate.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
 import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
@@ -366,6 +378,7 @@ const makeWsRpcLayer = (
       const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
+      const rosterSync = yield* RosterSync;
       const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
       yield* Effect.addFinalizer(() =>
         Ref.get(rpcClientIds).pipe(
@@ -461,6 +474,37 @@ const makeWsRpcLayer = (
               message: cause instanceof Error ? cause.message : fallbackMessage,
               cause,
             });
+      const toTeamDispatchCommandError = (cause: unknown, fallbackMessage: string) =>
+        new TeamDispatchCommandError({
+          message: cause instanceof Error ? cause.message : fallbackMessage,
+          cause,
+        });
+      const toTeamRosterSyncError = (cause: unknown, cwd: string) => {
+        if (isTeamRosterSyncOperationError(cause)) {
+          return new TeamRosterSyncError({
+            reason:
+              cause.operation === "read-local-roster" &&
+              cause.message.includes("team remote is not configured")
+                ? "team-remote-missing"
+                : cause.operation === "resolve-default-branch"
+                  ? "default-branch-unresolved"
+                  : cause.operation === "fetch-remote-roster"
+                    ? "fetch-failed"
+                    : "roster-read-failed",
+            cwd: cause.cwd,
+            ...(cause.remote === undefined ? {} : { remote: cause.remote }),
+            ...(cause.branch === undefined ? {} : { branch: cause.branch }),
+            message: cause.message,
+            cause,
+          });
+        }
+        return new TeamRosterSyncError({
+          reason: "roster-read-failed",
+          cwd,
+          message: cause instanceof Error ? cause.message : "Failed to sync AgentForge roster.",
+          cause,
+        });
+      };
       const randomUUID = crypto.randomUUIDv4.pipe(
         Effect.mapError((cause) =>
           toDispatchCommandError(cause, "Failed to generate orchestration command identifier."),
@@ -1667,9 +1711,22 @@ const makeWsRpcLayer = (
         [WS_METHODS.subscribeVcsStatus]: (input) =>
           observeRpcStream(
             WS_METHODS.subscribeVcsStatus,
-            vcsStatusBroadcaster.streamStatus(input, {
-              automaticRemoteRefreshInterval: automaticGitFetchInterval,
-            }),
+            Stream.unwrap(
+              rosterSync
+                .retainProjectSync({
+                  cwd: input.cwd,
+                  automaticRosterSyncInterval: automaticGitFetchInterval,
+                })
+                .pipe(
+                  Effect.map((releaseRosterSync) =>
+                    vcsStatusBroadcaster
+                      .streamStatus(input, {
+                        automaticRemoteRefreshInterval: automaticGitFetchInterval,
+                      })
+                      .pipe(Stream.ensuring(releaseRosterSync)),
+                  ),
+                ),
+            ),
             {
               "rpc.aggregate": "vcs",
             },
@@ -1773,6 +1830,55 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.reviewGetDiffPreview, review.getDiffPreview(input), {
             "rpc.aggregate": "review",
           }),
+        [WS_METHODS.teamReadRoster]: (input) =>
+          observeRpcEffect(WS_METHODS.teamReadRoster, readTeamRoster(input), {
+            "rpc.aggregate": "team",
+          }),
+        [WS_METHODS.teamUpsertAgent]: (input) =>
+          observeRpcEffect(WS_METHODS.teamUpsertAgent, upsertTeamAgent(input), {
+            "rpc.aggregate": "team",
+          }),
+        [WS_METHODS.teamUpdateTeamFile]: (input) =>
+          observeRpcEffect(WS_METHODS.teamUpdateTeamFile, updateTeamFile(input), {
+            "rpc.aggregate": "team",
+          }),
+        [WS_METHODS.teamPreviewInstructions]: (input) =>
+          observeRpcEffect(WS_METHODS.teamPreviewInstructions, previewTeamInstructions(input), {
+            "rpc.aggregate": "team",
+          }),
+        [WS_METHODS.teamSyncRoster]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.teamSyncRoster,
+            rosterSync
+              .syncProjectRoster(input.cwd)
+              .pipe(Effect.mapError((cause) => toTeamRosterSyncError(cause, input.cwd))),
+            { "rpc.aggregate": "team" },
+          ),
+        [WS_METHODS.teamReadLocalState]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.teamReadLocalState,
+            TeamEngineService.pipe(
+              Effect.flatMap((teamEngine) => teamEngine.getReadModel),
+              Effect.map((readModel) => ({
+                snapshotSequence: readModel.snapshotSequence,
+                project:
+                  readModel.projects.find((project) => project.projectId === input.projectId) ??
+                  null,
+              })),
+            ),
+            { "rpc.aggregate": "team" },
+          ),
+        [WS_METHODS.teamDispatchCommand]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.teamDispatchCommand,
+            TeamEngineService.pipe(
+              Effect.flatMap((teamEngine) => teamEngine.dispatch(input)),
+              Effect.mapError((cause) =>
+                toTeamDispatchCommandError(cause, "Failed to dispatch team command."),
+              ),
+            ),
+            { "rpc.aggregate": "team" },
+          ),
         [WS_METHODS.terminalOpen]: (input) =>
           observeRpcEffect(WS_METHODS.terminalOpen, terminalManager.open(input), {
             "rpc.aggregate": "terminal",
@@ -2049,6 +2155,14 @@ export const websocketRpcRouteLayer = Layer.unwrap(
           Effect.provide(
             makeWsRpcLayer(session, previewAutomationBroker).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
+              Layer.provide(CharacterCompiler.layer),
+              Layer.provide(
+                RosterSyncLayer.layer.pipe(
+                  Layer.provideMerge(TeamFileStore.layer),
+                  Layer.provide(ProcessRunner.layer),
+                ),
+              ),
+              Layer.provide(TeamFileStore.layer),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
               Layer.provide(

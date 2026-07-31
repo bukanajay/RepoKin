@@ -98,6 +98,8 @@ import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts
 import * as ResourceMonitorBinary from "./resourceTelemetry/ResourceMonitorBinary.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
+import { TeamLayerLive } from "./team/runtimeLayer.ts";
+import { TeamInboxDeliveryReactorLive } from "./team/Layers/TeamInboxDeliveryReactor.ts";
 import {
   clearPersistedServerRuntimeState,
   makePersistedServerRuntimeState,
@@ -213,6 +215,7 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(ProviderCommandReactorLive),
   Layer.provideMerge(CheckpointReactorLive),
   Layer.provideMerge(ThreadDeletionReactorLive),
+  Layer.provideMerge(TeamInboxDeliveryReactorLive),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
   Layer.provideMerge(RuntimeReceiptBusLive),
 );
@@ -333,8 +336,12 @@ const CloudManagedEndpointRuntimeLive = Layer.mergeAll(
 
 const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
   Layer.provideMerge(ProviderLayerLive),
-  Layer.provideMerge(OrchestrationLayerLive),
 );
+
+const ProviderAndTeamRuntimeLayerLive = Layer.mergeAll(
+  ProviderRuntimeLayerLive,
+  TeamLayerLive,
+).pipe(Layer.provideMerge(OrchestrationLayerLive));
 
 const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   // Core Services
@@ -343,7 +350,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(SourceControlProviderRegistryLayerLive),
   Layer.provideMerge(GitLayerLive),
   Layer.provideMerge(VcsLayerLive),
-  Layer.provideMerge(ProviderRuntimeLayerLive),
+  Layer.provideMerge(ProviderAndTeamRuntimeLayerLive),
   Layer.provideMerge(Layer.mergeAll(TerminalLayerLive, PreviewLayerLive)),
   Layer.provideMerge(PersistenceLayerLive),
   Layer.provideMerge(Keybindings.layer),
