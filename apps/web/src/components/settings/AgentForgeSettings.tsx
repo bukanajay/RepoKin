@@ -284,6 +284,24 @@ export function AgentForgeSettingsPanel() {
   const inboxItems = localState.data?.project?.inbox ?? [];
   const assignmentItems = localState.data?.project?.assignments ?? [];
   const activityItems = localState.data?.project?.activities ?? [];
+  const remotePresenceByMemberId = useMemo(() => {
+    const byMemberId = new Map<string, MemberPresenceState | null>();
+    for (const entry of localState.data?.presences ?? []) {
+      byMemberId.set(entry.memberId, entry.state);
+    }
+    return byMemberId;
+  }, [localState.data?.presences]);
+  const remoteEnvironmentLabelByEnvironmentId = useMemo(() => {
+    const byEnvironmentId = new Map<string, string>();
+    for (const human of roster.data?.humans ?? []) {
+      for (const linkedEnvironment of human.environments ?? []) {
+        if (linkedEnvironment.label !== undefined) {
+          byEnvironmentId.set(linkedEnvironment.environmentId, linkedEnvironment.label);
+        }
+      }
+    }
+    return byEnvironmentId;
+  }, [roster.data?.humans]);
   const agentOptions = roster.data?.agents ?? [];
   const selectedThread = threadOptions.find((thread) => thread.id === selectedThreadId) ?? null;
   const threadTitleById = useMemo(
@@ -759,8 +777,21 @@ export function AgentForgeSettingsPanel() {
                 </div>
               ) : (
                 agentOptions.map((agent) => {
-                  const presence = agentPresenceById.get(agent.id);
-                  const presenceState = presence?.state ?? null;
+                  const localPresence = agentPresenceById.get(agent.id);
+                  // Local thread activity is authoritative when present; a
+                  // roster agent whose home environment is elsewhere has no
+                  // local threads to derive presence from, so fall back to
+                  // what the relay last reported for that environment (M3.3).
+                  const isRemoteHome =
+                    localPresence === undefined &&
+                    agent.homeEnvironment !== undefined &&
+                    agent.homeEnvironment !== environmentId;
+                  const presenceState =
+                    localPresence?.state ?? remotePresenceByMemberId.get(agent.id) ?? null;
+                  const remoteEnvironmentLabel = isRemoteHome
+                    ? (remoteEnvironmentLabelByEnvironmentId.get(agent.homeEnvironment ?? "") ??
+                      agent.homeEnvironment)
+                    : null;
                   return (
                     <button
                       key={agent.id}
@@ -787,6 +818,7 @@ export function AgentForgeSettingsPanel() {
                               )}
                             />
                             {presenceLabel(presenceState)}
+                            {remoteEnvironmentLabel ? ` (on ${remoteEnvironmentLabel})` : null}
                           </span>
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">

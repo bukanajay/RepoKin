@@ -2,6 +2,7 @@ import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -119,6 +120,7 @@ import { readTeamRoster } from "./team/RosterRead.ts";
 import { isTeamRosterSyncOperationError } from "./team/Services/RosterSync.ts";
 import { RosterSync } from "./team/Services/RosterSync.ts";
 import { TeamEngineService } from "./team/Services/TeamEngine.ts";
+import { TeamPresenceResolver } from "./team/Services/TeamPresenceResolver.ts";
 import { updateTeamFile } from "./team/TeamFileUpdate.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
@@ -1857,15 +1859,41 @@ const makeWsRpcLayer = (
         [WS_METHODS.teamReadLocalState]: (input) =>
           observeRpcEffect(
             WS_METHODS.teamReadLocalState,
-            TeamEngineService.pipe(
-              Effect.flatMap((teamEngine) => teamEngine.getReadModel),
-              Effect.map((readModel) => ({
+            Effect.gen(function* () {
+              const teamEngine = yield* TeamEngineService;
+              const presenceResolver = yield* TeamPresenceResolver;
+              const readModel = yield* teamEngine.getReadModel;
+              const project =
+                readModel.projects.find((candidate) => candidate.projectId === input.projectId) ??
+                null;
+              const nowMs = yield* Clock.currentTimeMillis;
+              const presences =
+                project === null
+                  ? []
+                  : yield* Effect.forEach(
+                      project.members,
+                      (member) =>
+                        presenceResolver
+                          .resolveMemberPresence({
+                            projectId: input.projectId,
+                            memberId: member.memberId,
+                            nowMs,
+                          })
+                          .pipe(
+                            Effect.map((state) => ({ memberId: member.memberId, state })),
+                            Effect.orElseSucceed(() => ({
+                              memberId: member.memberId,
+                              state: null,
+                            })),
+                          ),
+                      { concurrency: "unbounded" },
+                    );
+              return {
                 snapshotSequence: readModel.snapshotSequence,
-                project:
-                  readModel.projects.find((project) => project.projectId === input.projectId) ??
-                  null,
-              })),
-            ),
+                project,
+                presences,
+              };
+            }),
             { "rpc.aggregate": "team" },
           ),
         [WS_METHODS.teamDispatchCommand]: (input) =>

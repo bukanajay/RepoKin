@@ -111,6 +111,7 @@ import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as TeamEngine from "./team/Services/TeamEngine.ts";
+import * as TeamPresenceResolver from "./team/Services/TeamPresenceResolver.ts";
 import { createEmptyTeamReadModel } from "./team/projector.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -348,6 +349,7 @@ const buildAppUnderTest = (options?: {
     >;
     terminalManager?: Partial<TerminalManager.TerminalManager["Service"]>;
     teamEngine?: Partial<TeamEngine.TeamEngineService["Service"]>;
+    teamPresenceResolver?: Partial<TeamPresenceResolver.TeamPresenceResolver["Service"]>;
     orchestrationEngine?: Partial<OrchestrationEngine.OrchestrationEngineService["Service"]>;
     projectionSnapshotQuery?: Partial<ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]>;
     checkpointDiffQuery?: Partial<CheckpointDiffQuery.CheckpointDiffQuery["Service"]>;
@@ -714,6 +716,10 @@ const buildAppUnderTest = (options?: {
             getReadModel: Effect.succeed(createEmptyTeamReadModel("1970-01-01T00:00:00.000Z")),
             streamDomainEvents: Stream.empty,
             ...options?.layers?.teamEngine,
+          }),
+          Layer.mock(TeamPresenceResolver.TeamPresenceResolver)({
+            resolveMemberPresence: () => Effect.succeed(null),
+            ...options?.layers?.teamPresenceResolver,
           }),
           Layer.mock(OrchestrationEngine.OrchestrationEngineService)({
             readEvents: () => Stream.empty,

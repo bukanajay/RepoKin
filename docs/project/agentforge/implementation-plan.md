@@ -395,6 +395,21 @@ has no cross-machine presence yet, so human recipients stay local until M3.3.
 
 ### M3.3 Cross-machine presence
 
+**Status:** landed locally (2026-07-31). Rather than fan out the full
+`RelayAgentActivityAggregateState` (project/thread titles) across account
+boundaries, the relay exposes a coarser `getEnvironmentPresence` query over
+the same underlying activity rows: only phase and its timestamp, per
+requested environment id — the same minimal-exposure default the local
+(M2.2) presence model already uses. `TeamRelayPresence` polls it every 10s
+for every roster agent's home environment seen across open projects and
+caches the result; `TeamPresenceResolver` now falls back to that cache when
+a member has no local thread activity and its roster profile's
+`homeEnvironment` differs from this one. `team.readLocalState` returns a
+`presences` list (resolved for every project member, local or remote) so the
+web UI doesn't need its own copy of the resolution logic; Settings ->
+AgentForge shows the owning human's roster environment label next to a
+remote agent's presence chip, e.g. `Busy (on julius-mbp)`.
+
 Fan out through the existing relay aggregate
 (`RelayAgentActivityAggregateState`), scoped to roster members. Presence carries
 the environment id so the UI can show `Aria (on julius-mbp)`.

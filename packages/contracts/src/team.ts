@@ -1167,9 +1167,19 @@ export const TeamLocalStateReadInput = Schema.Struct({
 });
 export type TeamLocalStateReadInput = typeof TeamLocalStateReadInput.Type;
 
+export const TeamMemberPresenceEntry = Schema.Struct({
+  memberId: MemberId,
+  state: Schema.NullOr(MemberPresenceState),
+});
+export type TeamMemberPresenceEntry = typeof TeamMemberPresenceEntry.Type;
+
 export const TeamLocalStateReadResult = Schema.Struct({
   snapshotSequence: NonNegativeInt,
   project: Schema.NullOr(TeamProjectReadModel),
+  // Presence for every member of `project`, resolved locally or (for a
+  // roster agent whose home environment differs from this one) via the
+  // relay (M3.3). Never surfaced when `project` is null.
+  presences: Schema.Array(TeamMemberPresenceEntry),
 }).annotate({
   description: "Environment-local team coordination state for one project.",
 });

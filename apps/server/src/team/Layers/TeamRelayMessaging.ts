@@ -1,5 +1,4 @@
 import { CommandId, type EnvironmentId } from "@t3tools/contracts";
-import { RelayApi } from "@t3tools/contracts/relay";
 import type {
   MemberId,
   TeamRosterReadModel,
@@ -9,22 +8,13 @@ import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
-import * as FetchHttpClient from "effect/unstable/http/FetchHttpClient";
-import * as HttpClient from "effect/unstable/http/HttpClient";
-import * as HttpClientRequest from "effect/unstable/http/HttpClientRequest";
-import * as HttpApiClient from "effect/unstable/httpapi/HttpApiClient";
 
 import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
-import {
-  RELAY_ENVIRONMENT_CREDENTIAL_SECRET,
-  RELAY_ISSUER_SECRET,
-  RELAY_URL_SECRET,
-} from "../../cloud/config.ts";
 import { getOrCreateEnvironmentKeyPairFromSecretStore } from "../../cloud/environmentKeys.ts";
 import { ServerEnvironment } from "../../environment/ServerEnvironment.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { makeTeamRelayClient, readTeamRelayConfig } from "../relayClient.ts";
 import { signTeamMessageEnvelope, verifyTeamMessageEnvelope } from "../SignedMessaging.ts";
 import { TeamEngineService } from "../Services/TeamEngine.ts";
 import { TeamFileStore } from "../Services/TeamFileStore.ts";
@@ -64,37 +54,8 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
   const teamFileStore = yield* TeamFileStore;
   const crypto = yield* Crypto.Crypto;
   const keyPair = yield* getOrCreateEnvironmentKeyPairFromSecretStore(secrets);
-
-  const readSecretString = (name: string) =>
-    secrets
-      .get(name)
-      .pipe(
-        Effect.map((bytes) =>
-          Option.isSome(bytes) ? new TextDecoder().decode(bytes.value) : null,
-        ),
-      );
-
-  const readRelayConfig = Effect.gen(function* () {
-    const [url, issuer, environmentCredential] = yield* Effect.all([
-      readSecretString(RELAY_URL_SECRET),
-      readSecretString(RELAY_ISSUER_SECRET),
-      readSecretString(RELAY_ENVIRONMENT_CREDENTIAL_SECRET),
-    ]);
-    return url && environmentCredential
-      ? { url, issuer: issuer ?? url, environmentCredential }
-      : null;
-  });
-
-  const makeRelayClient = (relayConfig: {
-    readonly url: string;
-    readonly environmentCredential: string;
-  }) =>
-    HttpApiClient.make(RelayApi, {
-      baseUrl: relayConfig.url,
-      transformClient: HttpClient.mapRequest(
-        HttpClientRequest.setHeader("authorization", `Bearer ${relayConfig.environmentCredential}`),
-      ),
-    }).pipe(Effect.provide(FetchHttpClient.layer));
+  const readRelayConfig = readTeamRelayConfig(secrets);
+  const makeRelayClient = makeTeamRelayClient;
 
   const resolveProjectCwd = (projectId: string) =>
     projectionSnapshotQuery
