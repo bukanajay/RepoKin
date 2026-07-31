@@ -270,6 +270,15 @@ export const ApiLive = Api.make(
             ),
           ),
         ),
+        // Expired team messages are never delivered by design (TTL, not a
+        // retry queue) — sweep them so the queue doesn't grow unbounded.
+        Effect.andThen(
+          Effect.all([TeamMessageRows.TeamMessageRows, DateTime.now]).pipe(
+            Effect.flatMap(([teamMessageRows, now]) =>
+              teamMessageRows.pruneExpired({ nowIso: DateTime.formatIso(now) }),
+            ),
+          ),
+        ),
         Effect.withSpan("relay.cron.prune_expired_state"),
         Effect.provide(runtimeLayer),
       ),

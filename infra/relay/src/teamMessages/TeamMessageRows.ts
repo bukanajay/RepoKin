@@ -5,7 +5,7 @@ import * as Function from "effect/Function";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { and, eq, gt, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray, lte } from "drizzle-orm";
 
 import * as RelayDb from "../db.ts";
 import { relayTeamMessages } from "../persistence/schema.ts";
@@ -34,6 +34,17 @@ export class TeamMessageDrainPersistenceError extends Schema.TaggedErrorClass<Te
   }
 }
 
+export class TeamMessagePrunePersistenceError extends Schema.TaggedErrorClass<TeamMessagePrunePersistenceError>()(
+  "TeamMessagePrunePersistenceError",
+  {
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return "Failed to prune expired queued team messages.";
+  }
+}
+
 export class TeamMessageRows extends Context.Service<
   TeamMessageRows,
   {
@@ -49,6 +60,9 @@ export class TeamMessageRows extends Context.Service<
       readonly recipientEnvironmentId: string;
       readonly nowIso: string;
     }) => Effect.Effect<ReadonlyArray<TeamSignedMessageEnvelope>, TeamMessageDrainPersistenceError>;
+    readonly pruneExpired: (input: {
+      readonly nowIso: string;
+    }) => Effect.Effect<void, TeamMessagePrunePersistenceError>;
   }
 >()("t3code-relay/teamMessages/TeamMessageRows") {}
 
@@ -160,6 +174,13 @@ export const make = Effect.gen(function* () {
         );
       },
     ),
+
+    pruneExpired: Effect.fn("relay.team_message_rows.prune_expired")(function* (input) {
+      yield* db
+        .delete(relayTeamMessages)
+        .where(lte(relayTeamMessages.expiresAt, input.nowIso))
+        .pipe(Effect.mapError((cause) => new TeamMessagePrunePersistenceError({ cause })));
+    }),
   });
 });
 

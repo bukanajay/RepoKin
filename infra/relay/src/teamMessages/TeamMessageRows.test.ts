@@ -71,6 +71,12 @@ describe("TeamMessageRows", () => {
       expect(drainError.message).toBe(
         "Failed to drain queued team messages for environment env-recipient.",
       );
+
+      const pruneError = yield* rows
+        .pruneExpired({ nowIso: "2026-07-30T00:30:00.000Z" })
+        .pipe(Effect.flip);
+      expect(pruneError).toMatchObject({ cause });
+      expect(pruneError.message).toBe("Failed to prune expired queued team messages.");
     }).pipe(
       Effect.provide(
         TeamMessageRows.layer.pipe(Layer.provide(Layer.succeed(RelayDb.RelayDb, failingDb))),
