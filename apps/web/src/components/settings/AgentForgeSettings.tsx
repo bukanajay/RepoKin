@@ -25,11 +25,15 @@ import {
   BotIcon,
   CableIcon,
   CheckIcon,
+  CloudUploadIcon,
+  FileCode2Icon,
   GitBranchIcon,
+  MessageSquareIcon,
   RefreshCwIcon,
   SaveIcon,
   SendIcon,
   ShieldCheckIcon,
+  UsersIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -51,12 +55,23 @@ import { primaryServerConfigAtom, primaryServerProvidersAtom } from "../../state
 import { teamEnvironment } from "../../state/team";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useProjects, useThreadShells } from "../../state/entities";
+import { useGitStackedAction } from "../../state/sourceControlActions";
+import { vcsEnvironment } from "../../state/vcs";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
+import { SettingsPageContainer, SettingsRow } from "./settingsLayout";
 
 const DRIVER_OPTIONS = [
   { value: "codex", label: "Codex" },
@@ -72,6 +87,14 @@ const DEFAULT_AGENT_NAME = "Aria";
 const DEFAULT_PERSONA = "Pragmatic implementation agent focused on scoped, verified progress.";
 const NO_BOUND_PROVIDER_VALUE = "__agentforge_no_bound_provider__";
 const decodeMemberId = Schema.decodeUnknownSync(MemberIdSchema);
+
+const AGENTFORGE_VIEWS = [
+  { id: "agents", label: "Agents", icon: UsersIcon },
+  { id: "collaboration", label: "Collaboration", icon: MessageSquareIcon },
+  { id: "instructions", label: "Instructions", icon: FileCode2Icon },
+] as const;
+
+type AgentForgeView = (typeof AGENTFORGE_VIEWS)[number]["id"];
 
 const RUNTIME_MODE_OPTIONS: ReadonlyArray<{ readonly value: RuntimeMode; readonly label: string }> =
   [
@@ -179,7 +202,10 @@ export function AgentForgeSettingsPanel() {
   const [bindingStatus, setBindingStatus] = useState<string | null>(null);
   const [teamRemote, setTeamRemote] = useState("");
   const [teamRemoteStatus, setTeamRemoteStatus] = useState<string | null>(null);
+  const [publishStatus, setPublishStatus] = useState<string | null>(null);
+  const [publishConfirmationOpen, setPublishConfirmationOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<AgentForgeView>("agents");
   const [messageBody, setMessageBody] = useState("");
   const [messageStatus, setMessageStatus] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState("");
@@ -202,6 +228,22 @@ export function AgentForgeSettingsPanel() {
 
   const normalizedCwd = normalizeInput(cwd);
   const normalizedAgentId = normalizeInput(agentId);
+  const vcsScope = useMemo(
+    () => ({
+      environmentId,
+      cwd: normalizedCwd.length === 0 ? null : normalizedCwd,
+    }),
+    [environmentId, normalizedCwd],
+  );
+  const vcsStatus = useEnvironmentQuery(
+    environmentId === null || normalizedCwd.length === 0
+      ? null
+      : vcsEnvironment.status({
+          environmentId,
+          input: { cwd: normalizedCwd },
+        }),
+  );
+  const publishTeamChanges = useGitStackedAction(vcsScope);
   const selectedProject = useMemo(
     () =>
       environmentId === null
@@ -510,14 +552,19 @@ export function AgentForgeSettingsPanel() {
       input: {
         cwd: normalizedCwd,
         profile,
-        commit: false,
+        commit: true,
       },
     });
 
     if (result._tag === "Success") {
-      setSaveStatus(`Saved locally to ${result.value.write.path}`);
+      setSaveStatus(
+        result.value.write.committed
+          ? `Saved and committed ${result.value.write.path}`
+          : `Saved locally to ${result.value.write.path}`,
+      );
       setSubmitted(null);
       roster.refresh();
+      vcsStatus.refresh();
       return;
     }
 
@@ -541,19 +588,43 @@ export function AgentForgeSettingsPanel() {
       input: {
         cwd: normalizedCwd,
         team: nextTeam,
-        commit: false,
+        commit: true,
       },
     });
     if (result._tag === "Success") {
       setTeamRemoteStatus(
-        nextTeam.teamRemote === undefined
-          ? "Saved without a team remote."
-          : `Saved ${nextTeam.teamRemote}.`,
+        result.value.write.committed
+          ? nextTeam.teamRemote === undefined
+            ? "Saved and committed without a team remote."
+            : `Saved and committed ${nextTeam.teamRemote}.`
+          : nextTeam.teamRemote === undefined
+            ? "Saved locally without a team remote."
+            : `Saved locally with ${nextTeam.teamRemote}.`,
       );
       roster.refresh();
+      vcsStatus.refresh();
       return;
     }
     setTeamRemoteStatus("Save failed. Check the repository path and remote value.");
+  }
+
+  async function handlePublishTeamChanges() {
+    const aheadCount = vcsStatus.data?.aheadCount ?? 0;
+    if (aheadCount === 0 || environmentId === null || normalizedCwd.length === 0) {
+      return;
+    }
+    setPublishConfirmationOpen(false);
+    setPublishStatus("Publishing...");
+    const result = await publishTeamChanges.run({
+      actionId: randomUUID(),
+      action: "push",
+    });
+    if (result._tag === "Success") {
+      setPublishStatus(`Published ${aheadCount} local commit${aheadCount === 1 ? "" : "s"}.`);
+      vcsStatus.refresh();
+      return;
+    }
+    setPublishStatus("Publish failed. Check the repository remote and branch permissions.");
   }
 
   async function handleSyncRoster() {
@@ -738,13 +809,178 @@ export function AgentForgeSettingsPanel() {
     });
   }
 
+  const unpublishedCommitCount = vcsStatus.data?.aheadCount ?? 0;
+  const canPublishTeamChanges =
+    unpublishedCommitCount > 0 &&
+    vcsStatus.data?.isRepo === true &&
+    vcsStatus.data.hasPrimaryRemote &&
+    !publishTeamChanges.isPending;
+
   return (
-    <SettingsPageContainer>
-      <SettingsSection
-        title="AgentForge"
-        icon={<BotIcon className="size-4 text-muted-foreground" />}
+    <SettingsPageContainer className="max-w-5xl gap-6">
+      <section className="space-y-5 px-3 sm:px-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
+              <BotIcon className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-xl font-semibold text-foreground">AgentForge</h2>
+              <p className="truncate text-sm text-muted-foreground">
+                {selectedProject?.title ?? "Select a project workspace"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-sm border px-2 py-1 font-medium",
+                roster.data
+                  ? "border-emerald-500/25 bg-emerald-500/8 text-emerald-700 dark:text-emerald-400"
+                  : "border-border bg-muted/40 text-muted-foreground",
+              )}
+            >
+              <span
+                className={cn(
+                  "size-1.5 rounded-full",
+                  roster.data ? "bg-emerald-500" : "bg-muted-foreground/50",
+                )}
+              />
+              {roster.data ? "Roster ready" : "Roster unavailable"}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid overflow-hidden rounded-lg border border-border/70 bg-card shadow-xs/5 lg:grid-cols-[minmax(0,1fr)_19rem]">
+          <div className="grid gap-2 p-3 sm:grid-cols-[minmax(0,1fr)_14rem] sm:p-4">
+            <label className="grid min-w-0 gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Workspace path</span>
+              <Input
+                nativeInput
+                value={cwd}
+                onChange={(event) => setCwd(event.currentTarget.value)}
+                placeholder="/path/to/repository"
+              />
+            </label>
+            <label className="grid min-w-0 gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground">Project</span>
+              <Select
+                value={cwd}
+                onValueChange={(value) => {
+                  if (value !== null) {
+                    setCwd(value);
+                  }
+                }}
+              >
+                <SelectTrigger aria-label="AgentForge project workspace">
+                  <SelectValue>
+                    {projectOptions.find((project) => project.value === cwd)?.label ??
+                      "Select project"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  {projectOptions.map((project) => (
+                    <SelectItem hideIndicator key={project.value} value={project.value}>
+                      <span className="block min-w-0 truncate">{project.label}</span>
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-3 border-border/70 border-t bg-muted/20 lg:border-t-0 lg:border-l">
+            <div className="flex min-w-0 flex-col justify-center px-3 py-3 sm:px-4">
+              <span className="text-lg font-semibold text-foreground">
+                {roster.data?.agents.length ?? 0}
+              </span>
+              <span className="text-xs text-muted-foreground">Agents</span>
+            </div>
+            <div className="flex min-w-0 flex-col justify-center border-border/60 border-l px-3 py-3 sm:px-4">
+              <span className="text-lg font-semibold text-foreground">
+                {roster.data?.humans.length ?? 0}
+              </span>
+              <span className="text-xs text-muted-foreground">Humans</span>
+            </div>
+            <div className="flex min-w-0 flex-col justify-center border-border/60 border-l px-3 py-3 sm:px-4">
+              <span className="truncate text-sm font-semibold text-foreground">
+                {roster.data?.team?.teamRemote ?? "Local"}
+              </span>
+              <span className="text-xs text-muted-foreground">Roster</span>
+            </div>
+          </div>
+        </div>
+
+        {unpublishedCommitCount > 0 || publishStatus !== null ? (
+          <div className="flex flex-col gap-3 border-y border-border/70 bg-muted/20 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-foreground">
+                {unpublishedCommitCount > 0
+                  ? "Team changes ready to publish"
+                  : "Team changes published"}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {publishStatus ??
+                  `${unpublishedCommitCount} local commit${unpublishedCommitCount === 1 ? "" : "s"} ahead on ${vcsStatus.data?.refName ?? "the current branch"}.`}
+              </div>
+            </div>
+            {unpublishedCommitCount > 0 ? (
+              <Button
+                size="sm"
+                className="shrink-0"
+                disabled={!canPublishTeamChanges}
+                onClick={() => {
+                  if (vcsStatus.data?.isDefaultRef) {
+                    setPublishConfirmationOpen(true);
+                    return;
+                  }
+                  void handlePublishTeamChanges();
+                }}
+              >
+                <CloudUploadIcon className="size-3.5" />
+                {publishTeamChanges.isPending ? "Publishing..." : "Publish team changes"}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div
+          role="tablist"
+          aria-label="AgentForge settings views"
+          className="grid min-w-0 grid-cols-3 border-border/70 border-b"
+        >
+          {AGENTFORGE_VIEWS.map((view) => {
+            const Icon = view.icon;
+            const selected = activeView === view.id;
+            return (
+              <button
+                key={view.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                aria-controls={`agentforge-${view.id}-panel`}
+                className={cn(
+                  "relative flex h-10 min-w-0 items-center justify-center gap-1 px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:gap-2 sm:px-3 sm:text-sm",
+                  selected &&
+                    "text-foreground after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary",
+                )}
+                onClick={() => setActiveView(view.id)}
+              >
+                <Icon className="size-4 shrink-0" />
+                <span className="min-w-0 truncate">{view.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <div
+        id={`agentforge-${activeView}-panel`}
+        role="tabpanel"
+        className="relative space-y-2 text-foreground"
       >
         <SettingsRow
+          className={activeView === "agents" ? undefined : "hidden"}
           title="Roster"
           description="Read humans and agents from the selected repository's .agentforge directory."
           control={
@@ -766,7 +1002,7 @@ export function AgentForgeSettingsPanel() {
                 : "No roster loaded yet."
           }
         >
-          <div className="mt-4 rounded-xl border border-border/70 bg-card shadow-xs/5">
+          <div className="mt-4 overflow-hidden rounded-lg border border-border/70 bg-card shadow-xs/5">
             {roster.error ? (
               <div className="border-border/60 border-b px-3 py-3 text-sm text-destructive sm:px-4">
                 {roster.error}
@@ -859,6 +1095,7 @@ export function AgentForgeSettingsPanel() {
         </SettingsRow>
 
         <SettingsRow
+          className={activeView === "agents" ? undefined : "hidden"}
           title="Runtime binding"
           description="Choose the local provider instance that runs the selected agent on this machine."
           control={
@@ -874,7 +1111,7 @@ export function AgentForgeSettingsPanel() {
               : "No local provider binding saved.")
           }
         >
-          <div className="mt-4 grid gap-4 rounded-xl border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] sm:px-4">
+          <div className="mt-4 grid gap-4 rounded-lg border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)] sm:px-4">
             <label className="grid gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">Provider instance</span>
               <Select
@@ -939,6 +1176,7 @@ export function AgentForgeSettingsPanel() {
         </SettingsRow>
 
         <SettingsRow
+          className={activeView === "collaboration" ? undefined : "hidden"}
           title="Team sync"
           description="Set the explicit team remote and fetch its roster without touching the working tree."
           control={
@@ -975,7 +1213,7 @@ export function AgentForgeSettingsPanel() {
           }
           status={syncStatus ?? teamRemoteStatus ?? "No remote sync has run for this project."}
         >
-          <div className="mt-4 grid gap-3 rounded-xl border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:px-4">
+          <div className="mt-4 grid gap-3 rounded-lg border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:px-4">
             <label className="grid gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">Team remote</span>
               <Input
@@ -998,6 +1236,7 @@ export function AgentForgeSettingsPanel() {
         </SettingsRow>
 
         <SettingsRow
+          className={activeView === "collaboration" ? undefined : "hidden"}
           title="Local inbox"
           description="Send direct local messages to the selected agent and inspect delivery state."
           control={
@@ -1023,7 +1262,7 @@ export function AgentForgeSettingsPanel() {
               : `${inboxItems.length} local messages`)
           }
         >
-          <div className="mt-4 grid gap-3 rounded-xl border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:px-4">
+          <div className="mt-4 grid gap-3 rounded-lg border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:px-4">
             <Textarea
               value={messageBody}
               onChange={(event) => setMessageBody(event.currentTarget.value)}
@@ -1072,6 +1311,7 @@ export function AgentForgeSettingsPanel() {
         </SettingsRow>
 
         <SettingsRow
+          className={activeView === "collaboration" ? undefined : "hidden"}
           title="Local handoff"
           description="Assign a project thread to the selected agent and inspect the local activity trail."
           control={
@@ -1097,7 +1337,7 @@ export function AgentForgeSettingsPanel() {
               : `${assignmentItems.length} local assignments`)
           }
         >
-          <div className="mt-4 grid gap-3 rounded-xl border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:px-4">
+          <div className="mt-4 grid gap-3 rounded-lg border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:px-4">
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)]">
               <Select
                 value={selectedThreadId}
@@ -1175,6 +1415,7 @@ export function AgentForgeSettingsPanel() {
         </SettingsRow>
 
         <SettingsRow
+          className={activeView === "agents" ? undefined : "hidden"}
           title="Agent profile"
           description="Create or edit the selected agent profile as a local .agentforge file."
           control={
@@ -1189,7 +1430,7 @@ export function AgentForgeSettingsPanel() {
           }
           status={saveStatus ?? "Local write only; no commit is created."}
         >
-          <div className="mt-4 grid gap-4 rounded-xl border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:grid-cols-2 sm:px-4">
+          <div className="mt-4 grid gap-4 rounded-lg border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:grid-cols-2 sm:px-4">
             <label className="grid gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">Agent ID</span>
               <Input
@@ -1304,6 +1545,7 @@ export function AgentForgeSettingsPanel() {
         </SettingsRow>
 
         <SettingsRow
+          className={activeView === "instructions" ? undefined : "hidden"}
           title="Instruction preview"
           description="Compile one agent profile into the exact provider instructions used when a session starts."
           control={
@@ -1323,41 +1565,7 @@ export function AgentForgeSettingsPanel() {
             </Button>
           }
         >
-          <div className="mt-4 grid gap-4 rounded-xl border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:grid-cols-[minmax(0,1fr)_minmax(8rem,12rem)] sm:px-4">
-            <label className="grid gap-1.5 sm:col-span-2">
-              <span className="text-xs font-medium text-muted-foreground">Workspace</span>
-              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,16rem)]">
-                <Input
-                  nativeInput
-                  value={cwd}
-                  onChange={(event) => setCwd(event.currentTarget.value)}
-                  placeholder="/path/to/repository"
-                />
-                <Select
-                  value={cwd}
-                  onValueChange={(value) => {
-                    if (value !== null) {
-                      setCwd(value);
-                    }
-                  }}
-                >
-                  <SelectTrigger aria-label="Project workspace">
-                    <SelectValue>
-                      {projectOptions.find((project) => project.value === cwd)?.label ??
-                        "Select project"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup align="end" alignItemWithTrigger={false}>
-                    {projectOptions.map((project) => (
-                      <SelectItem hideIndicator key={project.value} value={project.value}>
-                        <span className="block min-w-0 truncate">{project.label}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectPopup>
-                </Select>
-              </div>
-            </label>
-
+          <div className="mt-4 grid gap-4 rounded-lg border border-border/70 bg-card px-3 py-3 shadow-xs/5 sm:grid-cols-[minmax(0,1fr)_minmax(8rem,12rem)] sm:px-4">
             <label className="grid gap-1.5">
               <span className="text-xs font-medium text-muted-foreground">Agent ID</span>
               <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(9rem,12rem)]">
@@ -1417,7 +1625,7 @@ export function AgentForgeSettingsPanel() {
             </label>
           </div>
 
-          <div className="mt-4 rounded-xl border border-border/70 bg-card shadow-xs/5">
+          <div className="mt-4 overflow-hidden rounded-lg border border-border/70 bg-card shadow-xs/5">
             <div className="flex min-h-11 items-center justify-between gap-3 border-border/60 border-b px-3 py-2 sm:px-4">
               <div className="min-w-0">
                 <div className="text-sm font-medium text-foreground">Compiled instructions</div>
@@ -1494,7 +1702,28 @@ export function AgentForgeSettingsPanel() {
             </div>
           </div>
         </SettingsRow>
-      </SettingsSection>
+      </div>
+
+      <AlertDialog open={publishConfirmationOpen} onOpenChange={setPublishConfirmationOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Publish to the default branch?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will push {unpublishedCommitCount} local commit
+              {unpublishedCommitCount === 1 ? "" : "s"} from{" "}
+              {vcsStatus.data?.refName ?? "the current branch"}. AgentForge never publishes
+              automatically.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <Button onClick={() => void handlePublishTeamChanges()}>
+              <CloudUploadIcon className="size-3.5" />
+              Publish
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </SettingsPageContainer>
   );
 }

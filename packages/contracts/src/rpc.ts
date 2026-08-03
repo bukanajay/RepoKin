@@ -228,6 +228,7 @@ export const WS_METHODS = {
   teamSyncRoster: "team.syncRoster",
   teamReadLocalState: "team.readLocalState",
   teamDispatchCommand: "team.dispatchCommand",
+  teamHeartbeatHumanPresence: "team.heartbeatHumanPresence",
 
   // Terminal methods
   terminalOpen: "terminal.open",
@@ -639,6 +640,12 @@ export const WsTeamDispatchCommandRpc = Rpc.make(WS_METHODS.teamDispatchCommand,
   error: Schema.Union([TeamDispatchCommandError, EnvironmentAuthorizationError]),
 });
 
+export const WsTeamHeartbeatHumanPresenceRpc = Rpc.make(WS_METHODS.teamHeartbeatHumanPresence, {
+  payload: Schema.Struct({}),
+  success: Schema.Struct({}),
+  error: EnvironmentAuthorizationError,
+});
+
 export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
   payload: TerminalOpenInput,
   success: TerminalSessionSnapshot,
@@ -910,6 +917,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsTeamSyncRosterRpc,
   WsTeamReadLocalStateRpc,
   WsTeamDispatchCommandRpc,
+  WsTeamHeartbeatHumanPresenceRpc,
   WsTerminalOpenRpc,
   WsTerminalAttachRpc,
   WsTerminalWriteRpc,

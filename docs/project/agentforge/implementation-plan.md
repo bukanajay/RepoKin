@@ -2,7 +2,7 @@
 
 **Companion to:** [prd.md](./prd.md) · [fork-policy.md](./fork-policy.md)
 **Date:** 2026-07-30
-**Status:** in progress (M0 landing on `forge`)
+**Status:** M0-M3 implemented locally; external and live acceptance gates remain
 
 This plan is ordered so that each milestone is shippable and each one _earns_
 the next. Effort estimates assume one to two engineers who know the codebase;
@@ -102,7 +102,9 @@ Then ~~add the `./team` subpath~~ to `packages/contracts/package.json` — not a
 
 ### M1.2 Repository store — `apps/server/src/team/`
 
-**Status:** landed on `forge` (2026-07-30). Not yet wired into server layers/UI.
+**Status:** landed on `forge` (2026-07-30) and wired through typed WebSocket
+RPCs, client-runtime atoms, the web/desktop AgentForge settings surface, and a
+read-only mobile roster.
 
 | File                                                        | Responsibility                                                                                                                                                    |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -233,14 +235,15 @@ chain hole. It ships with M1, not after.
 - [x] Instruction preview.
 - [x] Agent picker in the composer: reads the active project roster and applies
       profile provider/runtime/interaction defaults to the current draft controls.
-- Publish affordance: "N team changes to publish" (PRD Q2 — explicit, never
-  automatic).
+- [x] Publish affordance: local AgentForge saves create scoped commits and a
+      persistent "team changes ready to publish" control pushes only when the
+      user chooses it (PRD Q2). Default-branch pushes require confirmation.
 
 **Desktop:** inherits web. Verify the trust prompt renders correctly in the
 Electron shell.
 
-**Mobile:** read-only roster and agent detail. Editing is M4. Say so in the UI
-rather than shipping a half-working form.
+**Mobile:** [x] read-only roster and agent detail, with project selection and an
+explicit editing-unavailable state. Editing remains M4.
 
 ### M1.8 Testing
 
@@ -258,7 +261,8 @@ rather than shipping a half-working form.
 - [ ] Two agents with different characters produce recognizably different output
       on the same prompt — the blind A/B in [PRD §13](./prd.md#13-success-metrics).
 - [ ] Mechanical settings verifiably applied on all five drivers.
-- [ ] Roster survives clone → edit → commit → clone elsewhere.
+- [x] Roster survives clone → edit → commit → clone elsewhere. Covered by an
+      independent-clone Git integration test in `TeamFileStore.test.ts`.
 - [ ] A project with no `.agentforge/` is indistinguishable from stock T3 Code.
 - [ ] No p95 regression on thread open.
 - [ ] Upstream sync still merges in under two hours.
@@ -272,13 +276,14 @@ rather than shipping a half-working form.
 
 ### M2.1 Team domain
 
-**Status:** started locally (2026-07-30). Landed typed M2 command/event/read
+**Status:** landed locally (2026-07-30). Landed typed M2 command/event/read
 models in `packages/contracts/src/team.ts`, pure
 `apps/server/src/team/decider.ts` / `projector.ts` /
 `commandInvariants.ts`, SQLite `team_events` + `team_command_receipts`
 migration `100_TeamMembers.ts`, `TeamEventStore`, command receipts, and
 `Layers/TeamEngine.ts` with serial dispatch and idempotent command receipts.
-Current scope is local-only and not yet exposed through WebSocket/UI.
+The domain is exposed through typed WebSocket RPCs and client-runtime atoms;
+web/desktop AgentForge settings render the inbox, assignments, and activity.
 
 Mirror the orchestration pattern exactly — `decider.ts` (pure), `projector.ts`,
 `commandInvariants.ts`, `Layers/TeamEngine.ts`. Reusing the shape means reusing
@@ -292,13 +297,16 @@ the team's intuition and the existing test ergonomics.
 
 ### M2.2 Presence
 
-**Status:** started locally (2026-07-30). Extended
+**Status:** landed locally (2026-08-03). Extended
 `packages/shared/src/agentAwareness.ts` with local member presence projection:
 awareness phases map to `online` / `busy` / `away` / `offline`, with a
 30-second staleness horizon. Settings → AgentForge now shows non-animated
 presence chips for roster agents when thread shells are attributed with
-`agentforgeAgentId`. Human presence and durable presence events are still
-pending.
+`agentforgeAgentId`. Human app-presence follows FR-6.3: throttled web/desktop
+pointer and keyboard activity, plus mobile foreground/touch activity, publish
+an authenticated environment heartbeat. The existing 30-second staleness
+horizon turns missing or stale activity into `offline`; durable team-domain
+presence events are intentionally not required because presence is ephemeral.
 
 Extend [`agentAwareness.ts`](../../../packages/shared/src/agentAwareness.ts)
 rather than adding a parallel model. Map existing session phases onto
@@ -307,13 +315,15 @@ indicator never animates continuously.
 
 ### M2.3 Inbox
 
-**Status:** started locally (2026-07-30). Added local inbox command/event
+**Status:** landed locally (2026-07-30). Added local inbox command/event
 schemas and WebSocket RPCs, exposed `team.readLocalState` /
 `team.dispatchCommand` through client runtime atoms, and added a visible
 Settings -> AgentForge local inbox control for sending messages to the selected
 agent and marking delivered messages read. Server-side delivery now uses
 `TeamInboxDeliveryReactorLive` with presence-aware queued/delivered/expired
 decisions and focused tests for domain transitions plus online delivery.
+Messages without an explicit expiry receive a deterministic 24-hour TTL when
+the queued event is decided, so offline messages cannot remain queued forever.
 
 - Durable queue in the team event store, drained by a reactor built on
   [`DrainableWorker`](../../../packages/shared/src/DrainableWorker.ts) so tests
@@ -323,7 +333,7 @@ decisions and focused tests for domain transitions plus online delivery.
 
 ### M2.4 Handoff
 
-**Status:** started locally (2026-07-30). The local team domain already records
+**Status:** landed locally (2026-07-30). The local team domain records
 `team.agent.assign` as a durable assignment plus `thread.assigned` activity.
 Settings -> AgentForge now exposes a local handoff control that selects a
 project thread, assigns it to the selected agent, refreshes the team read model,
@@ -336,8 +346,10 @@ handoff as an activity so it shows in the timeline.
 
 - [ ] Presence reflects real agent state within 2s locally, with no visible
       repaint cost.
-- [ ] Messages to a busy agent queue and deliver on idle.
-- [ ] Handoff preserves thread history and is visible in the timeline.
+- [x] Messages to a busy agent queue and deliver on idle. Covered by the
+      drainable delivery-reactor test without sleeps or polling.
+- [x] Handoff preserves the thread reference and is visible as
+      `thread.assigned` in the activity timeline.
 
 ---
 
@@ -376,13 +388,18 @@ environment-authenticated; `deliverTeamMessage` rejects envelopes whose
 claimed sender doesn't match the caller's authenticated environment.
 `TeamRelayMessaging.ts` forwards a locally queued message through the relay
 when its recipient is a roster agent whose `homeEnvironment` differs from
-this environment (M3.4 changed the local delivery bookkeeping around this —
-see below); a 10s poll loop verifies inbound envelopes against the owning
+this environment, or a human with exactly one unambiguous linked remote
+environment (M3.4 changed the local delivery bookkeeping around this — see
+below); a 10s poll loop verifies inbound envelopes against the owning
 project's roster and dispatches accepted ones into the local team engine,
-dropping unverifiable ones without surfacing them. **Scoped for now:** only
-agent recipients route remotely — a human can have several linked
-environments and this environment has no cross-machine presence yet, so
-human recipients stay local until M3.3.
+dropping unverifiable ones without surfacing them. Human recipients with one
+linked remote environment route there directly. For humans with multiple
+linked environments, recent app activity selects the destination only when
+exactly one environment is active; ambiguous presence remains queued, and the
+relay cycle reconsiders it when presence changes.
+Message and receipt proofs remain valid for the same 24-hour window as the
+offline relay queue; the focused suite verifies consumption after several
+offline hours rather than only immediately after signing.
 
 - Reuse the environment keypair from
   [`environmentKeys.ts`](../../../apps/server/src/cloud/environmentKeys.ts) and
@@ -396,7 +413,7 @@ human recipients stay local until M3.3.
 
 ### M3.3 Cross-machine presence
 
-**Status:** landed locally (2026-07-31). Rather than fan out the full
+**Status:** landed locally (2026-08-03). Rather than fan out the full
 `RelayAgentActivityAggregateState` (project/thread titles) across account
 boundaries, the relay exposes a coarser `getEnvironmentPresence` query over
 the same underlying activity rows: only phase and its timestamp, per
@@ -411,26 +428,48 @@ web UI doesn't need its own copy of the resolution logic; Settings ->
 AgentForge shows the owning human's roster environment label next to a
 remote agent's presence chip, e.g. `Busy (on julius-mbp)`.
 
+Human presence uses a separate minimal relay heartbeat keyed only by the
+authenticated environment id and `activeAt`; it carries no project, thread, or
+input data. Web/desktop and mobile report recent interaction without a timer
+animation. `TeamPresenceResolver` maps linked human environments to the same
+`online` / `offline` read model, and multiple-device message routing proceeds
+only when one active destination is unambiguous.
+
 Fan out through the existing relay aggregate
 (`RelayAgentActivityAggregateState`), scoped to roster members. Presence carries
 the environment id so the UI can show `Aria (on julius-mbp)`.
 
 ### M3.4 Offline queue and borrowed agents
 
-**Status:** landed locally (2026-07-31). The relay's `relay_team_messages`
+**Status:** landed locally (2026-08-03). The relay's `relay_team_messages`
 queue is swept on the existing 5-minute cron alongside the agent-activity
-prune. `TeamRelayMessaging` no longer marks a forwarded message "delivered"
-on relay hand-off — handing off only means the recipient environment _can_
-pick it up, not that it has, so the message stays queued locally until
-either it's genuinely delivered or its own TTL expires (`team.message.expire`),
-giving honest visible expiry instead of an optimistic false-positive. Fixing
-that surfaced a real bug: since M3.3 made `TeamPresenceResolver` resolve a
-non-null presence for remote-home agents, `TeamInboxDeliveryReactor` would
-otherwise have started marking their messages "delivered" locally the moment
-the relay reported them online — wrong, since only `TeamRelayMessaging` can
-actually get a message to a remote agent. It now checks the recipient's
-roster `homeEnvironment` and only ever "wait"s or "expire"s a remote-home
-agent's message itself.
+prune. `TeamRelayMessaging` does not mark a forwarded message "delivered" on
+relay hand-off — handing off only means the recipient environment _can_ pick
+it up. After the recipient durably accepts and verifies the message, it signs
+a delivery receipt with its environment key and queues that receipt back to
+the original sender environment. The sender verifies the recipient's current
+roster key, checks the signed sender/recipient tuple against its queued local
+message, and only then dispatches `team.message.deliver`. Wrong-key and
+tampered receipts are dropped. Messages and receipts share the queue's
+24-hour validity window, and messages without an explicit expiry now receive
+that TTL in the local event domain.
+
+The relay queue and human-presence tables ship with generated Postgres
+migration `20260802175214_agentforge_team_transport`; the earlier TypeScript
+schema alone was not deployable. A process-local forwarded-message set prevents
+the 10-second retry scan from flooding the relay while still allowing messages
+that were initially unroutable, or failed a transient send, to be retried. The
+same cycle retries receipts from persisted inbound-message provenance until the
+relay accepts them, so a transient receipt-send failure does not strand the
+sender in `queued` after recipient acceptance.
+
+Fixing the earlier optimistic state surfaced a real bug: since M3.3 made
+`TeamPresenceResolver` resolve a non-null presence for remote-home agents,
+`TeamInboxDeliveryReactor` would otherwise have started marking their messages
+"delivered" locally the moment the relay reported them online — wrong, since
+only `TeamRelayMessaging` can actually get a message to a remote agent. It
+checks the recipient's roster `homeEnvironment` and only ever "wait"s or
+"expire"s a remote-home agent's message itself.
 
 Borrowed-agent visibility ships without any new state: M1.4's local
 agent-to-provider binding is already an explicit, environment-local opt-in,
@@ -448,8 +487,9 @@ the agent (already-existing UI) is the "way out."
 
 - [ ] Two machines, one repo: both rosters converge within the staleness target.
 - [ ] Messages deliver when both online; queue and deliver later when not.
-- [ ] A forged message signed by the wrong key is rejected — with a test.
-- [ ] Revoking a member by removing their profile actually cuts them off.
+- [x] A forged message signed by the wrong key is rejected — with a test.
+- [x] Revoking a member by removing their profile actually cuts them off — with
+      a focused signed-envelope test.
 
 ---
 

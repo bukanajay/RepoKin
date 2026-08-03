@@ -1988,6 +1988,15 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "team" },
           ),
+        [WS_METHODS.teamHeartbeatHumanPresence]: () =>
+          observeRpcEffect(
+            WS_METHODS.teamHeartbeatHumanPresence,
+            TeamPresenceResolver.pipe(
+              Effect.flatMap((presence) => presence.publishHumanPresence),
+              Effect.as({}),
+            ),
+            { "rpc.aggregate": "team" },
+          ),
         [WS_METHODS.terminalOpen]: (input) =>
           observeRpcEffect(WS_METHODS.terminalOpen, terminalManager.open(input), {
             "rpc.aggregate": "terminal",

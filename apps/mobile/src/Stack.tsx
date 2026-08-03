@@ -10,8 +10,16 @@ import {
   createNativeStackScreen,
   type NativeStackNavigationOptions,
 } from "@react-navigation/native-stack";
-import { useEffect, useRef } from "react";
-import { DynamicColorIOS, Platform, Pressable, ScrollView, StyleSheet } from "react-native";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  AppState,
+  DynamicColorIOS,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { useResolveClassNames } from "uniwind";
 
 import { AppText as Text } from "./components/AppText";
@@ -43,6 +51,7 @@ import { NewTaskDraftRouteScreen } from "./features/threads/NewTaskDraftRouteScr
 import { NewTaskFlowProvider } from "./features/threads/new-task-flow-provider";
 import { NewTaskRouteScreen } from "./features/threads/NewTaskRouteScreen";
 import { SettingsAppearanceRouteScreen } from "./features/settings/SettingsAppearanceRouteScreen";
+import { SettingsAgentForgeRouteScreen } from "./features/settings/SettingsAgentForgeRouteScreen";
 import { SettingsClientStorageRouteScreen } from "./features/settings/SettingsClientStorageRouteScreen";
 import { SettingsAuthRouteScreen } from "./features/settings/SettingsAuthRouteScreen";
 import { SettingsEnvironmentsRouteScreen } from "./features/settings/SettingsEnvironmentsRouteScreen";
@@ -62,8 +71,13 @@ import {
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "./native/native-glass";
 import { nativeHeaderScrollEdgeEffects } from "./native/StackHeader";
 import { useThreadOutboxDrain } from "./state/use-thread-outbox-drain";
+import { useThreadSelection } from "./state/use-thread-selection";
+import { useProjects } from "./state/entities";
+import { useAtomCommand } from "./state/use-atom-command";
+import { teamEnvironment } from "./state/team";
 
 const HEADER_SCROLL_EDGE_EFFECTS = nativeHeaderScrollEdgeEffects(Platform.OS, Platform.Version);
+const styles = StyleSheet.create({ root: { flex: 1 } });
 
 // Matches --color-sheet in global.css (light/dark). DynamicColorIOS lets the header
 // background stay STATIC config while still adapting to appearance changes.
@@ -152,6 +166,13 @@ const SettingsSheetStack = createNativeStackNavigator({
       linking: "environments",
       options: {
         title: "Environments",
+      },
+    }),
+    SettingsAgentForge: createNativeStackScreen({
+      screen: SettingsAgentForgeRouteScreen,
+      linking: "agent-forge",
+      options: {
+        title: "AgentForge",
       },
     }),
     SettingsEnvironmentNew: createNativeStackScreen({
@@ -306,6 +327,32 @@ function RootStackLayout(props: {
   useConnectOnboardingNavigation();
   // Launcher app shortcuts: routes shortcut taps and tracks opened threads.
   useAppShortcuts(props.state);
+  const projects = useProjects();
+  const { selectedThread } = useThreadSelection();
+  const projectEnvironmentIds = useMemo(
+    () => new Set(projects.map((project) => project.environmentId)),
+    [projects],
+  );
+  const presenceEnvironmentId =
+    selectedThread?.environmentId ??
+    (projectEnvironmentIds.size === 1 ? ([...projectEnvironmentIds][0] ?? null) : null);
+  const heartbeatHumanPresence = useAtomCommand(teamEnvironment.heartbeatHumanPresence, {
+    label: "publish AgentForge human presence",
+    reportFailure: false,
+    reportDefect: false,
+  });
+  const lastPresenceSentAtRef = useRef(0);
+  const publishHumanPresence = useCallback(() => {
+    if (presenceEnvironmentId === null || AppState.currentState !== "active") {
+      return;
+    }
+    const now = Date.now();
+    if (now - lastPresenceSentAtRef.current < 10_000) {
+      return;
+    }
+    lastPresenceSentAtRef.current = now;
+    void heartbeatHumanPresence({ environmentId: presenceEnvironmentId, input: {} });
+  }, [heartbeatHumanPresence, presenceEnvironmentId]);
   useEffect(() => {
     const topRouteName = props.state.routes[props.state.index]?.name;
     const transition = transitionIncomingSharePresentation(sharePresentationRef.current, {
@@ -321,6 +368,16 @@ function RootStackLayout(props: {
       params: { incomingShareId: transition.shareIdToPresent },
     });
   }, [navigation, pendingShare, props.state]);
+  useEffect(() => {
+    lastPresenceSentAtRef.current = 0;
+    publishHumanPresence();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        publishHumanPresence();
+      }
+    });
+    return () => subscription.remove();
+  }, [presenceEnvironmentId, publishHumanPresence]);
   // Full pathname (sheets included) for keyboard-command scoping; the
   // workspace layout only reacts to the underlying non-overlay route.
   const path = getPathFromState(props.state, navigationPathConfig);
@@ -328,15 +385,17 @@ function RootStackLayout(props: {
   const workspacePathname = workspacePathFromState(props.state);
 
   return (
-    <HardwareKeyboardCommandProvider pathname={pathname}>
-      <ThreadOutboxDrainWorker />
-      <ShowcaseCaptureCoordinator pathname={pathname} />
-      <ClerkSettingsSheetDetentProvider initiallyExpanded={false}>
-        <AdaptiveWorkspaceLayout pathname={workspacePathname}>
-          {props.children}
-        </AdaptiveWorkspaceLayout>
-      </ClerkSettingsSheetDetentProvider>
-    </HardwareKeyboardCommandProvider>
+    <View style={styles.root} onTouchStart={publishHumanPresence}>
+      <HardwareKeyboardCommandProvider pathname={pathname}>
+        <ThreadOutboxDrainWorker />
+        <ShowcaseCaptureCoordinator pathname={pathname} />
+        <ClerkSettingsSheetDetentProvider initiallyExpanded={false}>
+          <AdaptiveWorkspaceLayout pathname={workspacePathname}>
+            {props.children}
+          </AdaptiveWorkspaceLayout>
+        </ClerkSettingsSheetDetentProvider>
+      </HardwareKeyboardCommandProvider>
+    </View>
   );
 }
 

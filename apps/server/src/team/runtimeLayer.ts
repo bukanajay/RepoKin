@@ -12,11 +12,16 @@ export const TeamEventInfrastructureLayerLive = Layer.mergeAll(
   TeamCommandReceiptRepositoryLive,
 );
 
+const TeamRelayPresenceLayerLive = TeamRelayPresenceLive.pipe(
+  Layer.provide(TeamFileStoreLayer.layer),
+);
+
 export const TeamLayerLive = Layer.mergeAll(
   TeamEventInfrastructureLayerLive,
   TeamEngineLive.pipe(Layer.provide(TeamEventInfrastructureLayerLive)),
+  TeamRelayPresenceLayerLive,
   TeamPresenceResolverLive.pipe(
-    Layer.provide(TeamRelayPresenceLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
+    Layer.provide(TeamRelayPresenceLayerLive),
     Layer.provide(TeamFileStoreLayer.layer),
   ),
 );

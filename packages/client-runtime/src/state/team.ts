@@ -39,5 +39,9 @@ export function createTeamEnvironmentAtoms<R, E>(
       label: "environment-data:team:dispatch-command",
       tag: WS_METHODS.teamDispatchCommand,
     }),
+    heartbeatHumanPresence: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:team:human-presence-heartbeat",
+      tag: WS_METHODS.teamHeartbeatHumanPresence,
+    }),
   };
 }

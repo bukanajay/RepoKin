@@ -6,6 +6,7 @@ import type * as Effect from "effect/Effect";
 import type { ProjectionRepositoryError } from "../../persistence/Errors.ts";
 
 export interface TeamPresenceResolverShape {
+  readonly publishHumanPresence: Effect.Effect<void>;
   readonly resolveMemberPresence: (input: {
     readonly projectId: ProjectId;
     readonly memberId: MemberId;

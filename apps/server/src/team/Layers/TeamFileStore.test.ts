@@ -127,6 +127,42 @@ it.layer(TestLayer)("TeamFileStore", (it) => {
     }),
   );
 
+  it.effect("preserves a committed roster across independent clones", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "agentforge-store-clones-",
+      });
+      const remote = path.join(root, "team.git");
+      const firstClone = path.join(root, "first");
+      const secondClone = path.join(root, "second");
+
+      yield* git(root, ["init", "--bare", "--initial-branch=main", remote]);
+      yield* git(root, ["clone", remote, firstClone]);
+      yield* git(firstClone, ["config", "user.email", "test@example.com"]);
+      yield* git(firstClone, ["config", "user.name", "Test User"]);
+      yield* fileSystem.writeFileString(path.join(firstClone, "README.md"), "hello\n");
+      yield* git(firstClone, ["add", "README.md"]);
+      yield* git(firstClone, ["commit", "-m", "Initial commit"]);
+      yield* git(firstClone, ["push", "-u", "origin", "main"]);
+
+      const store = yield* TeamFileStoreTag;
+      yield* store.writeTeamFile(firstClone, teamFile);
+      yield* store.writeHumanProfile(firstClone, julius);
+      yield* store.writeAgentProfile(firstClone, aria);
+      yield* git(firstClone, ["push"]);
+
+      yield* git(root, ["clone", remote, secondClone]);
+      const clonedRoster = yield* store.readRoster(secondClone);
+
+      expect(clonedRoster.team?.displayName).toBe("AgentForge");
+      expect(clonedRoster.humans.map((human) => human.id)).toEqual(["human_julius"]);
+      expect(clonedRoster.agents.map((agent) => agent.id)).toEqual(["agent_aria"]);
+      expect(clonedRoster.warnings).toEqual([]);
+    }),
+  );
+
   it.effect("skips malformed profiles with warnings instead of failing", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;

@@ -1,6 +1,6 @@
 import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import type { OrchestrationShellSnapshot } from "@t3tools/contracts";
-import { AgentId, MemberId, type TeamRosterReadModel } from "@t3tools/contracts/team";
+import { AgentId, HumanId, MemberId, type TeamRosterReadModel } from "@t3tools/contracts/team";
 import { describe, expect, it } from "@effect/vitest";
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
@@ -18,6 +18,7 @@ const localEnvironmentId = EnvironmentId.make("env-local");
 const remoteEnvironmentId = EnvironmentId.make("env-remote");
 const localAgentId = MemberId.make(AgentId.make("agent_local"));
 const remoteAgentId = MemberId.make(AgentId.make("agent_remote"));
+const remoteHumanId = MemberId.make(HumanId.make("human_remote"));
 
 const snapshot = {
   projects: [{ id: projectId, workspaceRoot: "/tmp/project-1" }],
@@ -25,7 +26,16 @@ const snapshot = {
 } as unknown as OrchestrationShellSnapshot;
 
 const roster: TeamRosterReadModel = {
-  humans: [],
+  humans: [
+    {
+      schemaVersion: 1,
+      id: HumanId.make("human_remote"),
+      type: "human",
+      displayName: "Remote human",
+      gitEmails: ["remote@example.com"],
+      environments: [{ environmentId: remoteEnvironmentId, publicKey: "test-key" }],
+    },
+  ],
   agents: [
     {
       schemaVersion: 1,
@@ -61,7 +71,9 @@ const testLayer = (remotePresenceState: "online" | "busy" | "away" | "offline" |
       readRoster: () => Effect.succeed(roster),
     } as unknown as TeamFileStore["Service"]),
     Layer.succeed(TeamRelayPresence, {
+      publishLocalHumanPresence: Effect.void,
       resolveRemoteEnvironmentPresence: () => Effect.succeed(remotePresenceState),
+      resolveHumanEnvironmentPresence: () => Effect.succeed(remotePresenceState),
     } as unknown as TeamRelayPresence["Service"]),
   );
 
@@ -88,5 +100,17 @@ describe("TeamPresenceResolverLive", () => {
       });
       expect(state).toBeNull();
     }).pipe(Effect.provide(TeamPresenceResolverLive.pipe(Layer.provide(testLayer(null))))),
+  );
+
+  it.effect("resolves a human from recent app activity on their linked environment", () =>
+    Effect.gen(function* () {
+      const resolver = yield* TeamPresenceResolver;
+      const state = yield* resolver.resolveMemberPresence({
+        projectId,
+        memberId: remoteHumanId,
+        nowMs: yield* Clock.currentTimeMillis,
+      });
+      expect(state).toBe("online");
+    }).pipe(Effect.provide(TeamPresenceResolverLive.pipe(Layer.provide(testLayer("online"))))),
   );
 });

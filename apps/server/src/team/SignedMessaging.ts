@@ -9,13 +9,18 @@
 import { CommandId } from "@t3tools/contracts";
 import {
   type HumanProfile,
+  type TeamMessageDeliverCommand,
   type TeamMessageSendCommand,
+  TeamSignedDeliveryReceiptPayload,
+  type TeamSignedDeliveryReceiptEnvelope,
+  TeamSignedDeliveryReceiptProofPayload,
   TeamSignedMessagePayload,
   type TeamSignedMessageEnvelope,
   TeamSignedMessageProofPayload,
   type TeamRosterReadModel,
 } from "@t3tools/contracts/team";
 import {
+  RELAY_TEAM_DELIVERY_RECEIPT_TYP,
   RELAY_TEAM_MESSAGE_TYP,
   normalizeRelayIssuer,
   signRelayJwt,
@@ -29,6 +34,13 @@ import * as Schema from "effect/Schema";
 
 const decodeSignedMessagePayload = Schema.decodeUnknownEffect(TeamSignedMessagePayload);
 const decodeSignedMessageProofPayload = Schema.decodeUnknownEffect(TeamSignedMessageProofPayload);
+const decodeSignedDeliveryReceiptPayload = Schema.decodeUnknownEffect(
+  TeamSignedDeliveryReceiptPayload,
+);
+const decodeSignedDeliveryReceiptProofPayload = Schema.decodeUnknownEffect(
+  TeamSignedDeliveryReceiptProofPayload,
+);
+const TEAM_RELAY_ENVELOPE_LIFETIME = { hours: 24 } as const;
 
 export type TeamSignedMessageDropReason =
   | "payload-decode-failed"
@@ -52,6 +64,17 @@ export interface TeamSignedMessageDropped {
 
 export type TeamSignedMessageVerificationResult =
   | TeamSignedMessageAccepted
+  | TeamSignedMessageDropped;
+
+export interface TeamSignedDeliveryReceiptAccepted {
+  readonly _tag: "accepted";
+  readonly command: TeamMessageDeliverCommand;
+  readonly proof: TeamSignedDeliveryReceiptProofPayload;
+  readonly signerPublicKey: string;
+}
+
+export type TeamSignedDeliveryReceiptVerificationResult =
+  | TeamSignedDeliveryReceiptAccepted
   | TeamSignedMessageDropped;
 
 const dropped = (
@@ -131,6 +154,23 @@ export function signedMessagePayloadToCommand(
   };
 }
 
+export function signedDeliveryReceiptPayloadToCommand(
+  payload: TeamSignedDeliveryReceiptPayload,
+): TeamMessageDeliverCommand {
+  return {
+    commandId: CommandId.make(
+      `team:remote-receipt:${payload.messageId}:${payload.recipientEnvironmentId}`,
+    ),
+    projectId: payload.projectId,
+    type: "team.message.deliver",
+    messageId: payload.messageId,
+    metadata: {
+      actorMemberId: payload.recipientId,
+      environmentId: payload.recipientEnvironmentId,
+    },
+  };
+}
+
 export const signTeamMessageEnvelope = Effect.fn("TeamSignedMessaging.signEnvelope")(
   function* (input: {
     readonly privateKey: string;
@@ -140,7 +180,7 @@ export const signTeamMessageEnvelope = Effect.fn("TeamSignedMessaging.signEnvelo
     readonly now?: DateTime.Utc;
   }) {
     const now = input.now ?? (yield* DateTime.now);
-    const expiresAt = DateTime.add(now, { minutes: 5 });
+    const expiresAt = DateTime.add(now, TEAM_RELAY_ENVELOPE_LIFETIME);
     const proofPayload = {
       iss: `t3-env:${input.payload.senderEnvironmentId}`,
       aud: normalizeRelayIssuer(input.relayIssuer),
@@ -160,6 +200,36 @@ export const signTeamMessageEnvelope = Effect.fn("TeamSignedMessaging.signEnvelo
     return { payload: input.payload, proof };
   },
 );
+
+export const signTeamDeliveryReceiptEnvelope = Effect.fn(
+  "TeamSignedMessaging.signDeliveryReceiptEnvelope",
+)(function* (input: {
+  readonly privateKey: string;
+  readonly relayIssuer: string;
+  readonly receipt: TeamSignedDeliveryReceiptPayload;
+  readonly jti: string;
+  readonly now?: DateTime.Utc;
+}) {
+  const now = input.now ?? (yield* DateTime.now);
+  const expiresAt = DateTime.add(now, TEAM_RELAY_ENVELOPE_LIFETIME);
+  const proofPayload = {
+    iss: `t3-env:${input.receipt.recipientEnvironmentId}`,
+    aud: normalizeRelayIssuer(input.relayIssuer),
+    sub: input.receipt.recipientEnvironmentId,
+    jti: input.jti,
+    iat: Math.floor(now.epochMilliseconds / 1_000),
+    exp: Math.floor(expiresAt.epochMilliseconds / 1_000),
+    senderEnvironmentId: input.receipt.senderEnvironmentId,
+    recipientEnvironmentId: input.receipt.recipientEnvironmentId,
+    receipt: input.receipt,
+  } satisfies TeamSignedDeliveryReceiptProofPayload;
+  const proof = yield* signRelayJwt({
+    privateKey: input.privateKey,
+    typ: RELAY_TEAM_DELIVERY_RECEIPT_TYP,
+    payload: proofPayload,
+  });
+  return { receipt: input.receipt, proof };
+});
 
 export const verifyTeamMessageEnvelope = Effect.fn("TeamSignedMessaging.verifyEnvelope")(
   function* (input: {
@@ -192,6 +262,7 @@ export const verifyTeamMessageEnvelope = Effect.fn("TeamSignedMessaging.verifyEn
       issuer: `t3-env:${payload.senderEnvironmentId}`,
       audience: normalizeRelayIssuer(input.relayIssuer),
       nowEpochSeconds: input.nowEpochSeconds,
+      maxTokenAge: "24 hours",
     }).pipe(Effect.flatMap(decodeSignedMessageProofPayload), Effect.option);
     if (Option.isNone(proofOption)) {
       return dropped("proof-invalid", "The signed team message proof did not verify.");
@@ -214,3 +285,58 @@ export const verifyTeamMessageEnvelope = Effect.fn("TeamSignedMessaging.verifyEn
     } satisfies TeamSignedMessageAccepted;
   },
 );
+
+export const verifyTeamDeliveryReceiptEnvelope = Effect.fn(
+  "TeamSignedMessaging.verifyDeliveryReceiptEnvelope",
+)(function* (input: {
+  readonly envelope: TeamSignedDeliveryReceiptEnvelope;
+  readonly roster: TeamRosterReadModel;
+  readonly relayIssuer: string;
+  readonly nowEpochSeconds: number;
+}) {
+  const receiptOption = yield* decodeSignedDeliveryReceiptPayload(input.envelope.receipt).pipe(
+    Effect.option,
+  );
+  if (Option.isNone(receiptOption)) {
+    return dropped("payload-decode-failed", "The signed delivery receipt is malformed.");
+  }
+
+  const receipt = receiptOption.value;
+  const publicKeyResult = resolveRosterPublicKeyForMember({
+    roster: input.roster,
+    memberId: receipt.recipientId,
+    environmentId: receipt.recipientEnvironmentId,
+  });
+  if ("_tag" in publicKeyResult) {
+    return publicKeyResult;
+  }
+
+  const proofOption = yield* verifyRelayJwt({
+    publicKey: publicKeyResult.publicKey,
+    token: input.envelope.proof,
+    typ: RELAY_TEAM_DELIVERY_RECEIPT_TYP,
+    issuer: `t3-env:${receipt.recipientEnvironmentId}`,
+    audience: normalizeRelayIssuer(input.relayIssuer),
+    nowEpochSeconds: input.nowEpochSeconds,
+    maxTokenAge: "24 hours",
+  }).pipe(Effect.flatMap(decodeSignedDeliveryReceiptProofPayload), Effect.option);
+  if (Option.isNone(proofOption)) {
+    return dropped("proof-invalid", "The signed delivery receipt proof did not verify.");
+  }
+
+  const proof = proofOption.value;
+  if (
+    proof.senderEnvironmentId !== receipt.senderEnvironmentId ||
+    proof.recipientEnvironmentId !== receipt.recipientEnvironmentId ||
+    !Equal.equals(proof.receipt, receipt)
+  ) {
+    return dropped("payload-mismatch", "The signed proof does not cover the delivery receipt.");
+  }
+
+  return {
+    _tag: "accepted",
+    command: signedDeliveryReceiptPayloadToCommand(receipt),
+    proof,
+    signerPublicKey: publicKeyResult.publicKey,
+  } satisfies TeamSignedDeliveryReceiptAccepted;
+});

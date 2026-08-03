@@ -46,6 +46,7 @@ const decodeCommand = Schema.decodeUnknownSync(TeamCommand);
 const fakePresenceResolver = Layer.succeed(
   TeamPresenceResolver,
   TeamPresenceResolver.of({
+    publishHumanPresence: Effect.void,
     resolveMemberPresence: () => Effect.succeed("online"),
   }),
 );
@@ -79,6 +80,7 @@ let mutablePresence: "online" | "busy" | "away" | "offline" | null = "busy";
 const mutablePresenceResolver = Layer.succeed(
   TeamPresenceResolver,
   TeamPresenceResolver.of({
+    publishHumanPresence: Effect.void,
     resolveMemberPresence: () => Effect.sync(() => mutablePresence),
   }),
 );
@@ -249,6 +251,7 @@ mutablePresenceLayer("TeamInboxDeliveryReactor queued retry", (it) => {
 const alwaysOnlinePresenceResolver = Layer.succeed(
   TeamPresenceResolver,
   TeamPresenceResolver.of({
+    publishHumanPresence: Effect.void,
     resolveMemberPresence: () => Effect.succeed("online"),
   }),
 );

@@ -1,4 +1,4 @@
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, MessageId, ProjectId } from "@t3tools/contracts";
 import {
   AgentId,
   type AgentProfile,
@@ -6,10 +6,14 @@ import {
   type HumanProfile,
   MemberId,
   type TeamRosterReadModel,
+  type TeamSignedDeliveryReceiptPayload,
 } from "@t3tools/contracts/team";
 import { describe, expect, it } from "@effect/vitest";
 
-import { resolveRemoteRecipientEnvironment } from "./TeamRelayMessaging.ts";
+import {
+  matchesQueuedMessageForReceipt,
+  resolveRemoteRecipientEnvironment,
+} from "./TeamRelayMessaging.ts";
 
 const julius: HumanProfile = {
   schemaVersion: 1,
@@ -21,6 +25,15 @@ const julius: HumanProfile = {
     { environmentId: EnvironmentId.make("env-local"), publicKey: "julius-key" },
     { environmentId: EnvironmentId.make("env-remote"), publicKey: "julius-key-2" },
   ],
+};
+
+const maya: HumanProfile = {
+  schemaVersion: 1,
+  id: HumanId.make("human_maya"),
+  type: "human",
+  displayName: "Maya",
+  gitEmails: ["maya@example.com"],
+  environments: [{ environmentId: EnvironmentId.make("env-maya"), publicKey: "maya-key" }],
 };
 
 const localAria: AgentProfile = {
@@ -53,7 +66,7 @@ const homelessCleo: AgentProfile = {
 };
 
 const roster: TeamRosterReadModel = {
-  humans: [julius],
+  humans: [julius, maya],
   agents: [localAria, remoteBrooks, homelessCleo],
   warnings: [],
 };
@@ -91,7 +104,7 @@ describe("resolveRemoteRecipientEnvironment", () => {
     ).toBeNull();
   });
 
-  it("returns null for a human recipient, deferring multi-environment routing to M3.3", () => {
+  it("keeps a human recipient local when this environment is linked", () => {
     expect(
       resolveRemoteRecipientEnvironment({
         roster,
@@ -99,6 +112,16 @@ describe("resolveRemoteRecipientEnvironment", () => {
         localEnvironmentId,
       }),
     ).toBeNull();
+  });
+
+  it("returns a human recipient's only linked remote environment", () => {
+    expect(
+      resolveRemoteRecipientEnvironment({
+        roster,
+        recipientId: MemberId.make(maya.id),
+        localEnvironmentId,
+      }),
+    ).toBe("env-maya");
   });
 
   it("returns null for an unknown recipient", () => {
@@ -109,5 +132,69 @@ describe("resolveRemoteRecipientEnvironment", () => {
         localEnvironmentId,
       }),
     ).toBeNull();
+  });
+
+  it("routes a multi-device human when exactly one remote environment is active", () => {
+    expect(
+      resolveRemoteRecipientEnvironment({
+        roster,
+        recipientId: MemberId.make(julius.id),
+        localEnvironmentId: EnvironmentId.make("env-sender"),
+        activeHumanEnvironmentIds: [EnvironmentId.make("env-remote")],
+      }),
+    ).toBe("env-remote");
+  });
+
+  it("keeps a multi-device human queued when presence is ambiguous", () => {
+    expect(
+      resolveRemoteRecipientEnvironment({
+        roster,
+        recipientId: MemberId.make(julius.id),
+        localEnvironmentId: EnvironmentId.make("env-sender"),
+        activeHumanEnvironmentIds: [
+          EnvironmentId.make("env-local"),
+          EnvironmentId.make("env-remote"),
+        ],
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("matchesQueuedMessageForReceipt", () => {
+  const receipt: TeamSignedDeliveryReceiptPayload = {
+    projectId: ProjectId.make("project-1"),
+    messageId: MessageId.make("message-1"),
+    senderId: MemberId.make(julius.id),
+    senderEnvironmentId: EnvironmentId.make("env-local"),
+    recipientId: MemberId.make(maya.id),
+    recipientEnvironmentId: EnvironmentId.make("env-maya"),
+    deliveredAt: "2026-07-30T00:00:01.000Z",
+  };
+  const message = {
+    messageId: receipt.messageId,
+    senderId: receipt.senderId,
+    recipientId: receipt.recipientId,
+    senderEnvironmentId: receipt.senderEnvironmentId,
+    body: "Please review this change.",
+    threadId: null,
+    sentAt: "2026-07-30T00:00:00.000Z",
+    expiresAt: null,
+    state: "queued" as const,
+    deliveredAt: null,
+    readAt: null,
+    expiredAt: null,
+  };
+
+  it("matches the signed receipt to its queued sender and recipient", () => {
+    expect(matchesQueuedMessageForReceipt({ message, receipt })).toBe(true);
+  });
+
+  it("rejects a receipt for a different recipient", () => {
+    expect(
+      matchesQueuedMessageForReceipt({
+        message,
+        receipt: { ...receipt, recipientId: MemberId.make("human_someone_else") },
+      }),
+    ).toBe(false);
   });
 });

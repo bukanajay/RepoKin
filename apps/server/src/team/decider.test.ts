@@ -91,6 +91,11 @@ it.layer(NodeServices.layer)("team decider/projector", (it) => {
         }),
       });
       expect(messageEvent.type).toBe("team.message.queued");
+      if (messageEvent.type === "team.message.queued") {
+        expect(Date.parse(messageEvent.expiresAt ?? "") - Date.parse(messageEvent.sentAt)).toBe(
+          24 * 60 * 60 * 1_000,
+        );
+      }
       readModel = yield* projectTeamEvent(readModel, withSequence(messageEvent, 3));
       expect(readModel.projects[0]?.inbox[0]).toMatchObject({
         messageId: "message-1",

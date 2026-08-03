@@ -73,11 +73,13 @@ function activity(input: {
   return input;
 }
 
+const decodeTeamDomainReadModel = Schema.decodeUnknownEffect(TeamDomainReadModelSchema);
+
 function decodeReadModel(
   value: TeamDomainReadModel,
   eventType: TeamEvent["type"],
 ): Effect.Effect<TeamDomainReadModel, TeamProjectorDecodeError> {
-  return Schema.decodeUnknownEffect(TeamDomainReadModelSchema)(value).pipe(
+  return decodeTeamDomainReadModel(value).pipe(
     Effect.mapError(toTeamProjectorDecodeError(eventType)),
   );
 }
@@ -189,6 +191,7 @@ export function projectTeamEvent(
               messageId: event.messageId,
               senderId: event.senderId,
               recipientId: event.recipientId,
+              senderEnvironmentId: event.metadata.environmentId ?? null,
               body: event.body,
               threadId: event.threadId,
               sentAt: event.sentAt,

@@ -1,13 +1,18 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import type {
   MemberId,
+  TeamInboxMessage,
+  TeamRelayEnvelope,
   TeamRosterReadModel,
+  TeamSignedDeliveryReceiptPayload,
+  TeamSignedMessageEnvelope,
   TeamSignedMessagePayload,
 } from "@t3tools/contracts/team";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
 import * as ServerSecretStore from "../../auth/ServerSecretStore.ts";
@@ -15,9 +20,15 @@ import { getOrCreateEnvironmentKeyPairFromSecretStore } from "../../cloud/enviro
 import { ServerEnvironment } from "../../environment/ServerEnvironment.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { makeTeamRelayClient, readTeamRelayConfig } from "../relayClient.ts";
-import { signTeamMessageEnvelope, verifyTeamMessageEnvelope } from "../SignedMessaging.ts";
+import {
+  signTeamDeliveryReceiptEnvelope,
+  signTeamMessageEnvelope,
+  verifyTeamDeliveryReceiptEnvelope,
+  verifyTeamMessageEnvelope,
+} from "../SignedMessaging.ts";
 import { TeamEngineService } from "../Services/TeamEngine.ts";
 import { TeamFileStore } from "../Services/TeamFileStore.ts";
+import { TeamRelayPresence } from "../Services/TeamRelayPresence.ts";
 import {
   TeamRelayMessaging,
   type TeamRelayMessagingShape,
@@ -25,23 +36,61 @@ import {
 
 const TEAM_RELAY_POLL_INTERVAL = "10 seconds";
 
+function isSignedMessageEnvelope(
+  envelope: TeamRelayEnvelope,
+): envelope is TeamSignedMessageEnvelope {
+  return "payload" in envelope;
+}
+
+export function matchesQueuedMessageForReceipt(input: {
+  readonly message: TeamInboxMessage | undefined;
+  readonly receipt: TeamSignedDeliveryReceiptPayload;
+}): boolean {
+  return (
+    input.message !== undefined &&
+    input.message.state === "queued" &&
+    input.message.senderId === input.receipt.senderId &&
+    input.message.recipientId === input.receipt.recipientId
+  );
+}
+
 /**
- * An agent's home environment is unambiguous, so remote agent recipients
- * route there. A human can have several linked environments and this
- * environment has no cross-machine presence yet (M3.3), so human recipients
- * stay local for now rather than guessing which of their environments is
- * current.
+ * An agent's home environment is unambiguous, so remote agent recipients route
+ * there. A human also routes remotely when exactly one linked environment is
+ * declared. Multiple remote human environments remain unresolved until human
+ * app presence can select the current device without guessing.
  */
 export function resolveRemoteRecipientEnvironment(input: {
   readonly roster: TeamRosterReadModel;
   readonly recipientId: MemberId;
   readonly localEnvironmentId: EnvironmentId;
+  readonly activeHumanEnvironmentIds?: ReadonlyArray<EnvironmentId>;
 }): EnvironmentId | null {
   const agent = input.roster.agents.find(
     (candidate) => String(candidate.id) === String(input.recipientId),
   );
   if (agent === undefined || agent.homeEnvironment === undefined) {
-    return null;
+    const human = input.roster.humans.find(
+      (candidate) => String(candidate.id) === String(input.recipientId),
+    );
+    if (human === undefined) {
+      return null;
+    }
+    const environments = human.environments ?? [];
+    const activeEnvironments = environments.filter((environment) =>
+      (input.activeHumanEnvironmentIds ?? []).includes(environment.environmentId),
+    );
+    if (activeEnvironments.length === 1) {
+      return activeEnvironments[0]!.environmentId === input.localEnvironmentId
+        ? null
+        : activeEnvironments[0]!.environmentId;
+    }
+    if (activeEnvironments.length > 1) {
+      return null;
+    }
+    return environments.length === 1 && environments[0]!.environmentId !== input.localEnvironmentId
+      ? environments[0]!.environmentId
+      : null;
   }
   return agent.homeEnvironment !== input.localEnvironmentId ? agent.homeEnvironment : null;
 }
@@ -52,10 +101,13 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const teamEngine = yield* TeamEngineService;
   const teamFileStore = yield* TeamFileStore;
+  const teamRelayPresence = yield* TeamRelayPresence;
   const crypto = yield* Crypto.Crypto;
   const keyPair = yield* getOrCreateEnvironmentKeyPairFromSecretStore(secrets);
   const readRelayConfig = readTeamRelayConfig(secrets);
   const makeRelayClient = makeTeamRelayClient;
+  const forwardedMessageIdsRef = yield* Ref.make(new Set<string>());
+  const sentReceiptMessageIdsRef = yield* Ref.make(new Set<string>());
 
   const resolveProjectCwd = (projectId: string) =>
     projectionSnapshotQuery
@@ -69,6 +121,10 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
 
   const forwardQueuedMessage: TeamRelayMessagingShape["forwardQueuedMessage"] = (input) =>
     Effect.gen(function* () {
+      const forwardedMessageIds = yield* Ref.get(forwardedMessageIdsRef);
+      if (forwardedMessageIds.has(input.messageId)) {
+        return;
+      }
       const relayConfig = yield* readRelayConfig.pipe(Effect.orElseSucceed(() => null));
       if (relayConfig === null) {
         return;
@@ -87,10 +143,26 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
       }
       const roster = yield* teamFileStore.readRoster(cwd);
       const localEnvironmentId = yield* serverEnvironment.getEnvironmentId;
+      const human = roster.humans.find(
+        (candidate) => String(candidate.id) === String(message.recipientId),
+      );
+      const nowMs = (yield* DateTime.now).epochMilliseconds;
+      const activeHumanEnvironmentIds =
+        human === undefined
+          ? []
+          : yield* Effect.filter(
+              (human.environments ?? []).map((environment) => environment.environmentId),
+              (environmentId) =>
+                teamRelayPresence
+                  .resolveHumanEnvironmentPresence({ environmentId, nowMs })
+                  .pipe(Effect.map((state) => state === "online")),
+              { concurrency: "unbounded" },
+            );
       const recipientEnvironmentId = resolveRemoteRecipientEnvironment({
         roster,
         recipientId: message.recipientId,
         localEnvironmentId,
+        activeHumanEnvironmentIds,
       });
       if (recipientEnvironmentId === null) {
         return;
@@ -120,6 +192,11 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
 
       const relayClient = yield* makeRelayClient(relayConfig);
       yield* relayClient.server.deliverTeamMessage({ payload: { envelope } });
+      yield* Ref.update(forwardedMessageIdsRef, (current) => {
+        const next = new Set(current);
+        next.add(input.messageId);
+        return next;
+      });
       // Deliberately not marked "delivered" here: handing off to the relay
       // only means the recipient environment *can* pick it up, not that it
       // has. The message stays queued locally so a genuine non-delivery
@@ -136,6 +213,53 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
       Effect.ignoreCause({ log: true }),
     );
 
+  const queueDeliveryReceipt = (input: {
+    readonly projectId: TeamSignedDeliveryReceiptPayload["projectId"];
+    readonly messageId: TeamSignedDeliveryReceiptPayload["messageId"];
+    readonly senderId: TeamSignedDeliveryReceiptPayload["senderId"];
+    readonly senderEnvironmentId: TeamSignedDeliveryReceiptPayload["senderEnvironmentId"];
+    readonly recipientId: TeamSignedDeliveryReceiptPayload["recipientId"];
+    readonly recipientEnvironmentId: TeamSignedDeliveryReceiptPayload["recipientEnvironmentId"];
+  }) =>
+    Effect.gen(function* () {
+      const receiptKey = `${input.projectId}:${input.messageId}`;
+      if ((yield* Ref.get(sentReceiptMessageIdsRef)).has(receiptKey)) {
+        return;
+      }
+      const relayConfig = yield* readRelayConfig.pipe(Effect.orElseSucceed(() => null));
+      if (relayConfig === null) {
+        return;
+      }
+      const now = yield* DateTime.now;
+      const jti = yield* crypto.randomUUIDv4;
+      const receipt = {
+        ...input,
+        deliveredAt: DateTime.formatIso(now),
+      } satisfies TeamSignedDeliveryReceiptPayload;
+      const envelope = yield* signTeamDeliveryReceiptEnvelope({
+        privateKey: keyPair.privateKey,
+        relayIssuer: relayConfig.issuer,
+        receipt,
+        jti,
+        now,
+      });
+      const relayClient = yield* makeRelayClient(relayConfig);
+      yield* relayClient.server.deliverTeamDeliveryReceipt({ payload: { envelope } });
+      yield* Ref.update(sentReceiptMessageIdsRef, (current) => {
+        const next = new Set(current);
+        next.add(receiptKey);
+        return next;
+      });
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.logWarning("failed to queue team delivery receipt", {
+          projectId: input.projectId,
+          messageId: input.messageId,
+          error,
+        }),
+      ),
+    );
+
   const pollInbound: TeamRelayMessagingShape["pollInbound"] = () =>
     Effect.gen(function* () {
       const relayConfig = yield* readRelayConfig.pipe(Effect.orElseSucceed(() => null));
@@ -144,49 +268,154 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
       }
       const relayClient = yield* makeRelayClient(relayConfig);
       const response = yield* relayClient.server.pollTeamMessages();
-      if (response.envelopes.length === 0) {
-        return;
-      }
       const snapshot = yield* projectionSnapshotQuery.getShellSnapshot();
       const now = yield* DateTime.now;
       const nowEpochSeconds = Math.floor(now.epochMilliseconds / 1_000);
+      const localEnvironmentId = yield* serverEnvironment.getEnvironmentId;
 
       yield* Effect.forEach(
         response.envelopes,
         (envelope) =>
           Effect.gen(function* () {
+            const envelopeProjectId = isSignedMessageEnvelope(envelope)
+              ? envelope.payload.projectId
+              : envelope.receipt.projectId;
             const project = snapshot.projects.find(
-              (candidate) => candidate.id === envelope.payload.projectId,
+              (candidate) => candidate.id === envelopeProjectId,
             );
             if (project === undefined) {
-              yield* Effect.logWarning("dropped inbound team message for unknown project", {
-                projectId: envelope.payload.projectId,
+              yield* Effect.logWarning("dropped inbound team envelope for unknown project", {
+                projectId: envelopeProjectId,
               });
               return;
             }
             const roster = yield* teamFileStore.readRoster(project.workspaceRoot);
-            const result = yield* verifyTeamMessageEnvelope({
+            if (isSignedMessageEnvelope(envelope)) {
+              const result = yield* verifyTeamMessageEnvelope({
+                envelope,
+                roster,
+                relayIssuer: relayConfig.issuer,
+                nowEpochSeconds,
+              });
+              if (result._tag === "dropped") {
+                yield* Effect.logWarning("dropped inbound team message", {
+                  reason: result.reason,
+                  detail: result.detail,
+                });
+                return;
+              }
+              const dispatched = yield* teamEngine.dispatch(result.command).pipe(
+                Effect.as(true),
+                Effect.catch((error) =>
+                  Effect.logWarning("failed to dispatch inbound team message", {
+                    messageId: result.command.messageId,
+                    error,
+                  }).pipe(Effect.as(false)),
+                ),
+              );
+              if (!dispatched) {
+                return;
+              }
+
+              yield* queueDeliveryReceipt({
+                projectId: envelope.payload.projectId,
+                messageId: envelope.payload.messageId,
+                senderId: envelope.payload.senderId,
+                senderEnvironmentId: envelope.payload.senderEnvironmentId,
+                recipientId: envelope.payload.recipientId,
+                recipientEnvironmentId: localEnvironmentId,
+              });
+              return;
+            }
+
+            if (envelope.receipt.senderEnvironmentId !== localEnvironmentId) {
+              yield* Effect.logWarning("dropped team delivery receipt for another environment", {
+                messageId: envelope.receipt.messageId,
+                expectedEnvironmentId: localEnvironmentId,
+                receivedEnvironmentId: envelope.receipt.senderEnvironmentId,
+              });
+              return;
+            }
+            const result = yield* verifyTeamDeliveryReceiptEnvelope({
               envelope,
               roster,
               relayIssuer: relayConfig.issuer,
               nowEpochSeconds,
             });
             if (result._tag === "dropped") {
-              yield* Effect.logWarning("dropped inbound team message", {
+              yield* Effect.logWarning("dropped inbound team delivery receipt", {
                 reason: result.reason,
                 detail: result.detail,
               });
               return;
             }
+
+            const readModel = yield* teamEngine.getReadModel;
+            const localProject = readModel.projects.find(
+              (candidate) => candidate.projectId === envelope.receipt.projectId,
+            );
+            const queuedMessage = localProject?.inbox.find(
+              (candidate) => candidate.messageId === envelope.receipt.messageId,
+            );
+            if (
+              !matchesQueuedMessageForReceipt({ message: queuedMessage, receipt: envelope.receipt })
+            ) {
+              yield* Effect.logWarning(
+                "dropped delivery receipt without a matching queued message",
+                {
+                  messageId: envelope.receipt.messageId,
+                },
+              );
+              return;
+            }
             yield* teamEngine.dispatch(result.command).pipe(
               Effect.catch((error) =>
-                Effect.logWarning("failed to dispatch inbound team message", {
+                Effect.logWarning("failed to apply inbound team delivery receipt", {
                   messageId: result.command.messageId,
                   error,
                 }),
               ),
             );
           }),
+        { discard: true, concurrency: "unbounded" },
+      );
+
+      const readModel = yield* teamEngine.getReadModel;
+      yield* Effect.forEach(
+        readModel.projects,
+        (project) =>
+          Effect.forEach(
+            project.inbox.filter(
+              (message) =>
+                message.senderEnvironmentId !== null &&
+                message.senderEnvironmentId !== localEnvironmentId &&
+                message.state !== "expired",
+            ),
+            (message) =>
+              queueDeliveryReceipt({
+                projectId: project.projectId,
+                messageId: message.messageId,
+                senderId: message.senderId,
+                senderEnvironmentId: message.senderEnvironmentId!,
+                recipientId: message.recipientId,
+                recipientEnvironmentId: localEnvironmentId,
+              }),
+            { discard: true, concurrency: "unbounded" },
+          ),
+        { discard: true, concurrency: "unbounded" },
+      );
+      yield* Effect.forEach(
+        readModel.projects,
+        (project) =>
+          Effect.forEach(
+            project.inbox.filter((message) => message.state === "queued"),
+            (message) =>
+              forwardQueuedMessage({
+                projectId: project.projectId,
+                messageId: message.messageId,
+              }),
+            { discard: true, concurrency: "unbounded" },
+          ),
         { discard: true, concurrency: "unbounded" },
       );
     }).pipe(Effect.catch((error) => Effect.logWarning("team message poll failed", { error })));

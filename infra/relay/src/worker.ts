@@ -38,6 +38,7 @@ import * as DeliveryAttempts from "./agentActivity/DeliveryAttempts.ts";
 import * as AgentActivityRows from "./agentActivity/AgentActivityRows.ts";
 import * as Devices from "./agentActivity/Devices.ts";
 import * as TeamMessageRows from "./teamMessages/TeamMessageRows.ts";
+import * as TeamHumanPresenceRows from "./teamPresence/TeamHumanPresenceRows.ts";
 import * as DpopProofs from "./auth/DpopProofs.ts";
 import * as RelayTokens from "./auth/RelayTokens.ts";
 import * as EnvironmentCredentials from "./environments/EnvironmentCredentials.ts";
@@ -205,7 +206,9 @@ export const ApiLive = Api.make(
       Layer.provideMerge(
         ApnsDeliveryQueue.layerCloudflareQueues(apnsDeliveryQueueSender, alchemyRuntimeContext),
       ),
-      Layer.provideMerge(Layer.mergeAll(AgentActivityRows.layer, TeamMessageRows.layer)),
+      Layer.provideMerge(
+        Layer.mergeAll(AgentActivityRows.layer, TeamMessageRows.layer, TeamHumanPresenceRows.layer),
+      ),
       Layer.provideMerge(Devices.layer),
       Layer.provideMerge(EnvironmentCredentials.layer),
       Layer.provideMerge(
@@ -276,6 +279,15 @@ export const ApiLive = Api.make(
           Effect.all([TeamMessageRows.TeamMessageRows, DateTime.now]).pipe(
             Effect.flatMap(([teamMessageRows, now]) =>
               teamMessageRows.pruneExpired({ nowIso: DateTime.formatIso(now) }),
+            ),
+          ),
+        ),
+        Effect.andThen(
+          Effect.all([TeamHumanPresenceRows.TeamHumanPresenceRows, DateTime.now]).pipe(
+            Effect.flatMap(([humanPresenceRows, now]) =>
+              humanPresenceRows.pruneOlderThan({
+                cutoffIso: DateTime.formatIso(DateTime.subtract(now, { hours: 24 })),
+              }),
             ),
           ),
         ),

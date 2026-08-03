@@ -10,7 +10,11 @@ import * as OpenApi from "effect/unstable/httpapi/OpenApi";
 
 import { EnvironmentId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
-import { TeamSignedMessageEnvelope } from "./team.ts";
+import {
+  TeamRelayEnvelope,
+  TeamSignedDeliveryReceiptEnvelope,
+  TeamSignedMessageEnvelope,
+} from "./team.ts";
 
 export const RelayAgentAwarenessPlatform = Schema.Literal("ios");
 export type RelayAgentAwarenessPlatform = typeof RelayAgentAwarenessPlatform.Type;
@@ -876,8 +880,15 @@ export const RelayTeamMessageDeliveryResponse = Schema.Struct({
 });
 export type RelayTeamMessageDeliveryResponse = typeof RelayTeamMessageDeliveryResponse.Type;
 
+export const RelayTeamDeliveryReceiptRequest = Schema.Struct({
+  envelope: TeamSignedDeliveryReceiptEnvelope,
+}).annotate({
+  description: "Recipient-signed delivery receipt queued for the original sender environment.",
+});
+export type RelayTeamDeliveryReceiptRequest = typeof RelayTeamDeliveryReceiptRequest.Type;
+
 export const RelayTeamMessagePollResponse = Schema.Struct({
-  envelopes: Schema.Array(TeamSignedMessageEnvelope),
+  envelopes: Schema.Array(TeamRelayEnvelope),
 });
 export type RelayTeamMessagePollResponse = typeof RelayTeamMessagePollResponse.Type;
 
@@ -900,6 +911,24 @@ export const RelayEnvironmentPresenceResponse = Schema.Struct({
   presences: Schema.Array(RelayEnvironmentPresenceEntry),
 });
 export type RelayEnvironmentPresenceResponse = typeof RelayEnvironmentPresenceResponse.Type;
+
+export const RelayHumanPresenceHeartbeatResponse = Schema.Struct({
+  ok: Schema.Boolean,
+  activeAt: TrimmedNonEmptyString,
+});
+export type RelayHumanPresenceHeartbeatResponse = typeof RelayHumanPresenceHeartbeatResponse.Type;
+
+export const RelayHumanEnvironmentPresenceEntry = Schema.Struct({
+  environmentId: EnvironmentId,
+  activeAt: TrimmedNonEmptyString,
+});
+export type RelayHumanEnvironmentPresenceEntry = typeof RelayHumanEnvironmentPresenceEntry.Type;
+
+export const RelayHumanEnvironmentPresenceResponse = Schema.Struct({
+  presences: Schema.Array(RelayHumanEnvironmentPresenceEntry),
+});
+export type RelayHumanEnvironmentPresenceResponse =
+  typeof RelayHumanEnvironmentPresenceResponse.Type;
 
 export const RelayHealthResponse = Schema.Struct({
   ok: Schema.Boolean,
@@ -1113,6 +1142,21 @@ export const RelayServerGroup = HttpApiGroup.make("server")
       success: RelayTeamMessageDeliveryResponse,
       error: RelayTeamErrors,
     }).annotate(OpenApi.Summary, "Deliver a signed team message envelope"),
+    HttpApiEndpoint.post("deliverTeamDeliveryReceipt", "/v1/team/message-receipts", {
+      payload: RelayTeamDeliveryReceiptRequest,
+      success: RelayTeamMessageDeliveryResponse,
+      error: RelayTeamErrors,
+    }).annotate(OpenApi.Summary, "Deliver a signed team-message receipt"),
+    HttpApiEndpoint.post("heartbeatTeamHumanPresence", "/v1/team/human-presence/heartbeat", {
+      payload: Schema.Struct({}),
+      success: RelayHumanPresenceHeartbeatResponse,
+      error: RelayTeamErrors,
+    }).annotate(OpenApi.Summary, "Publish recent human app activity for an environment"),
+    HttpApiEndpoint.post("getTeamHumanPresence", "/v1/team/human-presence", {
+      payload: RelayEnvironmentPresenceRequest,
+      success: RelayHumanEnvironmentPresenceResponse,
+      error: RelayTeamErrors,
+    }).annotate(OpenApi.Summary, "Read recent human app activity by environment"),
     HttpApiEndpoint.get("pollTeamMessages", "/v1/team/messages", {
       success: RelayTeamMessagePollResponse,
       error: RelayTeamErrors,

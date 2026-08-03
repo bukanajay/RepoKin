@@ -3,7 +3,7 @@ import type {
   RelayAgentActivityState,
   RelayAgentAwarenessPreferences,
 } from "@t3tools/contracts/relay";
-import type { TeamSignedMessageEnvelope } from "@t3tools/contracts/team";
+import type { TeamRelayEnvelope } from "@t3tools/contracts/team";
 import {
   boolean,
   index,
@@ -182,7 +182,7 @@ export const relayTeamMessages = pgTable(
     id: varchar("id", { length: 36 }).primaryKey(),
     recipientEnvironmentId: varchar("recipient_environment_id", { length: 191 }).notNull(),
     senderEnvironmentId: varchar("sender_environment_id", { length: 191 }).notNull(),
-    envelopeJson: jsonb("envelope_json").notNull().$type<TeamSignedMessageEnvelope>(),
+    envelopeJson: jsonb("envelope_json").notNull().$type<TeamRelayEnvelope>(),
     expiresAt: varchar("expires_at", { length: 64 }).notNull(),
     createdAt: varchar("created_at", { length: 64 }).notNull(),
   },
@@ -190,6 +190,15 @@ export const relayTeamMessages = pgTable(
     index("idx_relay_team_messages_recipient").on(table.recipientEnvironmentId, table.createdAt),
     index("idx_relay_team_messages_expires_at").on(table.expiresAt),
   ],
+);
+
+export const relayTeamHumanPresence = pgTable(
+  "relay_team_human_presence",
+  {
+    environmentId: varchar("environment_id", { length: 191 }).primaryKey(),
+    activeAt: varchar("active_at", { length: 64 }).notNull(),
+  },
+  (table) => [index("idx_relay_team_human_presence_active_at").on(table.activeAt)],
 );
 
 export const relayDpopProofs = pgTable(

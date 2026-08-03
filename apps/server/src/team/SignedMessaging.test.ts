@@ -9,6 +9,7 @@ import {
   type HumanProfile,
   MemberId,
   type TeamRosterReadModel,
+  type TeamSignedDeliveryReceiptPayload,
   type TeamSignedMessagePayload,
 } from "@t3tools/contracts/team";
 import * as DateTime from "effect/DateTime";
@@ -17,7 +18,9 @@ import * as Schema from "effect/Schema";
 
 import {
   resolveRosterPublicKeyForMember,
+  signTeamDeliveryReceiptEnvelope,
   signTeamMessageEnvelope,
+  verifyTeamDeliveryReceiptEnvelope,
   verifyTeamMessageEnvelope,
 } from "./SignedMessaging.ts";
 
@@ -96,6 +99,16 @@ const payload: TeamSignedMessagePayload = {
   sentAt: "2026-07-30T00:00:00.000Z",
 };
 
+const receipt: TeamSignedDeliveryReceiptPayload = {
+  projectId: payload.projectId,
+  messageId: payload.messageId,
+  senderId: payload.senderId,
+  senderEnvironmentId: payload.senderEnvironmentId,
+  recipientId: payload.recipientId,
+  recipientEnvironmentId: payload.recipientEnvironmentId,
+  deliveredAt: "2026-07-30T00:00:01.000Z",
+};
+
 it.effect("accepts a team message signed by the sender roster key", () =>
   Effect.gen(function* () {
     const envelope = yield* signTeamMessageEnvelope({
@@ -128,6 +141,28 @@ it.effect("accepts a team message signed by the sender roster key", () =>
         },
       });
     }
+  }),
+);
+
+it.effect("accepts a queued team message after several offline hours", () =>
+  Effect.gen(function* () {
+    const envelope = yield* signTeamMessageEnvelope({
+      privateKey: senderKeys.privateKey,
+      relayIssuer,
+      payload,
+      jti: "jti-offline",
+      now,
+    });
+    const sixHoursLater = Math.floor(DateTime.add(now, { hours: 6 }).epochMilliseconds / 1_000);
+
+    const result = yield* verifyTeamMessageEnvelope({
+      envelope,
+      roster,
+      relayIssuer,
+      nowEpochSeconds: sixHoursLater,
+    });
+
+    expect(result._tag).toBe("accepted");
   }),
 );
 
@@ -192,6 +227,33 @@ it.effect("drops a message when the sender environment key is not in the roster"
   }),
 );
 
+it.effect("drops a previously valid message after the sender is revoked from the roster", () =>
+  Effect.gen(function* () {
+    const envelope = yield* signTeamMessageEnvelope({
+      privateKey: senderKeys.privateKey,
+      relayIssuer,
+      payload,
+      jti: "jti-revoked",
+      now,
+    });
+
+    const result = yield* verifyTeamMessageEnvelope({
+      envelope,
+      roster: {
+        ...roster,
+        humans: [maya],
+      },
+      relayIssuer,
+      nowEpochSeconds,
+    });
+
+    expect(result).toMatchObject({
+      _tag: "dropped",
+      reason: "sender-not-in-roster",
+    });
+  }),
+);
+
 it.effect("drops a message when the envelope payload is not the signed payload", () =>
   Effect.gen(function* () {
     const envelope = yield* signTeamMessageEnvelope({
@@ -228,3 +290,80 @@ it("resolves an agent sender through its owner key and home environment", () => 
     }),
   ).toEqual({ publicKey: senderKeys.publicKey });
 });
+
+it.effect("accepts a delivery receipt signed by the recipient roster key", () =>
+  Effect.gen(function* () {
+    const envelope = yield* signTeamDeliveryReceiptEnvelope({
+      privateKey: otherKeys.privateKey,
+      relayIssuer,
+      receipt,
+      jti: "receipt-jti-1",
+      now,
+    });
+
+    const result = yield* verifyTeamDeliveryReceiptEnvelope({
+      envelope,
+      roster,
+      relayIssuer,
+      nowEpochSeconds,
+    });
+
+    expect(result).toMatchObject({
+      _tag: "accepted",
+      command: {
+        type: "team.message.deliver",
+        projectId: "project-1",
+        messageId: "message-1",
+        metadata: {
+          actorMemberId: "human_maya",
+          environmentId: "env_recipient",
+        },
+      },
+    });
+  }),
+);
+
+it.effect("drops a delivery receipt signed by the wrong environment key", () =>
+  Effect.gen(function* () {
+    const envelope = yield* signTeamDeliveryReceiptEnvelope({
+      privateKey: senderKeys.privateKey,
+      relayIssuer,
+      receipt,
+      jti: "receipt-jti-2",
+      now,
+    });
+
+    const result = yield* verifyTeamDeliveryReceiptEnvelope({
+      envelope,
+      roster,
+      relayIssuer,
+      nowEpochSeconds,
+    });
+
+    expect(result).toMatchObject({ _tag: "dropped", reason: "proof-invalid" });
+  }),
+);
+
+it.effect("drops a delivery receipt whose visible payload was tampered with", () =>
+  Effect.gen(function* () {
+    const envelope = yield* signTeamDeliveryReceiptEnvelope({
+      privateKey: otherKeys.privateKey,
+      relayIssuer,
+      receipt,
+      jti: "receipt-jti-3",
+      now,
+    });
+
+    const result = yield* verifyTeamDeliveryReceiptEnvelope({
+      envelope: {
+        ...envelope,
+        receipt: { ...receipt, deliveredAt: "2026-07-30T00:00:02.000Z" },
+      },
+      roster,
+      relayIssuer,
+      nowEpochSeconds,
+    });
+
+    expect(result).toMatchObject({ _tag: "dropped", reason: "payload-mismatch" });
+  }),
+);

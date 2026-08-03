@@ -1,4 +1,4 @@
-import { TeamSignedMessageEnvelope } from "@t3tools/contracts/team";
+import { TeamRelayEnvelope } from "@t3tools/contracts/team";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Function from "effect/Function";
@@ -52,14 +52,14 @@ export class TeamMessageRows extends Context.Service<
       readonly id: string;
       readonly recipientEnvironmentId: string;
       readonly senderEnvironmentId: string;
-      readonly envelope: TeamSignedMessageEnvelope;
+      readonly envelope: TeamRelayEnvelope;
       readonly expiresAt: string;
       readonly createdAt: string;
     }) => Effect.Effect<void, TeamMessageEnqueuePersistenceError>;
     readonly drainForEnvironment: (input: {
       readonly recipientEnvironmentId: string;
       readonly nowIso: string;
-    }) => Effect.Effect<ReadonlyArray<TeamSignedMessageEnvelope>, TeamMessageDrainPersistenceError>;
+    }) => Effect.Effect<ReadonlyArray<TeamRelayEnvelope>, TeamMessageDrainPersistenceError>;
     readonly pruneExpired: (input: {
       readonly nowIso: string;
     }) => Effect.Effect<void, TeamMessagePrunePersistenceError>;
@@ -69,10 +69,8 @@ export class TeamMessageRows extends Context.Service<
 const decodeJsonString = Schema.decodeEffect(Schema.UnknownFromJsonString);
 const encodeJsonValue = Schema.encodeEffect(Schema.UnknownFromJsonString);
 
-const encodeEnvelopeJson = Schema.encodeEffect(Schema.fromJsonString(TeamSignedMessageEnvelope));
-const decodeEnvelopeJson = Schema.decodeUnknownOption(
-  Schema.fromJsonString(TeamSignedMessageEnvelope),
-);
+const encodeEnvelopeJson = Schema.encodeEffect(Schema.fromJsonString(TeamRelayEnvelope));
+const decodeEnvelopeJson = Schema.decodeUnknownOption(Schema.fromJsonString(TeamRelayEnvelope));
 
 export const make = Effect.gen(function* () {
   const db = yield* RelayDb.RelayDb;
@@ -85,7 +83,7 @@ export const make = Effect.gen(function* () {
       });
       const envelopeJson = yield* encodeEnvelopeJson(input.envelope).pipe(
         Effect.flatMap(decodeJsonString),
-        Effect.map(Function.cast<unknown, TeamSignedMessageEnvelope>),
+        Effect.map(Function.cast<unknown, TeamRelayEnvelope>),
         Effect.mapError(
           (cause) =>
             new TeamMessageEnqueuePersistenceError({

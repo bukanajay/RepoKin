@@ -12,7 +12,6 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as PlatformError from "effect/PlatformError";
 
-import { TeamCommandInvariantError } from "./Errors.ts";
 import {
   requireMember,
   requireMessageAbsent,
@@ -20,7 +19,12 @@ import {
   requireReadableMessage,
   requireOpenRequest,
 } from "./commandInvariants.ts";
+import { TeamCommandInvariantError } from "./Errors.ts";
 import { projectTeamEvent } from "./projector.ts";
+
+function defaultTeamMessageExpiresAt(occurredAt: string): string {
+  return DateTime.formatIso(DateTime.add(DateTime.makeUnsafe(occurredAt), { hours: 24 }));
+}
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const decodeMemberId = Schema.decodeUnknownSync(MemberId);
@@ -116,7 +120,7 @@ export const decideTeamCommand = Effect.fn("decideTeamCommand")(function* ({
         body: command.body,
         threadId: command.threadId ?? null,
         sentAt: occurredAt,
-        expiresAt: command.expiresAt ?? null,
+        expiresAt: command.expiresAt ?? defaultTeamMessageExpiresAt(occurredAt),
       };
     }
 

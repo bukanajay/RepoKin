@@ -52,6 +52,7 @@ import {
   createKeybindingsUpdateToastController,
   type KeybindingsUpdateToastController,
 } from "../components/KeybindingsUpdateToast.logic";
+import { teamEnvironment } from "../state/team";
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -129,6 +130,7 @@ function RootRouteView() {
         <DocumentTitleSync />
         <GlassAppearanceSync />
         {primaryEnvironmentAuthenticated ? <AuthenticatedTracingBootstrap /> : null}
+        <HumanPresenceReporter />
         <RelayClientInstallDialog />
         <ConnectOnboardingDialog />
         <SshPasswordPromptDialog />
@@ -140,6 +142,45 @@ function RootRouteView() {
       </AnchoredToastProvider>
     </ToastProvider>
   );
+}
+
+const HUMAN_PRESENCE_HEARTBEAT_THROTTLE_MS = 10_000;
+
+function HumanPresenceReporter() {
+  const activeEnvironmentId = useActiveEnvironmentId();
+  const heartbeat = useAtomCommand(teamEnvironment.heartbeatHumanPresence, {
+    label: "publish AgentForge human presence",
+    reportFailure: false,
+    reportDefect: false,
+  });
+  const lastSentAtRef = useRef(0);
+  const publish = useEffectEvent(() => {
+    if (activeEnvironmentId === null || document.visibilityState !== "visible") {
+      return;
+    }
+    const now = Date.now();
+    if (now - lastSentAtRef.current < HUMAN_PRESENCE_HEARTBEAT_THROTTLE_MS) {
+      return;
+    }
+    lastSentAtRef.current = now;
+    void heartbeat({ environmentId: activeEnvironmentId, input: {} });
+  });
+
+  useEffect(() => {
+    lastSentAtRef.current = 0;
+    publish();
+    const onVisibilityChange = () => publish();
+    window.addEventListener("pointerdown", publish, { passive: true });
+    window.addEventListener("keydown", publish);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pointerdown", publish);
+      window.removeEventListener("keydown", publish);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [activeEnvironmentId]);
+
+  return null;
 }
 
 function GlassAppearanceSync() {

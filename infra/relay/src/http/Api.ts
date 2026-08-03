@@ -1,4 +1,5 @@
 import { createClerkClient, verifyToken } from "@clerk/backend";
+import { EnvironmentId } from "@t3tools/contracts";
 import { sql as drizzleSql } from "drizzle-orm";
 import * as Crypto from "effect/Crypto";
 import * as Context from "effect/Context";
@@ -70,6 +71,7 @@ import * as MobileRegistrations from "../agentActivity/MobileRegistrations.ts";
 import { withSpanAttributes } from "../observability.ts";
 import * as RelayDb from "../db.ts";
 import * as TeamMessageRows from "../teamMessages/TeamMessageRows.ts";
+import * as TeamHumanPresenceRows from "../teamPresence/TeamHumanPresenceRows.ts";
 
 const relayCorsAllowedMethods = ["GET", "POST", "DELETE", "OPTIONS"] as const;
 const relayCorsAllowedHeaders = [
@@ -858,6 +860,7 @@ export const serverApi = HttpApiBuilder.group(
     const publisher = yield* AgentActivityPublisher.AgentActivityPublisher;
     const publishSignatures = yield* EnvironmentPublishSignatures.EnvironmentPublishSignatures;
     const teamMessages = yield* TeamMessageRows.TeamMessageRows;
+    const teamHumanPresence = yield* TeamHumanPresenceRows.TeamHumanPresenceRows;
     const agentActivityRows = yield* AgentActivityRows.AgentActivityRows;
     const crypto = yield* Crypto.Crypto;
     return handlers
@@ -1016,6 +1019,51 @@ export const serverApi = HttpApiBuilder.group(
         }, mapRelayCommonApiErrors("not_authorized")),
       )
       .handle(
+        "deliverTeamDeliveryReceipt",
+        Effect.fn("relay.api.server.deliverTeamDeliveryReceipt")(function* (args) {
+          const { payload } = args;
+          const principal = yield* RelayEnvironmentPrincipal;
+          if (payload.envelope.receipt.recipientEnvironmentId !== principal.environmentId) {
+            return yield* new HttpApiError.Unauthorized({});
+          }
+          const id = yield* crypto.randomUUIDv4.pipe(
+            Effect.catch(() => relayInternalErrorResponse("internal_error")),
+          );
+          const now = yield* DateTime.now;
+          yield* teamMessages.enqueue({
+            id,
+            recipientEnvironmentId: payload.envelope.receipt.senderEnvironmentId,
+            senderEnvironmentId: principal.environmentId,
+            envelope: payload.envelope,
+            expiresAt: DateTime.formatIso(DateTime.add(now, { hours: 24 })),
+            createdAt: DateTime.formatIso(now),
+          });
+          return { ok: true, queued: true };
+        }, mapRelayCommonApiErrors("not_authorized")),
+      )
+      .handle(
+        "heartbeatTeamHumanPresence",
+        Effect.fn("relay.api.server.heartbeatTeamHumanPresence")(function* () {
+          const principal = yield* RelayEnvironmentPrincipal;
+          const now = yield* DateTime.now;
+          const activeAt = DateTime.formatIso(now);
+          yield* teamHumanPresence.heartbeat({
+            environmentId: EnvironmentId.make(principal.environmentId),
+            activeAt,
+          });
+          return { ok: true, activeAt };
+        }, mapRelayCommonApiErrors("not_authorized")),
+      )
+      .handle(
+        "getTeamHumanPresence",
+        Effect.fn("relay.api.server.getTeamHumanPresence")(function* (args) {
+          const presences = yield* teamHumanPresence.getForEnvironments({
+            environmentIds: args.payload.environmentIds,
+          });
+          return { presences };
+        }, mapRelayCommonApiErrors("not_authorized")),
+      )
+      .handle(
         "pollTeamMessages",
         Effect.fn("relay.api.server.pollTeamMessages")(function* () {
           const principal = yield* RelayEnvironmentPrincipal;
@@ -1079,6 +1127,7 @@ const RelayCommonPersistenceError = Schema.Union([
   DeliveryAttempts.DeliveryAttemptRecordPersistenceError,
   TeamMessageRows.TeamMessageEnqueuePersistenceError,
   TeamMessageRows.TeamMessageDrainPersistenceError,
+  TeamHumanPresenceRows.TeamHumanPresencePersistenceError,
   AgentActivityRows.AgentActivityRowPresencePersistenceError,
 ]);
 type RelayCommonPersistenceError = typeof RelayCommonPersistenceError.Type;

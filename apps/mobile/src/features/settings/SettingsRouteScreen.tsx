@@ -123,6 +123,13 @@ function LocalSettingsRouteScreen() {
             value={`${environmentCount}`}
             target="SettingsEnvironments"
           />
+          <View className="border-border border-t">
+            <SettingsRow
+              icon={{ ios: "sparkles", android: "auto_awesome" }}
+              label="AgentForge"
+              target="SettingsAgentForge"
+            />
+          </View>
         </SettingsSection>
 
         <GeneralSettingsSection />
@@ -477,6 +484,13 @@ function ConfiguredSettingsRouteScreen() {
             value={`${environmentCount}`}
             target="SettingsEnvironments"
           />
+          <View className="border-border border-t">
+            <SettingsRow
+              icon={{ ios: "sparkles", android: "auto_awesome" }}
+              label="AgentForge"
+              target="SettingsAgentForge"
+            />
+          </View>
           <SettingsSwitchRow
             icon="bell.badge"
             label="Device Notifications"

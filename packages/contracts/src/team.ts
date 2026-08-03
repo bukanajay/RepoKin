@@ -714,6 +714,46 @@ export const TeamSignedMessageEnvelope = Schema.Struct({
 });
 export type TeamSignedMessageEnvelope = typeof TeamSignedMessageEnvelope.Type;
 
+export const TeamSignedDeliveryReceiptPayload = Schema.Struct({
+  projectId: ProjectId,
+  messageId: MessageId,
+  senderId: MemberId,
+  senderEnvironmentId: EnvironmentId,
+  recipientId: MemberId,
+  recipientEnvironmentId: EnvironmentId,
+  deliveredAt: IsoDateTime,
+}).annotate({
+  description: "Recipient-confirmed delivery details returned to the original sender environment.",
+});
+export type TeamSignedDeliveryReceiptPayload = typeof TeamSignedDeliveryReceiptPayload.Type;
+
+export const TeamSignedDeliveryReceiptProofPayload = Schema.Struct({
+  ...TeamSignedJwtRegisteredClaims,
+  senderEnvironmentId: EnvironmentId,
+  recipientEnvironmentId: EnvironmentId,
+  receipt: TeamSignedDeliveryReceiptPayload,
+}).annotate({
+  description: "JWT payload signed by the recipient environment for a delivery receipt.",
+});
+export type TeamSignedDeliveryReceiptProofPayload =
+  typeof TeamSignedDeliveryReceiptProofPayload.Type;
+
+export const TeamSignedDeliveryReceiptEnvelope = Schema.Struct({
+  receipt: TeamSignedDeliveryReceiptPayload,
+  proof: TrimmedNonEmptyString,
+}).annotate({
+  description: "Relay-transported signed team-message delivery receipt.",
+});
+export type TeamSignedDeliveryReceiptEnvelope = typeof TeamSignedDeliveryReceiptEnvelope.Type;
+
+export const TeamRelayEnvelope = Schema.Union([
+  TeamSignedMessageEnvelope,
+  TeamSignedDeliveryReceiptEnvelope,
+]).annotate({
+  description: "Signed AgentForge message or delivery receipt transported through the relay.",
+});
+export type TeamRelayEnvelope = typeof TeamRelayEnvelope.Type;
+
 // ---------------------------------------------------------------------------
 // M2 local team domain — event-sourced, environment-local coordination.
 // ---------------------------------------------------------------------------
@@ -1102,6 +1142,9 @@ export const TeamInboxMessage = Schema.Struct({
   messageId: MessageId,
   senderId: MemberId,
   recipientId: MemberId,
+  senderEnvironmentId: Schema.NullOr(EnvironmentId).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   body: Schema.String,
   threadId: Schema.NullOr(ThreadId),
   sentAt: IsoDateTime,

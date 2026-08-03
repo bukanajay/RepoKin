@@ -14,6 +14,13 @@ export interface TeamRelayPresenceShape {
     readonly environmentId: EnvironmentId;
     readonly nowMs: number;
   }) => Effect.Effect<MemberPresenceState | null>;
+
+  readonly publishLocalHumanPresence: Effect.Effect<void>;
+
+  readonly resolveHumanEnvironmentPresence: (input: {
+    readonly environmentId: EnvironmentId;
+    readonly nowMs: number;
+  }) => Effect.Effect<MemberPresenceState | null>;
 }
 
 export class TeamRelayPresence extends Context.Service<TeamRelayPresence, TeamRelayPresenceShape>()(

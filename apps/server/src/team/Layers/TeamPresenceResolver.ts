@@ -77,6 +77,25 @@ const makeTeamPresenceResolver = Effect.gen(function* () {
       if (localPresence !== null) {
         return localPresence;
       }
+      const roster = yield* teamFileStore.readRoster(project.workspaceRoot);
+      const human = roster.humans.find(
+        (candidate) => String(candidate.id) === String(input.memberId),
+      );
+      if (human !== undefined) {
+        const states = yield* Effect.forEach(
+          human.environments ?? [],
+          (environment) =>
+            teamRelayPresence.resolveHumanEnvironmentPresence({
+              environmentId: environment.environmentId,
+              nowMs: input.nowMs,
+            }),
+          { concurrency: "unbounded" },
+        );
+        if (states.includes("online")) {
+          return "online";
+        }
+        return states.includes("offline") ? "offline" : null;
+      }
       // No local thread activity for this member — it may be a roster agent
       // whose home environment is a different machine (M3.3).
       return yield* resolveRemoteAgentPresence({
@@ -88,6 +107,7 @@ const makeTeamPresenceResolver = Effect.gen(function* () {
     });
 
   return {
+    publishHumanPresence: teamRelayPresence.publishLocalHumanPresence,
     resolveMemberPresence,
   } satisfies TeamPresenceResolverShape;
 });

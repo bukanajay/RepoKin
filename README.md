@@ -1,107 +1,162 @@
-# T3 Code
+# Agent Forge
 
-T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).
+Agent Forge is a multi-surface control center for coding agents. It lets you
+run and control agents from the web, desktop, and mobile clients while keeping
+the performance, remote access, and provider flexibility that made T3 Code
+useful.
 
-Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, and OpenCode. If they're set up on your computer, T3 Code can control them.
+Agent Forge is a fork of [T3 Code](https://github.com/pingdotgg/t3code). It
+works with locally authenticated subscriptions and CLIs for Codex, Claude
+Code, Cursor, Grok Build, and OpenCode. Agent Forge is building a Git-native
+team layer on top of that foundation, including persistent named agents,
+agent character and policy, repository-based rosters, attribution, and team
+presence and messaging.
 
-## "Wait, what are you selling me?"
+## What Agent Forge includes
 
-Nothing. We built T3 Code because we wanted the best possible development experience with agents. We were inspired by existing solutions like the Codex desktop app, Conductor, Claude Desktop and Cursor Glass, but none met our bar.
+- Web, Electron desktop, iOS, and Android clients
+- A Node.js WebSocket server for local and remote control
+- Provider adapters for Codex, Claude Code, Cursor, Grok Build, and OpenCode
+- Remote-ready operation over local networks, Tailscale, and T3 Connect
+- Project workspaces, checkpoints, terminal access, reviews, and agent status
+- Agent Forge's Git-native roster and persistent agent identity layer
 
-We wanted something performant, remote-ready, and truly open. If we ever go the wrong direction, we want you to have everything you need to fork and build the editor that you want.
+The original T3 Code capabilities remain part of this fork. Agent Forge is
+intended to continue receiving upstream fixes and features while keeping its
+team-specific work in the Agent Forge layer.
 
-## Installation
+## Install a provider
 
-> [!WARNING]
-> T3 Code currently supports Codex, Claude, Cursor, Grok Build and OpenCode. Install and authenticate at least one provider before use:
->
-> - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
-> - Claude: install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`
-> - Cursor: install [Cursor CLI](https://cursor.com/cli) and run `agent login`
-> - Grok Build: install [Grok Build CLI](https://x.ai/cli) and run `grok login`
-> - OpenCode: install [OpenCode](https://opencode.ai) and run `opencode auth login`
+Before using Agent Forge, install and authenticate at least one supported
+provider:
 
-### Try it out (install-free)
+- [Codex CLI](https://developers.openai.com/codex/cli): `codex login`
+- [Claude Code](https://claude.com/product/claude-code): `claude auth login`
+- [Cursor CLI](https://cursor.com/cli): `agent login`
+- [Grok Build CLI](https://x.ai/cli): `grok login`
+- [OpenCode](https://opencode.ai): `opencode auth login`
 
-The easiest way to test T3 Code is to run the server in your terminal (requires Node.js 22.16+, 23.11+, or 24.10+):
+Each provider uses the credentials and subscription configured on the machine
+where its CLI runs. Agent Forge does not transfer provider credentials between
+machines.
 
-```bash
-npx t3@latest
-```
+## Build and run locally
 
-This will launch T3 Code's backend on your machine as well as the local web app to control your agents.
+### Prerequisites
 
-Tip: Use `npx t3@latest --help` for the full CLI reference.
+- Node.js `24.13.1` or newer in the Node 24 release line
+- pnpm `11.10.0`
+- [Vite+ (`vp`)](https://viteplus.dev/guide/)
 
-### Desktop app
-
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
-
-#### Windows (`winget`)
-
-```bash
-winget install T3Tools.T3Code
-```
-
-#### macOS (Homebrew)
-
-```bash
-brew install --cask t3-code
-```
-
-#### Arch Linux (AUR)
-
-```bash
-yay -S t3code-bin
-```
-
-## Some notes
-
-We are very very early in this project. Expect bugs.
-
-We are (mostly) not accepting contributions yet. Small fixes may be considered. Big features will not be.
-
-## Documentation
-
-Full docs live in [docs/](./docs). There's no docs site yet.
-
-- [Install and first run](./docs/user/install.md)
-- [Permission modes](./docs/user/permission-modes.md)
-- [Keyboard shortcuts](./docs/user/keybindings.md)
-- [Remote access from a phone or another machine](./docs/user/remote-access.md)
-- [Keeping app and server in sync](./docs/user/updating.md)
-- [Source control integrations](./docs/user/source-control.md)
-- Multiple accounts: [Codex](./docs/user/providers-codex.md) · [Claude](./docs/user/providers-claude.md)
-- Linux: [run T3 Code as a background service](./docs/user/background-service.md)
-
-Building from source? Start at [docs/internals/overview.md](./docs/internals/overview.md).
-
-## If you REALLY want to contribute still.... read this first
-
-### Install `vp`
-
-T3 Code uses Vite+ so you'll need to install the global `vp` command-line tool.
-
-#### macOS / Linux
+Install Vite+ if it is not already available:
 
 ```bash
 curl -fsSL https://vite.plus | bash
 ```
 
-#### Windows
+Then clone and install the workspace dependencies:
 
 ```bash
-irm https://vite.plus/ps1 | iex
-```
-
-Checkout their getting started guide for more information: https://viteplus.dev/guide/
-
-### Install dependencies
-
-```bash
+git clone https://github.com/bukanajay/AgentForge.git
+cd AgentForge
 vp i
 ```
 
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
+Optional local configuration can be copied from `.env.example`:
 
-Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
+```bash
+cp .env.example .env
+```
+
+Most local development does not require additional environment variables.
+
+### Development mode
+
+Start the server and web client together with hot reload:
+
+```bash
+vp run dev
+```
+
+Open the one-time pairing URL printed in the terminal. By default, the web
+client uses port `5733` and the server uses port `13773`; the startup output
+is authoritative if those ports are already occupied.
+
+For desktop development:
+
+```bash
+vp run dev:desktop
+```
+
+To run only one side of the browser stack:
+
+```bash
+vp run dev:server
+vp run dev:web
+```
+
+To share a development instance over the machine's Tailscale network:
+
+```bash
+vp run dev --share
+```
+
+Do not set `VITE_HTTP_URL` or `VITE_WS_URL` for local development. The web
+client is single-origin and Vite proxies the API and WebSocket paths to the
+local server.
+
+### Production build and local server
+
+Build the workspace:
+
+```bash
+vp run build
+```
+
+Start the production server, which serves the built web client:
+
+```bash
+vp run start
+```
+
+### Desktop packages
+
+Build a local macOS DMG (arm64 by default):
+
+```bash
+vp run dist:desktop:dmg
+```
+
+Other packaging commands are documented in
+[`docs/internals/scripts.md`](./docs/internals/scripts.md).
+
+## Documentation
+
+- [Install and first run](./docs/user/install.md)
+- [Permission modes](./docs/user/permission-modes.md)
+- [Keyboard shortcuts](./docs/user/keybindings.md)
+- [Remote access](./docs/user/remote-access.md)
+- [Keeping app and server in sync](./docs/user/updating.md)
+- [Source control integrations](./docs/user/source-control.md)
+- [Agent Forge product requirements](./docs/project/agentforge/prd.md)
+- [Agent Forge implementation plan](./docs/project/agentforge/implementation-plan.md)
+- [Fork policy and upstream sync](./docs/project/agentforge/fork-policy.md)
+- [Architecture and internals](./docs/internals/overview.md)
+- [Reference scripts](./docs/internals/scripts.md)
+
+## Contributing
+
+Read [CONTRIBUTING.md](./CONTRIBUTING.md) and the
+[fork policy](./docs/project/agentforge/fork-policy.md) before opening an
+issue or pull request. Agent Forge-specific features should remain isolated
+from upstream code where possible so that upstream T3 Code improvements remain
+easy to merge.
+
+## Thanks
+
+Agent Forge would not exist without T3 Code. Thank you to Theo Browne, the
+original author of T3 Code, and to the T3 Code contributors for creating an
+open, performant, remote-ready foundation that we can extend for Agent Forge.
+
+- Original project: [T3 Code](https://github.com/pingdotgg/t3code)
+- Agent Forge: [github.com/bukanajay/AgentForge](https://github.com/bukanajay/AgentForge)
