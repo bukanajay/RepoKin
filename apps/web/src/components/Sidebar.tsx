@@ -715,7 +715,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
                   </span>
                 }
               />
-              <TooltipPopup side="top">AgentForge agent {agentForgeAgentLabel}</TooltipPopup>
+              <TooltipPopup side="top">RepoKin agent {agentForgeAgentLabel}</TooltipPopup>
             </Tooltip>
           )}
           {renamingThreadKey === threadKey ? (

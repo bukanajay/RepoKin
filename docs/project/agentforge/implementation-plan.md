@@ -1,4 +1,4 @@
-# AgentForge — Implementation Plan
+# RepoKin — Implementation Plan
 
 **Companion to:** [prd.md](./prd.md) · [fork-policy.md](./fork-policy.md)
 **Date:** 2026-07-30
@@ -52,14 +52,13 @@ set default branch on GitHub, and verify a manual sync-workflow dispatch.
 
 ### M0.2 Branding indirection
 
-5. ~~Set `APP_BASE_NAME` / product name to AgentForge~~ **Done** (web branding,
+5. ~~Set `APP_BASE_NAME` / product name to RepoKin~~ **Done** (web branding,
    desktop packaging `productName`, desktop `APP_BASE_NAME`, electron launcher
    display name). Package names / paths stay `@t3tools/*`.
 6. ~~Decide the product spelling and rename the GitHub repository to match.~~
-   **Done 2026-07-30** — product name is **AgentForge**; the repository is
-   [`bukanajay/AgentForge`](https://github.com/bukanajay/AgentForge). GitHub
-   redirects the old `agent-fordge` URL. Remaining: local clone directories
-   still carry the old spelling and should be renamed by their owners.
+   **In progress 2026-08-03** — the product name is **RepoKin**; the repository
+   rename from `bukanajay/AgentForge` to `bukanajay/RepoKin` is pending GitHub
+   account access. Existing internal compatibility identifiers remain unchanged.
 
 ### M0.3 Ground rules in writing
 
@@ -103,7 +102,7 @@ Then ~~add the `./team` subpath~~ to `packages/contracts/package.json` — not a
 ### M1.2 Repository store — `apps/server/src/team/`
 
 **Status:** landed on `forge` (2026-07-30) and wired through typed WebSocket
-RPCs, client-runtime atoms, the web/desktop AgentForge settings surface, and a
+RPCs, client-runtime atoms, the web/desktop RepoKin settings surface, and a
 read-only mobile roster.
 
 | File                                                        | Responsibility                                                                                                                                                    |
@@ -172,7 +171,7 @@ cannot debug, and this will be the single most-used feature during development.
 
 ### M1.4 Agent → runtime binding
 
-**Status:** landed locally (2026-07-30). Settings → AgentForge stores local
+**Status:** landed locally (2026-07-30). Settings → RepoKin stores local
 agent bindings under `ProviderInstanceConfig.config.agentforge.agentIds`, and
 the composer picker prefers that machine-local binding before falling back to an
 agent profile's provider preference. Unavailable/error provider instances are
@@ -192,9 +191,9 @@ this kind of fork payload.
 
 **Status:** landed locally (2026-07-30). Added environment-local
 `settings.agentforge.trustedMechanics`, pure trust evaluation helpers, and a
-Settings → AgentForge preview affordance, and composer send-flow prompt to mark
+Settings → RepoKin preview affordance, and composer send-flow prompt to mark
 the currently compiled mechanical hash trusted for a workspace/agent. Provider
-turns with untrusted or changed AgentForge mechanics are rejected before
+turns with untrusted or changed RepoKin mechanics are rejected before
 provider session start. The current prompt summarizes the mechanical settings in
 plain language; richer before/after copy can continue as UX polish outside the
 M1 gate.
@@ -235,7 +234,7 @@ chain hole. It ships with M1, not after.
 - [x] Instruction preview.
 - [x] Agent picker in the composer: reads the active project roster and applies
       profile provider/runtime/interaction defaults to the current draft controls.
-- [x] Publish affordance: local AgentForge saves create scoped commits and a
+- [x] Publish affordance: local RepoKin saves create scoped commits and a
       persistent "team changes ready to publish" control pushes only when the
       user chooses it (PRD Q2). Default-branch pushes require confirmation.
 
@@ -283,7 +282,7 @@ models in `packages/contracts/src/team.ts`, pure
 migration `100_TeamMembers.ts`, `TeamEventStore`, command receipts, and
 `Layers/TeamEngine.ts` with serial dispatch and idempotent command receipts.
 The domain is exposed through typed WebSocket RPCs and client-runtime atoms;
-web/desktop AgentForge settings render the inbox, assignments, and activity.
+web/desktop RepoKin settings render the inbox, assignments, and activity.
 
 Mirror the orchestration pattern exactly — `decider.ts` (pure), `projector.ts`,
 `commandInvariants.ts`, `Layers/TeamEngine.ts`. Reusing the shape means reusing
@@ -293,14 +292,14 @@ the team's intuition and the existing test ergonomics.
   `team.request.respond`.
 - Events: the corresponding `*-ed` facts.
 - Migrations start at **`100_TeamMembers.ts`**
-  ([fork-policy.md §4](./fork-policy.md#4-where-agentforge-code-goes)).
+  ([fork-policy.md §4](./fork-policy.md#4-where-repokin-code-goes)).
 
 ### M2.2 Presence
 
 **Status:** landed locally (2026-08-03). Extended
 `packages/shared/src/agentAwareness.ts` with local member presence projection:
 awareness phases map to `online` / `busy` / `away` / `offline`, with a
-30-second staleness horizon. Settings → AgentForge now shows non-animated
+30-second staleness horizon. Settings → RepoKin now shows non-animated
 presence chips for roster agents when thread shells are attributed with
 `agentforgeAgentId`. Human app-presence follows FR-6.3: throttled web/desktop
 pointer and keyboard activity, plus mobile foreground/touch activity, publish
@@ -318,7 +317,7 @@ indicator never animates continuously.
 **Status:** landed locally (2026-07-30). Added local inbox command/event
 schemas and WebSocket RPCs, exposed `team.readLocalState` /
 `team.dispatchCommand` through client runtime atoms, and added a visible
-Settings -> AgentForge local inbox control for sending messages to the selected
+Settings -> RepoKin local inbox control for sending messages to the selected
 agent and marking delivered messages read. Server-side delivery now uses
 `TeamInboxDeliveryReactorLive` with presence-aware queued/delivered/expired
 decisions and focused tests for domain transitions plus online delivery.
@@ -335,7 +334,7 @@ the queued event is decided, so offline messages cannot remain queued forever.
 
 **Status:** landed locally (2026-07-30). The local team domain records
 `team.agent.assign` as a durable assignment plus `thread.assigned` activity.
-Settings -> AgentForge now exposes a local handoff control that selects a
+Settings -> RepoKin now exposes a local handoff control that selects a
 project thread, assigns it to the selected agent, refreshes the team read model,
 and shows current assignments plus recent team activity.
 
@@ -365,8 +364,8 @@ Plan for slip; do not let M1 or M2 depend on this landing on time.
 `apps/server/src/team/Layers/RosterSync.ts`:
 
 **Status:** landed locally (2026-07-30). Added the explicit `teamRemote` save
-path, manual Settings -> AgentForge roster sync, upstream-then-origin suggestion
-helper, default-branch resolution, fetch into AgentForge-owned refs, and
+path, manual Settings -> RepoKin roster sync, upstream-then-origin suggestion
+helper, default-branch resolution, fetch into RepoKin-owned refs, and
 `git show`/`ls-tree` roster reads from the fetched ref without checkout. Roster
 sync is also retained by visible VCS status subscriptions: one coalesced poller
 per cwd, off the interaction path, and gated by `BackgroundPolicy` scoped work.
@@ -425,7 +424,7 @@ a member has no local thread activity and its roster profile's
 `homeEnvironment` differs from this one. `team.readLocalState` returns a
 `presences` list (resolved for every project member, local or remote) so the
 web UI doesn't need its own copy of the resolution logic; Settings ->
-AgentForge shows the owning human's roster environment label next to a
+RepoKin shows the owning human's roster environment label next to a
 remote agent's presence chip, e.g. `Busy (on julius-mbp)`.
 
 Human presence uses a separate minimal relay heartbeat keyed only by the
@@ -475,7 +474,7 @@ Borrowed-agent visibility ships without any new state: M1.4's local
 agent-to-provider binding is already an explicit, environment-local opt-in,
 so a roster agent whose `homeEnvironment` differs from here _and_ that has a
 local binding here is being run from this machine right now. Settings ->
-AgentForge shows a "Borrowed here" badge for exactly that case — no new
+RepoKin shows a "Borrowed here" badge for exactly that case — no new
 relay endpoint, no new settings key, no locking, no enforcement; unbinding
 the agent (already-existing UI) is the "way out."
 

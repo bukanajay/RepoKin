@@ -162,15 +162,12 @@ export function AgentForgeSettingsPanel() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
   const serverProviders = useAtomValue(primaryServerProvidersAtom);
-  const upsertAgent = useAtomCommand(teamEnvironment.upsertAgent, "save AgentForge agent");
-  const updateTeamFile = useAtomCommand(
-    teamEnvironment.updateTeamFile,
-    "save AgentForge team file",
-  );
-  const syncTeamRoster = useAtomCommand(teamEnvironment.syncRoster, "sync AgentForge roster");
+  const upsertAgent = useAtomCommand(teamEnvironment.upsertAgent, "save RepoKin agent");
+  const updateTeamFile = useAtomCommand(teamEnvironment.updateTeamFile, "save RepoKin team file");
+  const syncTeamRoster = useAtomCommand(teamEnvironment.syncRoster, "sync RepoKin roster");
   const dispatchTeamCommand = useAtomCommand(
     teamEnvironment.dispatchCommand,
-    "dispatch AgentForge team command",
+    "dispatch RepoKin team command",
   );
   const projects = useProjects();
   const threadShells = useThreadShells();
@@ -825,7 +822,7 @@ export function AgentForgeSettingsPanel() {
               <BotIcon className="size-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-xl font-semibold text-foreground">AgentForge</h2>
+              <h2 className="text-xl font-semibold text-foreground">RepoKin</h2>
               <p className="truncate text-sm text-muted-foreground">
                 {selectedProject?.title ?? "Select a project workspace"}
               </p>
@@ -872,7 +869,7 @@ export function AgentForgeSettingsPanel() {
                   }
                 }}
               >
-                <SelectTrigger aria-label="AgentForge project workspace">
+                <SelectTrigger aria-label="RepoKin project workspace">
                   <SelectValue>
                     {projectOptions.find((project) => project.value === cwd)?.label ??
                       "Select project"}
@@ -946,7 +943,7 @@ export function AgentForgeSettingsPanel() {
 
         <div
           role="tablist"
-          aria-label="AgentForge settings views"
+          aria-label="RepoKin settings views"
           className="grid min-w-0 grid-cols-3 border-border/70 border-b"
         >
           {AGENTFORGE_VIEWS.map((view) => {
@@ -1651,7 +1648,7 @@ export function AgentForgeSettingsPanel() {
                           preview.data === undefined || previewTrustStatus === "Trusted mechanics"
                         }
                         onClick={handleTrustPreviewMechanics}
-                        aria-label="Trust AgentForge mechanics"
+                        aria-label="Trust RepoKin mechanics"
                       >
                         <ShieldCheckIcon className="size-3.5" />
                       </Button>
@@ -1711,7 +1708,7 @@ export function AgentForgeSettingsPanel() {
             <AlertDialogDescription>
               This will push {unpublishedCommitCount} local commit
               {unpublishedCommitCount === 1 ? "" : "s"} from{" "}
-              {vcsStatus.data?.refName ?? "the current branch"}. AgentForge never publishes
+              {vcsStatus.data?.refName ?? "the current branch"}. RepoKin never publishes
               automatically.
             </AlertDialogDescription>
           </AlertDialogHeader>

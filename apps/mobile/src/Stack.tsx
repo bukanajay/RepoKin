@@ -172,7 +172,7 @@ const SettingsSheetStack = createNativeStackNavigator({
       screen: SettingsAgentForgeRouteScreen,
       linking: "agent-forge",
       options: {
-        title: "AgentForge",
+        title: "RepoKin",
       },
     }),
     SettingsEnvironmentNew: createNativeStackScreen({
@@ -337,7 +337,7 @@ function RootStackLayout(props: {
     selectedThread?.environmentId ??
     (projectEnvironmentIds.size === 1 ? ([...projectEnvironmentIds][0] ?? null) : null);
   const heartbeatHumanPresence = useAtomCommand(teamEnvironment.heartbeatHumanPresence, {
-    label: "publish AgentForge human presence",
+    label: "publish RepoKin human presence",
     reportFailure: false,
     reportDefect: false,
   });

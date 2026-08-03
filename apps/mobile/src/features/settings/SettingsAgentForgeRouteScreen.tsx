@@ -87,7 +87,7 @@ export function SettingsAgentForgeRouteScreen() {
               />
             </View>
             <View className="min-w-0 flex-1">
-              <Text className="text-xl font-t3-semibold text-foreground">AgentForge</Text>
+              <Text className="text-xl font-t3-semibold text-foreground">RepoKin</Text>
               <Text className="text-sm text-foreground-muted" numberOfLines={1}>
                 {roster.data?.team?.displayName ?? selectedProject?.title ?? "Team roster"}
               </Text>
@@ -154,7 +154,7 @@ export function SettingsAgentForgeRouteScreen() {
             <EmptyRoster
               iconColor={mutedIconColor}
               title="No projects available"
-              detail="Connect an environment with a project to read its AgentForge roster."
+              detail="Connect an environment with a project to read its RepoKin roster."
             />
           </SettingsSection>
         ) : roster.error !== null ? (

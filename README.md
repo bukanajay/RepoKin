@@ -1,33 +1,33 @@
-# Agent Forge
+# RepoKin
 
-Agent Forge is a multi-surface control center for coding agents. It lets you
+RepoKin is a multi-surface control center for coding agents. It lets you
 run and control agents from the web, desktop, and mobile clients while keeping
 the performance, remote access, and provider flexibility that made T3 Code
 useful.
 
-Agent Forge is a fork of [T3 Code](https://github.com/pingdotgg/t3code). It
+RepoKin is a fork of [T3 Code](https://github.com/pingdotgg/t3code). It
 works with locally authenticated subscriptions and CLIs for Codex, Claude
-Code, Cursor, Grok Build, and OpenCode. Agent Forge is building a Git-native
+Code, Cursor, Grok Build, and OpenCode. RepoKin is building a Git-native
 team layer on top of that foundation, including persistent named agents,
 agent character and policy, repository-based rosters, attribution, and team
 presence and messaging.
 
-## What Agent Forge includes
+## What RepoKin includes
 
 - Web, Electron desktop, iOS, and Android clients
 - A Node.js WebSocket server for local and remote control
 - Provider adapters for Codex, Claude Code, Cursor, Grok Build, and OpenCode
 - Remote-ready operation over local networks, Tailscale, and T3 Connect
 - Project workspaces, checkpoints, terminal access, reviews, and agent status
-- Agent Forge's Git-native roster and persistent agent identity layer
+- RepoKin's Git-native roster and persistent agent identity layer
 
-The original T3 Code capabilities remain part of this fork. Agent Forge is
+The original T3 Code capabilities remain part of this fork. RepoKin is
 intended to continue receiving upstream fixes and features while keeping its
-team-specific work in the Agent Forge layer.
+team-specific work in the RepoKin layer.
 
 ## Install a provider
 
-Before using Agent Forge, install and authenticate at least one supported
+Before using RepoKin, install and authenticate at least one supported
 provider:
 
 - [Codex CLI](https://developers.openai.com/codex/cli): `codex login`
@@ -37,7 +37,7 @@ provider:
 - [OpenCode](https://opencode.ai): `opencode auth login`
 
 Each provider uses the credentials and subscription configured on the machine
-where its CLI runs. Agent Forge does not transfer provider credentials between
+where its CLI runs. RepoKin does not transfer provider credentials between
 machines.
 
 ## Build and run locally
@@ -57,8 +57,8 @@ curl -fsSL https://vite.plus | bash
 Then clone and install the workspace dependencies:
 
 ```bash
-git clone https://github.com/bukanajay/AgentForge.git
-cd AgentForge
+git clone https://github.com/bukanajay/RepoKin.git
+cd RepoKin
 vp i
 ```
 
@@ -138,8 +138,8 @@ Other packaging commands are documented in
 - [Remote access](./docs/user/remote-access.md)
 - [Keeping app and server in sync](./docs/user/updating.md)
 - [Source control integrations](./docs/user/source-control.md)
-- [Agent Forge product requirements](./docs/project/agentforge/prd.md)
-- [Agent Forge implementation plan](./docs/project/agentforge/implementation-plan.md)
+- [RepoKin product requirements](./docs/project/agentforge/prd.md)
+- [RepoKin implementation plan](./docs/project/agentforge/implementation-plan.md)
 - [Fork policy and upstream sync](./docs/project/agentforge/fork-policy.md)
 - [Architecture and internals](./docs/internals/overview.md)
 - [Reference scripts](./docs/internals/scripts.md)
@@ -148,15 +148,22 @@ Other packaging commands are documented in
 
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) and the
 [fork policy](./docs/project/agentforge/fork-policy.md) before opening an
-issue or pull request. Agent Forge-specific features should remain isolated
+issue or pull request. RepoKin-specific features should remain isolated
 from upstream code where possible so that upstream T3 Code improvements remain
 easy to merge.
 
 ## Thanks
 
-Agent Forge would not exist without T3 Code. Thank you to Theo Browne, the
+RepoKin would not exist without T3 Code. Thank you to Theo Browne, the
 original author of T3 Code, and to the T3 Code contributors for creating an
-open, performant, remote-ready foundation that we can extend for Agent Forge.
+open, performant, remote-ready foundation that we can extend for RepoKin.
 
 - Original project: [T3 Code](https://github.com/pingdotgg/t3code)
-- Agent Forge: [github.com/bukanajay/AgentForge](https://github.com/bukanajay/AgentForge)
+- RepoKin: [github.com/bukanajay/RepoKin](https://github.com/bukanajay/RepoKin)
+
+## Compatibility note
+
+The legacy `.agentforge/` project directory, `agentforge` configuration
+namespace, and related protocol identifiers remain unchanged for compatibility
+with existing repositories and settings. These are internal storage and
+wire-format names only; the product brand is RepoKin.

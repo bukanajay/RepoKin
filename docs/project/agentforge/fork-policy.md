@@ -1,10 +1,10 @@
-# Fork policy — staying mergeable with upstream T3 Code
+# RepoKin fork policy — staying mergeable with upstream T3 Code
 
 **Upstream:** `https://github.com/pingdotgg/t3code`
-**This fork:** `https://github.com/bukanajay/AgentForge`
+**This fork:** `https://github.com/bukanajay/RepoKin`
 **Status:** active (M0 applied on `forge`)
 
-AgentForge must keep receiving upstream fixes and features indefinitely.
+RepoKin must keep receiving upstream fixes and features indefinitely.
 Upstream is highly active — 2,198 commits with the most recent landing the day
 before this fork's snapshot. At that cadence, merge cost is not a one-time
 migration problem; it is a **permanent tax we pay every week**, and it is set
@@ -45,7 +45,7 @@ upstream/main ──────────────────────
       │
       │ merge (weekly, automated PR)
       ▼
-  origin/forge ────────────────────────────►    AgentForge trunk
+  origin/forge ────────────────────────────►    RepoKin trunk
       │
       ├── forge/m1-agent-roster
       ├── forge/m1-character-compiler
@@ -55,7 +55,7 @@ upstream/main ──────────────────────
 - **`main` is a pure mirror of `upstream/main`.** Never commit to it. Its only
   job is to be a clean, always-fast-forwardable copy so that merges have an
   honest base and `git log main..forge` always answers "what is ours?"
-- **`forge` is our trunk.** Releases ship from here. All AgentForge work merges
+- **`forge` is our trunk.** Releases ship from here. All RepoKin work merges
   here.
 - Feature branches branch from `forge` and merge back with squash.
 
@@ -111,7 +111,7 @@ what makes `git bisect` and blame work across the merge boundary.
 
 ---
 
-## 4. Where AgentForge code goes
+## 4. Where RepoKin code goes
 
 New, ours-only — merge cost zero:
 
@@ -127,7 +127,7 @@ New, ours-only — merge cost zero:
 
 **Migration numbering.** Upstream is at `034` and counting. If we allocate `035`,
 upstream's next migration collides — a genuinely painful conflict, since
-migrations are ordered and already applied on users' machines. **AgentForge
+migrations are ordered and already applied on users' machines. **RepoKin
 migrations start at `100`.** This buys ~66 upstream migrations of headroom and
 makes ownership obvious at a glance.
 
@@ -235,17 +235,17 @@ Two reasons, in order of importance:
 2. Upstream is explicit that they are mostly not accepting contributions right
    now, and that small fixes may be considered while big features will not
    ([README](../../../README.md)). So: send the small fixes, keep the team layer
-   ours, and do not waste a round trip proposing AgentForge features upstream.
+   ours, and do not waste a round trip proposing RepoKin features upstream.
 
-Never send AgentForge-specific code upstream. It is not their product.
+Never send RepoKin-specific code upstream. It is not their product.
 
 ---
 
 ## 9. Review checklist
 
-Every AgentForge PR:
+Every RepoKin PR:
 
-- [ ] Are all new files in AgentForge-owned paths?
+- [ ] Are all new files in RepoKin-owned paths?
 - [ ] For each upstream file touched: is the change ≤ a few lines, and does the
       logic live in our file?
 - [ ] Any new migration numbered ≥ `100`?

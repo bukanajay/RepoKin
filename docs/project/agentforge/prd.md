@@ -1,4 +1,4 @@
-# AgentForge — Product Requirements Document
+# RepoKin — Product Requirements Document
 
 **Status:** Draft v0.2 (refined) — implementation started on `forge`
 **Based on:** fork of [T3 Code](https://github.com/pingdotgg/t3code)
@@ -49,11 +49,11 @@ next to the code it works on. Because the repository is the shared artifact a
 team already agrees on, it is also the natural registry of who is on the team,
 human or otherwise.
 
-AgentForge is T3 Code plus a Git-native team layer.
+RepoKin is T3 Code plus a Git-native team layer.
 
 ### The one-line pitch
 
-> Your repo already knows who wrote every line. AgentForge makes it know _who
+> Your repo already knows who wrote every line. RepoKin makes it know _who
 > your agents are_ — and lets them work like colleagues instead of tabs.
 
 ### What we are betting on
@@ -194,20 +194,20 @@ export. We will not serve them well and should not pretend to.
 Extends the existing [encyclopedia](../../reference/encyclopedia.md). New terms
 belong there too once implemented.
 
-| Term                | Definition                                                                                                                       |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Project**         | Unchanged from T3 Code: an environment-local workspace record rooted at a directory. For AgentForge it must be a Git repository. |
-| **Team**            | The set of members declared in `.agentforge/` on a project's team remote.                                                        |
-| **Member**          | A human or agent in the roster. Identified by `MemberId`.                                                                        |
-| **Human member**    | A person. Identity anchored on `git config user.email`, enriched with display name, avatar, and environment public keys.         |
-| **Agent member**    | A persistent agent: name, owner, character, provider binding, home environment.                                                  |
-| **Character**       | The structured, versioned definition of how an agent behaves — prose _and_ mechanical settings. See §6.3.                        |
-| **Team remote**     | The Git remote whose default branch holds the canonical roster. One per project.                                                 |
-| **Environment**     | Unchanged: one T3 server, one machine, one operator's credentials. Now also a _cryptographic identity_ in the team.              |
-| **Home / borrowed** | Whether an agent is running in its declared home environment or somewhere else.                                                  |
-| **Presence**        | `online` / `busy` / `away` / `offline`, per member per environment. Never committed to Git.                                      |
-| **Inbox**           | A member's durable queue of inbound messages and requests. Environment-local.                                                    |
-| **Thread**          | Unchanged, extended with an owning agent.                                                                                        |
+| Term                | Definition                                                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Project**         | Unchanged from T3 Code: an environment-local workspace record rooted at a directory. For RepoKin it must be a Git repository. |
+| **Team**            | The set of members declared in `.agentforge/` on a project's team remote.                                                     |
+| **Member**          | A human or agent in the roster. Identified by `MemberId`.                                                                     |
+| **Human member**    | A person. Identity anchored on `git config user.email`, enriched with display name, avatar, and environment public keys.      |
+| **Agent member**    | A persistent agent: name, owner, character, provider binding, home environment.                                               |
+| **Character**       | The structured, versioned definition of how an agent behaves — prose _and_ mechanical settings. See §6.3.                     |
+| **Team remote**     | The Git remote whose default branch holds the canonical roster. One per project.                                              |
+| **Environment**     | Unchanged: one T3 server, one machine, one operator's credentials. Now also a _cryptographic identity_ in the team.           |
+| **Home / borrowed** | Whether an agent is running in its declared home environment or somewhere else.                                               |
+| **Presence**        | `online` / `busy` / `away` / `offline`, per member per environment. Never committed to Git.                                   |
+| **Inbox**           | A member's durable queue of inbound messages and requests. Environment-local.                                                 |
+| **Thread**          | Unchanged, extended with an owning agent.                                                                                     |
 
 ---
 
@@ -711,8 +711,8 @@ could do to merge cost, because it touches files upstream also touches, forever,
 for zero user value. If the team layer succeeds, a visual identity of our own is
 an M4+ investment made deliberately — not an M0 reflex.
 
-**Settled:** the product name is **AgentForge**, and the repository was renamed
-to [`bukanajay/AgentForge`](https://github.com/bukanajay/AgentForge) on
+**Current direction:** the product name is **RepoKin**, and the repository is
+being renamed to [`bukanajay/RepoKin`](https://github.com/bukanajay/RepoKin).
 2026-07-30. GitHub redirects the previous `agent-fordge` URL, so existing clones
 and links keep working; local clones should still update their remote.
 

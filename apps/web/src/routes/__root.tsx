@@ -149,7 +149,7 @@ const HUMAN_PRESENCE_HEARTBEAT_THROTTLE_MS = 10_000;
 function HumanPresenceReporter() {
   const activeEnvironmentId = useActiveEnvironmentId();
   const heartbeat = useAtomCommand(teamEnvironment.heartbeatHumanPresence, {
-    label: "publish AgentForge human presence",
+    label: "publish RepoKin human presence",
     reportFailure: false,
     reportDefect: false,
   });
