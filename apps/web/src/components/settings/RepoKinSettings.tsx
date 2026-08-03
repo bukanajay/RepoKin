@@ -40,7 +40,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   providerConfigWithAgentBinding,
   providerInstanceHasAgentBinding,
-} from "../../agentforgeBindings";
+} from "../../repokinBindings";
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
 import { cn, randomUUID } from "../../lib/utils";
 import {
@@ -85,16 +85,16 @@ const DEFAULT_AGENT_ID = "agent_aria";
 const DEFAULT_OWNER_ID = "human_local";
 const DEFAULT_AGENT_NAME = "Aria";
 const DEFAULT_PERSONA = "Pragmatic implementation agent focused on scoped, verified progress.";
-const NO_BOUND_PROVIDER_VALUE = "__agentforge_no_bound_provider__";
+const NO_BOUND_PROVIDER_VALUE = "__repokin_no_bound_provider__";
 const decodeMemberId = Schema.decodeUnknownSync(MemberIdSchema);
 
-const AGENTFORGE_VIEWS = [
+const REPOKIN_VIEWS = [
   { id: "agents", label: "Agents", icon: UsersIcon },
   { id: "collaboration", label: "Collaboration", icon: MessageSquareIcon },
   { id: "instructions", label: "Instructions", icon: FileCode2Icon },
 ] as const;
 
-type AgentForgeView = (typeof AGENTFORGE_VIEWS)[number]["id"];
+type RepoKinView = (typeof REPOKIN_VIEWS)[number]["id"];
 
 const RUNTIME_MODE_OPTIONS: ReadonlyArray<{ readonly value: RuntimeMode; readonly label: string }> =
   [
@@ -156,7 +156,7 @@ function presenceDotClassName(state: MemberPresenceState | null): string {
   }
 }
 
-export function AgentForgeSettingsPanel() {
+export function RepoKinSettingsPanel() {
   const environmentId = usePrimaryEnvironmentId();
   const serverConfig = useAtomValue(primaryServerConfigAtom);
   const settings = usePrimarySettings();
@@ -202,7 +202,7 @@ export function AgentForgeSettingsPanel() {
   const [publishStatus, setPublishStatus] = useState<string | null>(null);
   const [publishConfirmationOpen, setPublishConfirmationOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<AgentForgeView>("agents");
+  const [activeView, setActiveView] = useState<RepoKinView>("agents");
   const [messageBody, setMessageBody] = useState("");
   const [messageStatus, setMessageStatus] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState("");
@@ -279,8 +279,8 @@ export function AgentForgeSettingsPanel() {
       if (
         thread.environmentId !== environmentId ||
         thread.projectId !== selectedProject.id ||
-        thread.agentforgeAgentId === null ||
-        thread.agentforgeAgentId === undefined
+        thread.repokinAgentId === null ||
+        thread.repokinAgentId === undefined
       ) {
         continue;
       }
@@ -293,13 +293,13 @@ export function AgentForgeSettingsPanel() {
         continue;
       }
       const presence = projectAgentThreadPresence({
-        memberId: thread.agentforgeAgentId as unknown as MemberId,
+        memberId: thread.repokinAgentId as unknown as MemberId,
         awareness,
         nowMs: Date.now(),
       });
-      const existing = byAgentId.get(thread.agentforgeAgentId);
+      const existing = byAgentId.get(thread.repokinAgentId);
       if (existing === undefined || existing.updatedAt.localeCompare(presence.updatedAt) < 0) {
-        byAgentId.set(thread.agentforgeAgentId, presence);
+        byAgentId.set(thread.repokinAgentId, presence);
       }
     }
     return byAgentId;
@@ -405,7 +405,7 @@ export function AgentForgeSettingsPanel() {
   const previewTrustedHash =
     submitted === null
       ? undefined
-      : settings.agentforge.trustedMechanics[submitted.cwd]?.[submitted.agentId];
+      : settings.repokin.trustedMechanics[submitted.cwd]?.[submitted.agentId];
   const previewTrustStatus =
     preview.data == null
       ? null
@@ -794,11 +794,11 @@ export function AgentForgeSettingsPanel() {
       return;
     }
     updateSettings({
-      agentforge: {
+      repokin: {
         trustedMechanics: {
-          ...settings.agentforge.trustedMechanics,
+          ...settings.repokin.trustedMechanics,
           [submitted.cwd]: {
-            ...(settings.agentforge.trustedMechanics[submitted.cwd] ?? {}),
+            ...(settings.repokin.trustedMechanics[submitted.cwd] ?? {}),
             [submitted.agentId]: preview.data.mechanicalHash,
           },
         },
@@ -946,7 +946,7 @@ export function AgentForgeSettingsPanel() {
           aria-label="RepoKin settings views"
           className="grid min-w-0 grid-cols-3 border-border/70 border-b"
         >
-          {AGENTFORGE_VIEWS.map((view) => {
+          {REPOKIN_VIEWS.map((view) => {
             const Icon = view.icon;
             const selected = activeView === view.id;
             return (
@@ -955,7 +955,7 @@ export function AgentForgeSettingsPanel() {
                 type="button"
                 role="tab"
                 aria-selected={selected}
-                aria-controls={`agentforge-${view.id}-panel`}
+                aria-controls={`repokin-${view.id}-panel`}
                 className={cn(
                   "relative flex h-10 min-w-0 items-center justify-center gap-1 px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground sm:gap-2 sm:px-3 sm:text-sm",
                   selected &&
@@ -972,14 +972,14 @@ export function AgentForgeSettingsPanel() {
       </section>
 
       <div
-        id={`agentforge-${activeView}-panel`}
+        id={`repokin-${activeView}-panel`}
         role="tabpanel"
         className="relative space-y-2 text-foreground"
       >
         <SettingsRow
           className={activeView === "agents" ? undefined : "hidden"}
           title="Roster"
-          description="Read humans and agents from the selected repository's .agentforge directory."
+          description="Read humans and agents from the selected repository's .repokin directory."
           control={
             <Button
               size="sm"
@@ -1022,7 +1022,7 @@ export function AgentForgeSettingsPanel() {
             <div className="divide-y divide-border/60">
               {agentOptions.length === 0 ? (
                 <div className="px-3 py-4 text-sm text-muted-foreground sm:px-4">
-                  No agent profiles found under `.agentforge/agents`.
+                  No agent profiles found under `.repokin/agents`.
                 </div>
               ) : (
                 agentOptions.map((agent) => {
@@ -1414,7 +1414,7 @@ export function AgentForgeSettingsPanel() {
         <SettingsRow
           className={activeView === "agents" ? undefined : "hidden"}
           title="Agent profile"
-          description="Create or edit the selected agent profile as a local .agentforge file."
+          description="Create or edit the selected agent profile as a local .repokin file."
           control={
             <Button
               size="sm"

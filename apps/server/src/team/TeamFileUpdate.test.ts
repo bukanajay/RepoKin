@@ -14,7 +14,7 @@ it.layer(TestLayer)("updateTeamFile", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-team-file-update-",
+        prefix: "repokin-team-file-update-",
       });
 
       const result = yield* updateTeamFile({
@@ -22,15 +22,15 @@ it.layer(TestLayer)("updateTeamFile", (it) => {
         team: {
           schemaVersion: 1,
           teamRemote: "upstream",
-          displayName: "AgentForge",
+          displayName: "RepoKin",
         },
         commit: false,
       });
 
       expect(result.write.committed).toBe(false);
-      expect(result.write.path.endsWith(".agentforge/team.json")).toBe(true);
+      expect(result.write.path.endsWith(".repokin/team.json")).toBe(true);
       expect(result.roster.team?.teamRemote).toBe("upstream");
-      expect(result.roster.team?.displayName).toBe("AgentForge");
+      expect(result.roster.team?.displayName).toBe("RepoKin");
       expect(result.roster.warnings).toEqual([]);
     }),
   );

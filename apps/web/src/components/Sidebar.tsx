@@ -228,7 +228,7 @@ const PROJECT_GROUPING_MODE_LABELS: Record<SidebarProjectGroupingMode, string> =
 const SIDEBAR_ICON_ACTION_BUTTON_CLASS =
   "inline-flex h-6 min-w-6 cursor-pointer items-center justify-center rounded-md px-[calc(--spacing(1)-1px)] text-muted-foreground/60 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring";
 
-function formatAgentForgeAgentLabel(agentId: string): string {
+function formatRepoKinAgentLabel(agentId: string): string {
   return `@${agentId}`;
 }
 
@@ -460,8 +460,8 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   });
   const prStatus = prStatusIndicator(pr, gitStatus.data?.sourceControlProvider);
   const terminalStatus = terminalStatusFromRunningIds(runningTerminalIds);
-  const agentForgeAgentLabel =
-    thread.agentforgeAgentId == null ? null : formatAgentForgeAgentLabel(thread.agentforgeAgentId);
+  const repoKinAgentLabel =
+    thread.repokinAgentId == null ? null : formatRepoKinAgentLabel(thread.repokinAgentId);
   const isConfirmingArchive = confirmingArchiveThreadKey === threadKey && !isThreadRunning;
   const threadMetaClassName = isConfirmingArchive
     ? "pointer-events-none opacity-0"
@@ -705,17 +705,17 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
             </Tooltip>
           )}
           {threadStatus && <ThreadStatusLabel status={threadStatus} />}
-          {agentForgeAgentLabel && (
+          {repoKinAgentLabel && (
             <Tooltip>
               <TooltipTrigger
                 render={
                   <span className="inline-flex max-w-24 shrink-0 items-center gap-1 rounded-sm border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
                     <BotIcon className="size-3" />
-                    <span className="min-w-0 truncate">{agentForgeAgentLabel}</span>
+                    <span className="min-w-0 truncate">{repoKinAgentLabel}</span>
                   </span>
                 }
               />
-              <TooltipPopup side="top">RepoKin agent {agentForgeAgentLabel}</TooltipPopup>
+              <TooltipPopup side="top">RepoKin agent {repoKinAgentLabel}</TooltipPopup>
             </Tooltip>
           )}
           {renamingThreadKey === threadKey ? (

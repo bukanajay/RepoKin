@@ -2,7 +2,7 @@ export type SettingsPath =
   | "/settings/general"
   | "/settings/appearance"
   | "/settings/keybindings"
-  | "/settings/agentforge"
+  | "/settings/repokin"
   | "/settings/providers"
   | "/settings/source-control"
   | "/settings/connections"
@@ -24,7 +24,7 @@ export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
   "/settings/keybindings": "Keybindings",
-  "/settings/agentforge": "RepoKin",
+  "/settings/repokin": "RepoKin",
   "/settings/providers": "Providers",
   "/settings/source-control": "Source Control",
   "/settings/connections": "Connections",

@@ -57,12 +57,12 @@ set default branch on GitHub, and verify a manual sync-workflow dispatch.
    display name). Package names / paths stay `@t3tools/*`.
 6. ~~Decide the product spelling and rename the GitHub repository to match.~~
    **In progress 2026-08-03** — the product name is **RepoKin**; the repository
-   rename from `bukanajay/AgentForge` to `bukanajay/RepoKin` is pending GitHub
+   rename from `bukanajay/RepoKin` to `bukanajay/RepoKin` is pending GitHub
    account access. Existing internal compatibility identifiers remain unchanged.
 
 ### M0.3 Ground rules in writing
 
-7. ~~Land these three documents.~~ **Done** under `docs/project/agentforge/`.
+7. ~~Land these three documents.~~ **Done** under `docs/project/repokin/`.
 8. ~~Add the review checklist to `.github/pull_request_template.md`.~~ **Done**.
 
 ---
@@ -105,11 +105,11 @@ Then ~~add the `./team` subpath~~ to `packages/contracts/package.json` — not a
 RPCs, client-runtime atoms, the web/desktop RepoKin settings surface, and a
 read-only mobile roster.
 
-| File                                                        | Responsibility                                                                                                                                                    |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~~`Services/TeamFileStore.ts` + `Layers/TeamFileStore.ts`~~ | Read and write `.agentforge/`. Atomic writes; optional git commit scoped to pathspecs under `.agentforge/`. `readRosterFromRef` uses `git show` / `ls-tree` only. |
-| ~~`Services/LocalIdentityResolver.ts` + layer~~             | `git config user.name` / `user.email` via ProcessRunner, cached per repo root.                                                                                    |
-| ~~`TeamPaths.ts`~~                                          | Path construction and slug derivation. Pure.                                                                                                                      |
+| File                                                        | Responsibility                                                                                                                                              |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~`Services/TeamFileStore.ts` + `Layers/TeamFileStore.ts`~~ | Read and write `.repokin/`. Atomic writes; optional git commit scoped to pathspecs under `.repokin/`. `readRosterFromRef` uses `git show` / `ls-tree` only. |
+| ~~`Services/LocalIdentityResolver.ts` + layer~~             | `git config user.name` / `user.email` via ProcessRunner, cached per repo root.                                                                              |
+| ~~`TeamPaths.ts`~~                                          | Path construction and slug derivation. Pure.                                                                                                                |
 
 Behavior notes that matter:
 
@@ -117,7 +117,7 @@ Behavior notes that matter:
   checkout, never merge, never `pull`. The user's working tree is theirs.
 - A malformed profile is skipped with a surfaced warning, never fatal. One
   teammate's bad JSON must not break your roster.
-- Writes touch only `.agentforge/`, and produce their own commit.
+- Writes touch only `.repokin/`, and produce their own commit.
 
 ### M1.3 Character compiler — the heart of M1
 
@@ -128,7 +128,7 @@ landed for Codex, Claude Code, Cursor, Grok, and OpenCode. Typed preview API
 exposure is in place through `team.previewInstructions`; roster read exposure is
 in place through `team.readRoster`; local agent profile writes are exposed
 through `team.upsertAgent`; all three have client-runtime atoms. Composer
-selection now passes `agentforgeAgentId` through orchestration and provider
+selection now passes `repokinAgentId` through orchestration and provider
 reactors so compiled instructions are supplied at provider session start and
 send-turn time. M1.6 attribution polish is now landed locally.
 
@@ -172,14 +172,14 @@ cannot debug, and this will be the single most-used feature during development.
 ### M1.4 Agent → runtime binding
 
 **Status:** landed locally (2026-07-30). Settings → RepoKin stores local
-agent bindings under `ProviderInstanceConfig.config.agentforge.agentIds`, and
+agent bindings under `ProviderInstanceConfig.config.repokin.agentIds`, and
 the composer picker prefers that machine-local binding before falling back to an
 agent profile's provider preference. Unavailable/error provider instances are
 shown but cannot be saved as a binding.
 
 An agent's runtime is a provider instance. The binding
 (`agentId → providerInstanceId`) is **machine-specific and stays out of Git** —
-it lives in local settings, namespaced under `config.agentforge` inside
+it lives in local settings, namespaced under `config.repokin` inside
 `ProviderInstanceConfig`, which upstream already preserves verbatim for exactly
 this kind of fork payload.
 
@@ -190,7 +190,7 @@ this kind of fork payload.
 ### M1.5 Trust prompt (PRD §6.5)
 
 **Status:** landed locally (2026-07-30). Added environment-local
-`settings.agentforge.trustedMechanics`, pure trust evaluation helpers, and a
+`settings.repokin.trustedMechanics`, pure trust evaluation helpers, and a
 Settings → RepoKin preview affordance, and composer send-flow prompt to mark
 the currently compiled mechanical hash trusted for a workspace/agent. Provider
 turns with untrusted or changed RepoKin mechanics are rejected before
@@ -214,7 +214,7 @@ chain hole. It ships with M1, not after.
 
 ### M1.6 Attribution
 
-- **Status:** landed locally (2026-07-30). `agentforgeAgentId` is projected
+- **Status:** landed locally (2026-07-30). `repokinAgentId` is projected
   onto thread rows from turn-start events, emitted in thread/shell snapshots,
   shown as a compact `@agent` chip in web thread rows, surfaced on checkpoint
   changed-file cards and turn-diff headers, and forwarded through web/mobile git
@@ -222,7 +222,7 @@ chain hole. It ships with M1, not after.
 - Add agent trailers to commits produced through
   [`GitManager.ts`](../../../apps/server/src/git/GitManager.ts) — the commit
   message construction path already exists and already takes a writing style.
-  **Landed:** `AgentForge-Agent: <agentId>` trailer on attributed commits.
+  **Landed:** `RepoKin-Agent: <agentId>` trailer on attributed commits.
 
 ### M1.7 UI
 
@@ -262,7 +262,7 @@ explicit editing-unavailable state. Editing remains M4.
 - [ ] Mechanical settings verifiably applied on all five drivers.
 - [x] Roster survives clone → edit → commit → clone elsewhere. Covered by an
       independent-clone Git integration test in `TeamFileStore.test.ts`.
-- [ ] A project with no `.agentforge/` is indistinguishable from stock T3 Code.
+- [ ] A project with no `.repokin/` is indistinguishable from stock T3 Code.
 - [ ] No p95 regression on thread open.
 - [ ] Upstream sync still merges in under two hours.
 
@@ -301,7 +301,7 @@ the team's intuition and the existing test ergonomics.
 awareness phases map to `online` / `busy` / `away` / `offline`, with a
 30-second staleness horizon. Settings → RepoKin now shows non-animated
 presence chips for roster agents when thread shells are attributed with
-`agentforgeAgentId`. Human app-presence follows FR-6.3: throttled web/desktop
+`repokinAgentId`. Human app-presence follows FR-6.3: throttled web/desktop
 pointer and keyboard activity, plus mobile foreground/touch activity, publish
 an authenticated environment heartbeat. The existing 30-second staleness
 horizon turns missing or stale activity into `offline`; durable team-domain
@@ -454,7 +454,7 @@ tampered receipts are dropped. Messages and receipts share the queue's
 that TTL in the local event domain.
 
 The relay queue and human-presence tables ship with generated Postgres
-migration `20260802175214_agentforge_team_transport`; the earlier TypeScript
+migration `20260802175214_repokin_team_transport`; the earlier TypeScript
 schema alone was not deployable. A process-local forwarded-message set prevents
 the 10-second retry scan from flooding the relay while still allowing messages
 that were initially unroutable, or failed a transient send, to be retried. The
@@ -530,7 +530,7 @@ M0 ──► M1.1 contracts ──┬──► M1.2 store ────┬──�
 | Migration collision                   | Upstream ships a migration in our range          | Ours start at `100`                                                           |
 | Roster sync stomps the working tree   | Any `git pull`/`checkout` in team code           | `git fetch` + `git show` only — make it a review checklist item               |
 | Presence repaints and burns GPU       | Any continuous animation in a presence indicator | T3 Code cardinal sin; catch it in review                                      |
-| Secrets reach `.agentforge/`          | Any profile field that could hold a credential   | Schema-level impossibility plus the M1.1 test                                 |
+| Secrets reach `.repokin/`             | Any profile field that could hold a credential   | Schema-level impossibility plus the M1.1 test                                 |
 | M3 slips                              | NAT and relay unknowns                           | M1 and M2 ship value without it; do not couple them                           |
 | Scope creep into M4                   | "While we're here…"                              | The milestone gates exist for this                                            |
 

@@ -1,5 +1,5 @@
 import type { ProviderInteractionMode } from "@t3tools/contracts";
-import { appendAgentforgeCharacterInstructions } from "../team/ProviderCharacterInstructions.ts";
+import { appendRepokinCharacterInstructions } from "../team/ProviderCharacterInstructions.ts";
 
 const T3_CODE_BROWSER_TOOL_INSTRUCTIONS = `
 
@@ -152,7 +152,7 @@ ${T3_CODE_BROWSER_TOOL_INSTRUCTIONS}
 export interface CodexRuntimeInfo {
   readonly model: string;
   readonly reasoningEffort: string;
-  readonly agentforgeCharacterInstructions?: string;
+  readonly repokinCharacterInstructions?: string;
 }
 
 // Values come from trusted config, but keep the block single-line regardless.
@@ -168,9 +168,9 @@ export function buildCodexDeveloperInstructions(
     interactionMode === "plan"
       ? CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS
       : CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS;
-  const instructions = appendAgentforgeCharacterInstructions(
+  const instructions = appendRepokinCharacterInstructions(
     base,
-    runtime.agentforgeCharacterInstructions,
+    runtime.repokinCharacterInstructions,
   );
   return `${instructions}
 

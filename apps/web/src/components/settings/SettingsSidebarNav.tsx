@@ -49,7 +49,7 @@ const SETTINGS_SECTION_ICONS: Readonly<
   "/settings/general": Settings2Icon,
   "/settings/appearance": PaletteIcon,
   "/settings/keybindings": KeyboardIcon,
-  "/settings/agentforge": BotIcon,
+  "/settings/repokin": BotIcon,
   "/settings/providers": BotIcon,
   "/settings/source-control": GitBranchIcon,
   "/settings/connections": Link2Icon,

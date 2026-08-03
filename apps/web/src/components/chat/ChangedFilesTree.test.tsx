@@ -11,7 +11,7 @@ describe("ChangedFilesCard", () => {
         turnId={TurnId.make("turn-1")}
         files={[{ path: "README.md", kind: "modified", additions: 2, deletions: 1 }]}
         expanded
-        agentForgeAgentLabel={null}
+        repoKinAgentLabel={null}
         showCompactPreview={false}
         allDirectoriesExpanded
         resolvedTheme="light"
@@ -49,7 +49,7 @@ describe("ChangedFilesCard", () => {
           { path: "README.md", kind: "modified", additions: 3, deletions: 0 },
         ]}
         expanded={false}
-        agentForgeAgentLabel={null}
+        repoKinAgentLabel={null}
         showCompactPreview
         allDirectoriesExpanded={false}
         resolvedTheme="light"
@@ -78,7 +78,7 @@ describe("ChangedFilesCard", () => {
         turnId={TurnId.make("turn-1")}
         files={[{ path: "apps/web/src/App.tsx", kind: "modified", additions: 120, deletions: 20 }]}
         expanded={false}
-        agentForgeAgentLabel="@agent_aria"
+        repoKinAgentLabel="@agent_aria"
         showCompactPreview={false}
         allDirectoriesExpanded={false}
         resolvedTheme="light"

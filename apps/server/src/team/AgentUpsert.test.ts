@@ -27,13 +27,13 @@ it.layer(TestLayer)("upsertTeamAgent", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-agent-upsert-",
+        prefix: "repokin-agent-upsert-",
       });
 
       const result = yield* upsertTeamAgent({ cwd, profile: aria, commit: false });
 
       expect(result.write.committed).toBe(false);
-      expect(result.write.path.endsWith(".agentforge/agents/agent_aria.json")).toBe(true);
+      expect(result.write.path.endsWith(".repokin/agents/agent_aria.json")).toBe(true);
       expect(result.roster.agents).toHaveLength(1);
       expect(result.roster.agents[0]?.id).toBe("agent_aria");
       expect(result.roster.warnings).toEqual([]);

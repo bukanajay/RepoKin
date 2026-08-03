@@ -467,16 +467,15 @@ export const BackgroundActivitySettings = Schema.Struct({
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type BackgroundActivitySettings = typeof BackgroundActivitySettings.Type;
 
-export const AgentForgeTrustSettings = Schema.Struct({
+export const RepoKinTrustSettings = Schema.Struct({
   trustedMechanics: Schema.Record(
     TrimmedNonEmptyString,
     Schema.Record(TrimmedNonEmptyString, TrimmedNonEmptyString),
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 }).annotate({
-  description:
-    "Environment-local AgentForge trust decisions keyed by project/workspace and agent id.",
+  description: "Environment-local RepoKin trust decisions keyed by project/workspace and agent id.",
 });
-export type AgentForgeTrustSettings = typeof AgentForgeTrustSettings.Type;
+export type RepoKinTrustSettings = typeof RepoKinTrustSettings.Type;
 
 export const ServerSettings = Schema.Struct({
   enableAssistantStreaming: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -540,7 +539,7 @@ export const ServerSettings = Schema.Struct({
   providerInstances: Schema.Record(ProviderInstanceId, ProviderInstanceConfig).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
-  agentforge: AgentForgeTrustSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  repokin: RepoKinTrustSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 });
 export type ServerSettings = typeof ServerSettings.Type;
@@ -682,7 +681,7 @@ export const ServerSettingsPatch = Schema.Struct({
   // patches risk leaving driver-specific config in a half-merged state.
   // The web UI sends a fully-formed map every time it edits this field.
   providerInstances: Schema.optionalKey(Schema.Record(ProviderInstanceId, ProviderInstanceConfig)),
-  agentforge: Schema.optionalKey(
+  repokin: Schema.optionalKey(
     Schema.Struct({
       trustedMechanics: Schema.optionalKey(
         Schema.Record(

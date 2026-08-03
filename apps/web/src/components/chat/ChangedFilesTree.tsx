@@ -32,7 +32,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
   turnId: TurnId;
   files: ReadonlyArray<TurnDiffFileChange>;
   expanded: boolean;
-  agentForgeAgentLabel: string | null;
+  repoKinAgentLabel: string | null;
   showCompactPreview: boolean;
   allDirectoriesExpanded: boolean;
   resolvedTheme: "light" | "dark";
@@ -44,7 +44,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
     turnId,
     files,
     expanded,
-    agentForgeAgentLabel,
+    repoKinAgentLabel,
     showCompactPreview,
     allDirectoriesExpanded,
     resolvedTheme,
@@ -98,19 +98,17 @@ export const ChangedFilesCard = memo(function ChangedFilesCard(props: {
               />
             )}
           </span>
-          {agentForgeAgentLabel ? (
+          {repoKinAgentLabel ? (
             <Tooltip>
               <TooltipTrigger
                 render={
                   <span className="ml-1 inline-flex max-w-28 shrink-0 items-center gap-1 rounded-sm border border-border/80 bg-background/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
                     <BotIcon className="size-3" />
-                    <span className="min-w-0 truncate">{agentForgeAgentLabel}</span>
+                    <span className="min-w-0 truncate">{repoKinAgentLabel}</span>
                   </span>
                 }
               />
-              <TooltipPopup side="top">
-                Checkpoint attributed to {agentForgeAgentLabel}
-              </TooltipPopup>
+              <TooltipPopup side="top">Checkpoint attributed to {repoKinAgentLabel}</TooltipPopup>
             </Tooltip>
           ) : null}
           <span className="ml-1 hidden truncate text-[11px] text-muted-foreground group-hover:text-foreground/80 sm:inline">

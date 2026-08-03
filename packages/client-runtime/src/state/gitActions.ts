@@ -41,7 +41,7 @@ export type DefaultBranchConfirmableAction =
 
 export type GitActionRequestInput = Pick<
   GitRunStackedActionInput,
-  "action" | "commitMessage" | "agentforgeAgentId" | "featureBranch" | "filePaths"
+  "action" | "commitMessage" | "repokinAgentId" | "featureBranch" | "filePaths"
 >;
 
 export function buildGitActionProgressStages(input: {

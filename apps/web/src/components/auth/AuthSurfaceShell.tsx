@@ -35,7 +35,7 @@ export function AuthSurfaceShell({ children }: { readonly children: ReactNode })
               alt=""
               className="size-8 rounded-lg shadow-md ring-1 ring-white/20"
               height={32}
-              src="/agentforge-mark.png"
+              src="/repokin-mark.png"
               width={32}
             />
             <p className="pb-1 text-[10px] font-semibold tracking-[0.2em] text-white/90 uppercase">

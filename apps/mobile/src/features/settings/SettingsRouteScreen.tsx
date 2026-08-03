@@ -127,7 +127,7 @@ function LocalSettingsRouteScreen() {
             <SettingsRow
               icon={{ ios: "sparkles", android: "auto_awesome" }}
               label="RepoKin"
-              target="SettingsAgentForge"
+              target="SettingsRepoKin"
             />
           </View>
         </SettingsSection>
@@ -488,7 +488,7 @@ function ConfiguredSettingsRouteScreen() {
             <SettingsRow
               icon={{ ios: "sparkles", android: "auto_awesome" }}
               label="RepoKin"
-              target="SettingsAgentForge"
+              target="SettingsRepoKin"
             />
           </View>
           <SettingsSwitchRow

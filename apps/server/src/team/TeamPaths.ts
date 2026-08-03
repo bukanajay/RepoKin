@@ -1,5 +1,5 @@
 /**
- * Pure path construction and slug derivation for `.agentforge/`.
+ * Pure path construction and slug derivation for `.repokin/`.
  *
  * The id field inside a profile is authoritative; filenames are a convenience.
  * Slugs must satisfy the member-id pattern: letter-first, then [A-Za-z0-9_-].
@@ -7,7 +7,7 @@
  * @module TeamPaths
  */
 import {
-  AGENTFORGE_DIR_NAME,
+  REPOKIN_DIR_NAME,
   TEAM_AGENTS_DIR_NAME,
   TEAM_FILE_NAME,
   TEAM_HUMANS_DIR_NAME,
@@ -25,17 +25,17 @@ export const joinPosix = (...parts: ReadonlyArray<string>): string => {
   return parts[0]?.startsWith("/") ? `/${joined}` : joined;
 };
 
-export const agentforgeDir = (workspaceRoot: string): string =>
-  joinPosix(workspaceRoot, AGENTFORGE_DIR_NAME);
+export const repokinDir = (workspaceRoot: string): string =>
+  joinPosix(workspaceRoot, REPOKIN_DIR_NAME);
 
 export const teamFilePath = (workspaceRoot: string): string =>
-  joinPosix(agentforgeDir(workspaceRoot), TEAM_FILE_NAME);
+  joinPosix(repokinDir(workspaceRoot), TEAM_FILE_NAME);
 
 export const humansDir = (workspaceRoot: string): string =>
-  joinPosix(agentforgeDir(workspaceRoot), TEAM_HUMANS_DIR_NAME);
+  joinPosix(repokinDir(workspaceRoot), TEAM_HUMANS_DIR_NAME);
 
 export const agentsDir = (workspaceRoot: string): string =>
-  joinPosix(agentforgeDir(workspaceRoot), TEAM_AGENTS_DIR_NAME);
+  joinPosix(repokinDir(workspaceRoot), TEAM_AGENTS_DIR_NAME);
 
 export const humanProfilePath = (workspaceRoot: string, slug: string): string =>
   joinPosix(humansDir(workspaceRoot), `${slug}.json`);
@@ -44,15 +44,15 @@ export const agentProfilePath = (workspaceRoot: string, slug: string): string =>
   joinPosix(agentsDir(workspaceRoot), `${slug}.json`);
 
 /** Repo-relative path of the team directory (for git pathspecs). */
-export const agentforgeDirRelative = (): string => AGENTFORGE_DIR_NAME;
+export const repokinDirRelative = (): string => REPOKIN_DIR_NAME;
 
-export const teamFilePathRelative = (): string => joinPosix(AGENTFORGE_DIR_NAME, TEAM_FILE_NAME);
+export const teamFilePathRelative = (): string => joinPosix(REPOKIN_DIR_NAME, TEAM_FILE_NAME);
 
 export const humanProfilePathRelative = (slug: string): string =>
-  joinPosix(AGENTFORGE_DIR_NAME, TEAM_HUMANS_DIR_NAME, `${slug}.json`);
+  joinPosix(REPOKIN_DIR_NAME, TEAM_HUMANS_DIR_NAME, `${slug}.json`);
 
 export const agentProfilePathRelative = (slug: string): string =>
-  joinPosix(AGENTFORGE_DIR_NAME, TEAM_AGENTS_DIR_NAME, `${slug}.json`);
+  joinPosix(REPOKIN_DIR_NAME, TEAM_AGENTS_DIR_NAME, `${slug}.json`);
 
 export const isValidMemberSlug = (value: string): boolean =>
   value.length > 0 && value.length <= MEMBER_SLUG_MAX_CHARS && MEMBER_SLUG_PATTERN.test(value);

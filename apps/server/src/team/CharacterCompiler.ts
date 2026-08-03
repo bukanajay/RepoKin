@@ -1,5 +1,5 @@
 /**
- * Pure AgentForge character compiler.
+ * Pure RepoKin character compiler.
  *
  * Keep provider-specific wording decisions here so adapters only splice the
  * compiled instruction text into their native launch path.
@@ -165,8 +165,8 @@ const buildInstructionsForDriver = (
 ): string => {
   const label = driverLabels.get(driver) ?? String(driver);
   return [
-    "<agentforge_character>",
-    `You are running this turn as the AgentForge agent ${agent.name}.`,
+    "<repokin_character>",
+    `You are running this turn as the RepoKin agent ${agent.name}.`,
     `Provider driver: ${label}.`,
     "",
     ...buildExpressiveInstructions(agent),
@@ -174,7 +174,7 @@ const buildInstructionsForDriver = (
     ...buildMechanicalSummary(mechanics),
     "",
     "Treat expressive character as behavioral guidance. Mechanical settings are enforced outside the model; do not claim to override them.",
-    "</agentforge_character>",
+    "</repokin_character>",
   ].join("\n");
 };
 

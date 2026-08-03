@@ -488,19 +488,19 @@ function escapeRegExpLiteral(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function appendAgentForgeCommitTrailers(body: string, agentId: string | undefined): string {
+function appendRepoKinCommitTrailers(body: string, agentId: string | undefined): string {
   const normalizedAgentId = normalizeOptionalString(agentId);
   if (!normalizedAgentId) {
     return body;
   }
 
-  const trailer = `AgentForge-Agent: ${normalizedAgentId}`;
+  const trailer = `RepoKin-Agent: ${normalizedAgentId}`;
   const trimmedBody = body.trim();
   if (trimmedBody.length === 0) {
     return trailer;
   }
   if (
-    new RegExp(`^AgentForge-Agent:\\s*${escapeRegExpLiteral(normalizedAgentId)}$`, "im").test(
+    new RegExp(`^RepoKin-Agent:\\s*${escapeRegExpLiteral(normalizedAgentId)}$`, "im").test(
       trimmedBody,
     )
   ) {
@@ -1465,7 +1465,7 @@ export const make = Effect.gen(function* () {
     commitMessage?: string,
     preResolvedSuggestion?: CommitAndBranchSuggestion,
     filePaths?: readonly string[],
-    agentforgeAgentId?: string,
+    repokinAgentId?: string,
     progressReporter?: GitActionProgressReporter,
     actionId?: string,
   ) {
@@ -1554,7 +1554,7 @@ export const make = Effect.gen(function* () {
     const { commitSha } = yield* gitCore.commit(
       cwd,
       suggestion.subject,
-      appendAgentForgeCommitTrailers(suggestion.body, agentforgeAgentId),
+      appendRepoKinCommitTrailers(suggestion.body, repokinAgentId),
       {
         timeoutMs: COMMIT_TIMEOUT_MS,
         ...(commitProgress ? { progress: commitProgress } : {}),
@@ -2091,7 +2091,7 @@ export const make = Effect.gen(function* () {
                   commitMessageForStep,
                   preResolvedCommitSuggestion,
                   input.filePaths,
-                  input.agentforgeAgentId,
+                  input.repokinAgentId,
                   options?.progressReporter,
                   progress.actionId,
                 ),

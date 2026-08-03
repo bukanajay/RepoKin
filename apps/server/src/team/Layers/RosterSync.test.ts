@@ -50,12 +50,12 @@ const initRepo = (cwd: string) =>
 const teamFile: TeamFile = {
   schemaVersion: 1,
   teamRemote: "origin",
-  displayName: "AgentForge",
+  displayName: "RepoKin",
 };
 
 const teamFileWithoutRemote: TeamFile = {
   schemaVersion: 1,
-  displayName: "AgentForge",
+  displayName: "RepoKin",
 };
 
 const julius: HumanProfile = {
@@ -137,7 +137,7 @@ it("suggests upstream before origin without treating the suggestion as confirmed
 
 it.layer(TestLayer)("RosterSync", (it) => {
   it.effect(
-    "fetches the configured team remote into an AgentForge ref and reads it without checkout",
+    "fetches the configured team remote into an RepoKin ref and reads it without checkout",
     () =>
       Effect.gen(function* () {
         const fileSystem = yield* FileSystem.FileSystem;
@@ -146,13 +146,13 @@ it.layer(TestLayer)("RosterSync", (it) => {
         const sync = yield* RosterSync;
 
         const remote = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "agentforge-roster-remote-",
+          prefix: "repokin-roster-remote-",
         });
         const author = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "agentforge-roster-author-",
+          prefix: "repokin-roster-author-",
         });
         const cloneParent = yield* fileSystem.makeTempDirectoryScoped({
-          prefix: "agentforge-roster-clone-parent-",
+          prefix: "repokin-roster-clone-parent-",
         });
         const consumer = path.join(cloneParent, "consumer");
 
@@ -170,7 +170,7 @@ it.layer(TestLayer)("RosterSync", (it) => {
         const headBefore = (yield* git(consumer, ["rev-parse", "HEAD"])).stdout.trim();
 
         yield* fileSystem.writeFileString(
-          path.join(consumer, ".agentforge", "agents", "aria.json"),
+          path.join(consumer, ".repokin", "agents", "aria.json"),
           `${encodeUnknownJson({
             ...aria,
             name: "Dirty Local Aria",
@@ -190,16 +190,16 @@ it.layer(TestLayer)("RosterSync", (it) => {
         const result = yield* sync.syncProjectRoster(consumer);
         expect(result.remote).toBe("origin");
         expect(result.branch).toBe("main");
-        expect(result.ref).toMatch(/^refs\/agentforge\/rosters\/[0-9a-f]{24}$/);
+        expect(result.ref).toMatch(/^refs\/repokin\/rosters\/[0-9a-f]{24}$/);
         expect(result.roster.agents[0]?.name).toBe("Remote Aria v2");
 
         const dirtyAgent = yield* fileSystem.readFileString(
-          path.join(consumer, ".agentforge", "agents", "aria.json"),
+          path.join(consumer, ".repokin", "agents", "aria.json"),
         );
         expect(dirtyAgent).toContain("Dirty Local Aria");
         expect((yield* git(consumer, ["rev-parse", "HEAD"])).stdout.trim()).toBe(headBefore);
         expect((yield* git(consumer, ["status", "--short"])).stdout).toContain(
-          "M .agentforge/agents/aria.json",
+          "M .repokin/agents/aria.json",
         );
       }),
   );
@@ -210,7 +210,7 @@ it.layer(TestLayer)("RosterSync", (it) => {
       const store = yield* TeamFileStore;
       const sync = yield* RosterSync;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-roster-no-remote-",
+        prefix: "repokin-roster-no-remote-",
       });
       yield* initRepo(cwd);
       yield* store.writeTeamFile(cwd, teamFileWithoutRemote);
@@ -229,7 +229,7 @@ it.layer(HiddenProjectTestLayer)("RosterSync visibility gate", (it) => {
       const fileSystem = yield* FileSystem.FileSystem;
       const sync = yield* RosterSync;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-roster-hidden-",
+        prefix: "repokin-roster-hidden-",
       });
 
       const result = yield* sync.syncProjectRosterIfVisible(cwd);

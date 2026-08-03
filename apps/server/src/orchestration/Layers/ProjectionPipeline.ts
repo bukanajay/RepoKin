@@ -598,7 +598,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             threadId: event.payload.threadId,
             projectId: event.payload.projectId,
             title: event.payload.title,
-            agentforgeAgentId: null,
+            repokinAgentId: null,
             modelSelection: event.payload.modelSelection,
             runtimeMode: event.payload.runtimeMode,
             interactionMode: event.payload.interactionMode,
@@ -820,8 +820,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           }
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
-            ...(event.payload.agentforgeAgentId !== undefined
-              ? { agentforgeAgentId: event.payload.agentforgeAgentId }
+            ...(event.payload.repokinAgentId !== undefined
+              ? { repokinAgentId: event.payload.repokinAgentId }
               : {}),
             ...(event.payload.modelSelection !== undefined
               ? { modelSelection: event.payload.modelSelection }

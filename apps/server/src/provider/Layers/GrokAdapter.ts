@@ -35,7 +35,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
-import { prependAgentforgePromptText } from "../../team/ProviderCharacterInstructions.ts";
+import { prependRepokinPromptText } from "../../team/ProviderCharacterInstructions.ts";
 import {
   ProviderAdapterProcessError,
   ProviderAdapterRequestError,
@@ -951,9 +951,9 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
                   mapAcpToAdapterError(PROVIDER, input.threadId, "session/set_model", cause),
               });
 
-              const text = prependAgentforgePromptText(
+              const text = prependRepokinPromptText(
                 input.input,
-                input.agentforgeCharacterInstructions,
+                input.repokinCharacterInstructions,
               );
               const imagePromptParts = yield* Effect.forEach(
                 input.attachments ?? [],

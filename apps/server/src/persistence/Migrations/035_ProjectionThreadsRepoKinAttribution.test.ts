@@ -8,8 +8,8 @@ import * as NodeSqliteClient from "../NodeSqliteClient.ts";
 
 const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
 
-layer("035_ProjectionThreadsAgentForgeAttribution", (it) => {
-  it.effect("adds nullable AgentForge owner column to existing thread projections", () =>
+layer("035_ProjectionThreadsRepoKinAttribution", (it) => {
+  it.effect("adds nullable RepoKin owner column to existing thread projections", () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
@@ -19,7 +19,7 @@ layer("035_ProjectionThreadsAgentForgeAttribution", (it) => {
       const columns = yield* sql<{ readonly name: string; readonly notnull: number }>`
         PRAGMA table_info(projection_threads)
       `;
-      const column = columns.find((entry) => entry.name === "agentforge_agent_id");
+      const column = columns.find((entry) => entry.name === "repokin_agent_id");
 
       assert.ok(column);
       assert.strictEqual(column.notnull, 0);

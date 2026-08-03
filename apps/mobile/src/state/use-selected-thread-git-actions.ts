@@ -328,7 +328,7 @@ export function useSelectedThreadGitActions() {
             actionId,
             action: input.action,
             ...(input.commitMessage ? { commitMessage: input.commitMessage } : {}),
-            ...(thread.agentforgeAgentId ? { agentforgeAgentId: thread.agentforgeAgentId } : {}),
+            ...(thread.repokinAgentId ? { repokinAgentId: thread.repokinAgentId } : {}),
             ...(input.featureBranch ? { featureBranch: input.featureBranch } : {}),
             ...(input.filePaths?.length ? { filePaths: [...input.filePaths] } : {}),
           });

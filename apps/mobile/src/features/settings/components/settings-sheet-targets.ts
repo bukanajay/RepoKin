@@ -1,6 +1,6 @@
 export type SettingsSheetTarget =
   | "SettingsEnvironments"
-  | "SettingsAgentForge"
+  | "SettingsRepoKin"
   | "SettingsArchive"
   | "SettingsAppearance"
   | "SettingsClientStorage";

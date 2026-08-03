@@ -20,7 +20,7 @@ import {
   type TeamRosterRemoteSelection,
 } from "../Services/RosterSync.ts";
 
-const AGENTFORGE_ROSTER_REF_PREFIX = "refs/agentforge/rosters";
+const REPOKIN_ROSTER_REF_PREFIX = "refs/repokin/rosters";
 const DEFAULT_ROSTER_SYNC_INTERVAL = Duration.seconds(30);
 type RosterSyncOperation = TeamRosterSyncOperationError["operation"];
 
@@ -74,7 +74,7 @@ export function rosterRefForRemote(input: {
     .update(input.branch)
     .digest("hex")
     .slice(0, 24);
-  return `${AGENTFORGE_ROSTER_REF_PREFIX}/${hash}`;
+  return `${REPOKIN_ROSTER_REF_PREFIX}/${hash}`;
 }
 
 const rosterSyncError = (input: {
@@ -116,7 +116,7 @@ const runGit = (input: {
             cwd: input.cwd,
             ...(input.remote === undefined ? {} : { remote: input.remote }),
             ...(input.branch === undefined ? {} : { branch: input.branch }),
-            message: "Git command failed while syncing the AgentForge roster.",
+            message: "Git command failed while syncing the RepoKin roster.",
             cause,
           }),
         ),
@@ -163,7 +163,7 @@ const resolveRemoteDefaultBranch = Effect.fn("RosterSync.resolveRemoteDefaultBra
     operation: "resolve-default-branch",
     cwd,
     remote,
-    message: `Could not resolve default branch for AgentForge team remote '${remote}'.`,
+    message: `Could not resolve default branch for RepoKin team remote '${remote}'.`,
   });
 });
 
@@ -188,7 +188,7 @@ const fetchRosterRef = Effect.fn("RosterSync.fetchRosterRef")(function* (input: 
       branch: input.branch,
       message:
         result.stderr.trim() ||
-        `Could not fetch AgentForge roster from '${input.remote}/${input.branch}'.`,
+        `Could not fetch RepoKin roster from '${input.remote}/${input.branch}'.`,
     });
   }
   return ref;
@@ -207,7 +207,7 @@ const syncProjectRoster = Effect.fn("RosterSync.syncProjectRoster")(function* (
       rosterSyncError({
         operation: "read-local-roster",
         cwd,
-        message: "Could not read the local AgentForge roster before sync.",
+        message: "Could not read the local RepoKin roster before sync.",
         cause,
       }),
     ),
@@ -219,7 +219,7 @@ const syncProjectRoster = Effect.fn("RosterSync.syncProjectRoster")(function* (
       operation: "read-local-roster",
       cwd,
       message:
-        "AgentForge team remote is not configured. Set .agentforge/team.json teamRemote before syncing.",
+        "RepoKin team remote is not configured. Set .repokin/team.json teamRemote before syncing.",
     });
   }
 
@@ -232,7 +232,7 @@ const syncProjectRoster = Effect.fn("RosterSync.syncProjectRoster")(function* (
         cwd,
         remote,
         branch,
-        message: "Could not read AgentForge roster from the fetched remote ref.",
+        message: "Could not read RepoKin roster from the fetched remote ref.",
         cause,
       }),
     ),
@@ -287,7 +287,7 @@ export const make = Effect.gen(function* () {
           return yield* Effect.failCause(Cause.fromReasons<never>(interruptionReasons));
         }
 
-        yield* Effect.logWarning("AgentForge roster sync failed", {
+        yield* Effect.logWarning("RepoKin roster sync failed", {
           cwdLength: cwd.length,
           reasonCount: exit.cause.reasons.length,
         });

@@ -104,7 +104,7 @@ export interface CodexSessionRuntimeOptions {
   readonly runtimeMode: RuntimeMode;
   readonly model?: string;
   readonly serviceTier?: CodexServiceTier | undefined;
-  readonly agentforgeCharacterInstructions?: string;
+  readonly repokinCharacterInstructions?: string;
   readonly resumeCursor?: CodexResumeCursor;
   readonly appServerArgs?: ReadonlyArray<string>;
 }
@@ -119,7 +119,7 @@ export interface CodexSessionRuntimeSendTurnInput {
   readonly serviceTier?: CodexServiceTier | undefined;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort | undefined;
   readonly interactionMode?: ProviderInteractionMode;
-  readonly agentforgeCharacterInstructions?: string;
+  readonly repokinCharacterInstructions?: string;
 }
 
 export interface CodexThreadTurnSnapshot {
@@ -341,7 +341,7 @@ function buildCodexCollaborationMode(input: {
   readonly interactionMode?: ProviderInteractionMode;
   readonly model?: string;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort;
-  readonly agentforgeCharacterInstructions?: string;
+  readonly repokinCharacterInstructions?: string;
 }): EffectCodexSchema.V2TurnStartParams__CollaborationMode | undefined {
   if (input.interactionMode === undefined) {
     return undefined;
@@ -356,8 +356,8 @@ function buildCodexCollaborationMode(input: {
       developer_instructions: buildCodexDeveloperInstructions(input.interactionMode, {
         model,
         reasoningEffort,
-        ...(input.agentforgeCharacterInstructions
-          ? { agentforgeCharacterInstructions: input.agentforgeCharacterInstructions }
+        ...(input.repokinCharacterInstructions
+          ? { repokinCharacterInstructions: input.repokinCharacterInstructions }
           : {}),
       }),
     },
@@ -376,7 +376,7 @@ export function buildTurnStartParams(input: {
   readonly serviceTier?: CodexServiceTier;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort;
   readonly interactionMode?: ProviderInteractionMode;
-  readonly agentforgeCharacterInstructions?: string;
+  readonly repokinCharacterInstructions?: string;
 }): Effect.Effect<
   CodexTurnStartParamsWithCollaborationMode,
   CodexErrors.CodexAppServerProtocolParseError
@@ -397,8 +397,8 @@ export function buildTurnStartParams(input: {
     ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
     ...(input.model ? { model: input.model } : {}),
     ...(input.effort ? { effort: input.effort } : {}),
-    ...(input.agentforgeCharacterInstructions
-      ? { agentforgeCharacterInstructions: input.agentforgeCharacterInstructions }
+    ...(input.repokinCharacterInstructions
+      ? { repokinCharacterInstructions: input.repokinCharacterInstructions }
       : {}),
   });
 
@@ -1311,11 +1311,10 @@ export const makeCodexSessionRuntime = (
             ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
             ...(input.effort ? { effort: input.effort } : {}),
             ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
-            ...((input.agentforgeCharacterInstructions ?? options.agentforgeCharacterInstructions)
+            ...((input.repokinCharacterInstructions ?? options.repokinCharacterInstructions)
               ? {
-                  agentforgeCharacterInstructions:
-                    input.agentforgeCharacterInstructions ??
-                    options.agentforgeCharacterInstructions,
+                  repokinCharacterInstructions:
+                    input.repokinCharacterInstructions ?? options.repokinCharacterInstructions,
                 }
               : {}),
           });

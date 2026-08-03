@@ -390,12 +390,12 @@ const make = Effect.gen(function* () {
       .pipe(Effect.map(Option.getOrUndefined));
   });
 
-  const compileAgentforgeCharacterInstructions = Effect.fnUntraced(function* (input: {
-    readonly agentforgeAgentId: string | undefined;
+  const compileRepokinCharacterInstructions = Effect.fnUntraced(function* (input: {
+    readonly repokinAgentId: string | undefined;
     readonly thread: OrchestrationThread;
     readonly modelSelection: ModelSelection;
   }) {
-    if (input.agentforgeAgentId === undefined) {
+    if (input.repokinAgentId === undefined) {
       return undefined;
     }
     const project = yield* resolveProject(input.thread.projectId);
@@ -407,7 +407,7 @@ const make = Effect.gen(function* () {
       return yield* new ProviderAdapterRequestError({
         provider: providerErrorLabel(String(input.modelSelection.instanceId)),
         method: "thread.turn.start",
-        detail: `AgentForge agent '${input.agentforgeAgentId}' cannot be resolved because thread '${input.thread.id}' has no workspace path.`,
+        detail: `RepoKin agent '${input.repokinAgentId}' cannot be resolved because thread '${input.thread.id}' has no workspace path.`,
       });
     }
 
@@ -419,18 +419,18 @@ const make = Effect.gen(function* () {
             new ProviderAdapterRequestError({
               provider: providerErrorLabel(String(input.modelSelection.instanceId)),
               method: "thread.turn.start",
-              detail: `AgentForge agent '${input.agentforgeAgentId}' references unknown provider instance '${input.modelSelection.instanceId}'.`,
+              detail: `RepoKin agent '${input.repokinAgentId}' references unknown provider instance '${input.modelSelection.instanceId}'.`,
             }),
         ),
       );
     const roster = yield* teamFileStore.readRoster(effectiveCwd);
-    const agentId = AgentId.make(input.agentforgeAgentId);
+    const agentId = AgentId.make(input.repokinAgentId);
     const agent = roster.agents.find((candidate) => candidate.id === agentId);
     if (agent === undefined) {
       return yield* new ProviderAdapterRequestError({
         provider: providerErrorLabel(String(input.modelSelection.instanceId)),
         method: "thread.turn.start",
-        detail: `AgentForge agent '${input.agentforgeAgentId}' was not found in '${effectiveCwd}'.`,
+        detail: `RepoKin agent '${input.repokinAgentId}' was not found in '${effectiveCwd}'.`,
       });
     }
     const compiled = yield* characterCompiler.compile(agent).pipe(
@@ -439,7 +439,7 @@ const make = Effect.gen(function* () {
           new ProviderAdapterRequestError({
             provider: providerErrorLabel(String(input.modelSelection.instanceId)),
             method: "thread.turn.start",
-            detail: `Failed to compile AgentForge agent '${input.agentforgeAgentId}'.`,
+            detail: `Failed to compile RepoKin agent '${input.repokinAgentId}'.`,
           }),
       ),
     );
@@ -449,12 +449,12 @@ const make = Effect.gen(function* () {
           new ProviderAdapterRequestError({
             provider: providerErrorLabel(String(input.modelSelection.instanceId)),
             method: "thread.turn.start",
-            detail: `Failed to read AgentForge trust settings for agent '${input.agentforgeAgentId}'.`,
+            detail: `Failed to read RepoKin trust settings for agent '${input.repokinAgentId}'.`,
           }),
       ),
     );
     const trustStatus = evaluateCharacterTrust({
-      trustedMechanics: settings.agentforge.trustedMechanics,
+      trustedMechanics: settings.repokin.trustedMechanics,
       projectKey: effectiveCwd,
       agentId,
       mechanicalHash: compiled.mechanicalHash,
@@ -465,8 +465,8 @@ const make = Effect.gen(function* () {
         method: "thread.turn.start",
         detail:
           trustStatus === "changed"
-            ? `AgentForge agent '${input.agentforgeAgentId}' has changed mechanical settings. Preview and trust the new mechanics before starting a turn.`
-            : `AgentForge agent '${input.agentforgeAgentId}' has untrusted mechanical settings. Preview and trust the mechanics before starting a turn.`,
+            ? `RepoKin agent '${input.repokinAgentId}' has changed mechanical settings. Preview and trust the new mechanics before starting a turn.`
+            : `RepoKin agent '${input.repokinAgentId}' has untrusted mechanical settings. Preview and trust the mechanics before starting a turn.`,
       });
     }
     const instructions = compiled.instructionsByDriver[instanceInfo.driverKind];
@@ -474,7 +474,7 @@ const make = Effect.gen(function* () {
       return yield* new ProviderAdapterRequestError({
         provider: providerErrorLabel(String(input.modelSelection.instanceId)),
         method: "thread.turn.start",
-        detail: `AgentForge agent '${input.agentforgeAgentId}' has no instructions for provider driver '${instanceInfo.driverKind}'.`,
+        detail: `RepoKin agent '${input.repokinAgentId}' has no instructions for provider driver '${instanceInfo.driverKind}'.`,
       });
     }
     return instructions;
@@ -518,7 +518,7 @@ const make = Effect.gen(function* () {
     options?: {
       readonly modelSelection?: ModelSelection;
       readonly pendingTurnStart?: boolean;
-      readonly agentforgeCharacterInstructions?: string;
+      readonly repokinCharacterInstructions?: string;
     },
   ) {
     const thread = yield* resolveThread(threadId);
@@ -664,8 +664,8 @@ const make = Effect.gen(function* () {
         modelSelection: desiredModelSelection,
         ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
         runtimeMode: desiredRuntimeMode,
-        ...(options?.agentforgeCharacterInstructions !== undefined
-          ? { agentforgeCharacterInstructions: options.agentforgeCharacterInstructions }
+        ...(options?.repokinCharacterInstructions !== undefined
+          ? { repokinCharacterInstructions: options.repokinCharacterInstructions }
           : {}),
       });
 
@@ -776,7 +776,7 @@ const make = Effect.gen(function* () {
     readonly attachments?: ReadonlyArray<ChatAttachment>;
     readonly modelSelection?: ModelSelection;
     readonly interactionMode?: "default" | "plan";
-    readonly agentforgeAgentId?: string;
+    readonly repokinAgentId?: string;
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThread(input.threadId);
@@ -787,15 +787,15 @@ const make = Effect.gen(function* () {
     }
     const requestedModelSelection =
       input.modelSelection ?? threadModelSelections.get(input.threadId) ?? thread.modelSelection;
-    const agentforgeCharacterInstructions = yield* compileAgentforgeCharacterInstructions({
-      agentforgeAgentId: input.agentforgeAgentId,
+    const repokinCharacterInstructions = yield* compileRepokinCharacterInstructions({
+      repokinAgentId: input.repokinAgentId,
       thread,
       modelSelection: requestedModelSelection,
     });
     yield* ensureSessionForThread(input.threadId, input.createdAt, {
       ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
       pendingTurnStart: true,
-      ...(agentforgeCharacterInstructions !== undefined ? { agentforgeCharacterInstructions } : {}),
+      ...(repokinCharacterInstructions !== undefined ? { repokinCharacterInstructions } : {}),
     });
     if (input.modelSelection !== undefined) {
       threadModelSelections.set(input.threadId, input.modelSelection);
@@ -834,7 +834,7 @@ const make = Effect.gen(function* () {
       ...(normalizedAttachments.length > 0 ? { attachments: normalizedAttachments } : {}),
       ...(modelForTurn !== undefined ? { modelSelection: modelForTurn } : {}),
       ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
-      ...(agentforgeCharacterInstructions !== undefined ? { agentforgeCharacterInstructions } : {}),
+      ...(repokinCharacterInstructions !== undefined ? { repokinCharacterInstructions } : {}),
     };
   });
 
@@ -1214,8 +1214,8 @@ const make = Effect.gen(function* () {
       ...(event.payload.modelSelection !== undefined
         ? { modelSelection: event.payload.modelSelection }
         : {}),
-      ...(event.payload.agentforgeAgentId !== undefined
-        ? { agentforgeAgentId: event.payload.agentforgeAgentId }
+      ...(event.payload.repokinAgentId !== undefined
+        ? { repokinAgentId: event.payload.repokinAgentId }
         : {}),
       interactionMode: event.payload.interactionMode,
       createdAt: event.payload.createdAt,

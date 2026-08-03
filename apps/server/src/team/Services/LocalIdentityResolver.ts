@@ -1,7 +1,7 @@
 /**
  * LocalIdentityResolver — resolve the local human identity from git config.
  *
- * Anchors AgentForge human membership on `user.name` / `user.email` (PRD FR-1.3).
+ * Anchors RepoKin human membership on `user.name` / `user.email` (PRD FR-1.3).
  * Never invents an identity from the OS user.
  *
  * @module LocalIdentityResolver

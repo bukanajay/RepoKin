@@ -174,18 +174,18 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
 
       yield* eventStore.append({
         type: "thread.turn-start-requested",
-        eventId: EventId.make("evt-agentforge-owner-1"),
+        eventId: EventId.make("evt-repokin-owner-1"),
         aggregateKind: "thread",
         aggregateId: ThreadId.make("thread-1"),
         occurredAt: "2026-01-01T00:00:00.500Z",
-        commandId: CommandId.make("cmd-agentforge-owner-1"),
+        commandId: CommandId.make("cmd-repokin-owner-1"),
         causationEventId: null,
-        correlationId: CommandId.make("cmd-agentforge-owner-1"),
+        correlationId: CommandId.make("cmd-repokin-owner-1"),
         metadata: {},
         payload: {
           threadId: ThreadId.make("thread-1"),
-          messageId: MessageId.make("message-agentforge-owner-1"),
-          agentforgeAgentId: "agent_aria",
+          messageId: MessageId.make("message-repokin-owner-1"),
+          repokinAgentId: "agent_aria",
           runtimeMode: "approval-required",
           interactionMode: "default",
           createdAt: "2026-01-01T00:00:00.500Z",
@@ -193,14 +193,14 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       });
       yield* projectionPipeline.bootstrap;
 
-      const agentForgeThreadRows = yield* sql<{
-        readonly agentforgeAgentId: string | null;
+      const repoKinThreadRows = yield* sql<{
+        readonly repokinAgentId: string | null;
       }>`
-        SELECT agentforge_agent_id AS "agentforgeAgentId"
+        SELECT repokin_agent_id AS "repokinAgentId"
         FROM projection_threads
         WHERE thread_id = 'thread-1'
       `;
-      assert.deepEqual(agentForgeThreadRows, [{ agentforgeAgentId: "agent_aria" }]);
+      assert.deepEqual(repoKinThreadRows, [{ repokinAgentId: "agent_aria" }]);
 
       // Settled lifecycle through the DB pipeline: thread.settled writes the
       // override + timestamp, thread.unsettled(user) flips to the active pin.

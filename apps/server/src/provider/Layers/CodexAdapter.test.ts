@@ -360,34 +360,34 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
     }),
   );
 
-  it.effect("passes AgentForge character instructions into the session runtime", () =>
+  it.effect("passes RepoKin character instructions into the session runtime", () =>
     Effect.gen(function* () {
       const adapter = yield* CodexAdapter;
       yield* adapter.startSession({
         provider: ProviderDriverKind.make("codex"),
-        threadId: asThreadId("sess-agentforge-character"),
+        threadId: asThreadId("sess-repokin-character"),
         runtimeMode: "approval-required",
-        agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+        repokinCharacterInstructions: "<repokin_character>Aria</repokin_character>",
       });
       const runtime = sessionRuntimeFactory.lastRuntime;
       NodeAssert.equal(
-        runtime?.options.agentforgeCharacterInstructions,
-        "<agentforge_character>Aria</agentforge_character>",
+        runtime?.options.repokinCharacterInstructions,
+        "<repokin_character>Aria</repokin_character>",
       );
 
       runtime?.sendTurnImpl.mockClear();
       yield* Effect.ignore(
         adapter.sendTurn({
-          threadId: asThreadId("sess-agentforge-character"),
+          threadId: asThreadId("sess-repokin-character"),
           input: "hello",
-          agentforgeCharacterInstructions: "<agentforge_character>Override</agentforge_character>",
+          repokinCharacterInstructions: "<repokin_character>Override</repokin_character>",
           attachments: [],
         }),
       );
 
       NodeAssert.equal(
-        runtime?.sendTurnImpl.mock.calls[0]?.[0].agentforgeCharacterInstructions,
-        "<agentforge_character>Override</agentforge_character>",
+        runtime?.sendTurnImpl.mock.calls[0]?.[0].repokinCharacterInstructions,
+        "<repokin_character>Override</repokin_character>",
       );
     }),
   );

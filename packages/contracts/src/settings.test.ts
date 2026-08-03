@@ -236,15 +236,15 @@ describe("ServerSettingsPatch.providerInstances", () => {
   });
 });
 
-describe("ServerSettings.agentforge trust", () => {
+describe("ServerSettings.repokin trust", () => {
   it("defaults to an empty trusted mechanics map for legacy settings", () => {
     const decoded = decodeServerSettings({});
-    expect(decoded.agentforge.trustedMechanics).toEqual({});
+    expect(decoded.repokin.trustedMechanics).toEqual({});
   });
 
   it("decodes project-scoped trusted mechanical hashes", () => {
     const decoded = decodeServerSettings({
-      agentforge: {
+      repokin: {
         trustedMechanics: {
           "/workspace/app": {
             agent_aria: "b5b9326f6a247b7da6f857e8d80ad308895c3cbec06e46f58d532331db93d208",
@@ -253,14 +253,14 @@ describe("ServerSettings.agentforge trust", () => {
       },
     });
 
-    expect(decoded.agentforge.trustedMechanics["/workspace/app"]?.agent_aria).toBe(
+    expect(decoded.repokin.trustedMechanics["/workspace/app"]?.agent_aria).toBe(
       "b5b9326f6a247b7da6f857e8d80ad308895c3cbec06e46f58d532331db93d208",
     );
   });
 
   it("allows trust decisions to be replaced through server settings patches", () => {
     const patch = decodeServerSettingsPatch({
-      agentforge: {
+      repokin: {
         trustedMechanics: {
           "/workspace/app": {
             agent_aria: "b5b9326f6a247b7da6f857e8d80ad308895c3cbec06e46f58d532331db93d208",
@@ -269,7 +269,7 @@ describe("ServerSettings.agentforge trust", () => {
       },
     });
 
-    expect(patch.agentforge?.trustedMechanics?.["/workspace/app"]?.agent_aria).toBe(
+    expect(patch.repokin?.trustedMechanics?.["/workspace/app"]?.agent_aria).toBe(
       "b5b9326f6a247b7da6f857e8d80ad308895c3cbec06e46f58d532331db93d208",
     );
   });

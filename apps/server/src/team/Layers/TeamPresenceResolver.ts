@@ -52,7 +52,7 @@ const makeTeamPresenceResolver = Effect.gen(function* () {
       }
       const environmentId = yield* serverEnvironment.getEnvironmentId;
       const presences = snapshot.threads.flatMap((thread) => {
-        if (thread.projectId !== input.projectId || thread.agentforgeAgentId !== input.memberId) {
+        if (thread.projectId !== input.projectId || thread.repokinAgentId !== input.memberId) {
           return [];
         }
         const awareness = projectThreadAwareness({

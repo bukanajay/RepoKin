@@ -45,7 +45,7 @@ function thread(
     updatedAt: NOW,
     hasPendingApprovals: false,
     hasPendingUserInput: false,
-    agentforgeAgentId: null,
+    repokinAgentId: null,
     ...overrides,
   };
 }
@@ -102,7 +102,7 @@ describe("projectThreadAwareness", () => {
 
     expect(state).toMatchObject({
       phase: "running",
-      agentforgeAgentId: null,
+      repokinAgentId: null,
       headline: "Agent is working",
       detail: "Codex is active.",
       modelTitle: "gpt-5.4",
@@ -191,7 +191,7 @@ describe("projectThreadAwareness", () => {
       environmentId: "env-1" as EnvironmentId,
       project,
       thread: thread({
-        agentforgeAgentId: "agent_aria",
+        repokinAgentId: "agent_aria",
         session: {
           threadId: "thread-1" as ThreadId,
           status: "running",
@@ -204,7 +204,7 @@ describe("projectThreadAwareness", () => {
       }),
     });
 
-    expect(state?.agentforgeAgentId).toBe("agent_aria");
+    expect(state?.repokinAgentId).toBe("agent_aria");
     expect(
       projectAgentThreadPresence({
         memberId: "agent_aria" as MemberId,

@@ -1,5 +1,5 @@
 /**
- * AgentForge team file write command.
+ * RepoKin team file write command.
  *
  * @module TeamFileUpdate
  */
@@ -26,7 +26,7 @@ export const updateTeamFile = Effect.fn("TeamFile.update")(function* (
           new TeamFileUpdateError({
             reason: "write-failed",
             cwd: input.cwd,
-            message: "Failed to write AgentForge team file.",
+            message: "Failed to write RepoKin team file.",
             cause,
           }),
       ),

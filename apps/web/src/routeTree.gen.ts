@@ -23,7 +23,7 @@ import { Route as SettingsConnectionsRouteImport } from './routes/settings.conne
 import { Route as SettingsBetaRouteImport } from './routes/settings.beta'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
-import { Route as SettingsAgentforgeRouteImport } from './routes/settings.agentforge'
+import { Route as SettingsRepokinRouteImport } from './routes/settings.repokin'
 import { Route as ConnectCallbackRouteImport } from './routes/connect_.callback'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
@@ -97,9 +97,9 @@ const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
   path: '/appearance',
   getParentRoute: () => SettingsRoute,
 } as any)
-const SettingsAgentforgeRoute = SettingsAgentforgeRouteImport.update({
-  id: '/agentforge',
-  path: '/agentforge',
+const SettingsRepokinRoute = SettingsRepokinRouteImport.update({
+  id: '/repokin',
+  path: '/repokin',
   getParentRoute: () => SettingsRoute,
 } as any)
 const ConnectCallbackRoute = ConnectCallbackRouteImport.update({
@@ -125,7 +125,7 @@ export interface FileRoutesByFullPath {
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/connect/callback': typeof ConnectCallbackRoute
-  '/settings/agentforge': typeof SettingsAgentforgeRoute
+  '/settings/repokin': typeof SettingsRepokinRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
@@ -143,7 +143,7 @@ export interface FileRoutesByTo {
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/connect/callback': typeof ConnectCallbackRoute
-  '/settings/agentforge': typeof SettingsAgentforgeRoute
+  '/settings/repokin': typeof SettingsRepokinRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
@@ -164,7 +164,7 @@ export interface FileRoutesById {
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/connect_/callback': typeof ConnectCallbackRoute
-  '/settings/agentforge': typeof SettingsAgentforgeRoute
+  '/settings/repokin': typeof SettingsRepokinRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
@@ -186,7 +186,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/settings'
     | '/connect/callback'
-    | '/settings/agentforge'
+    | '/settings/repokin'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
@@ -204,7 +204,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/settings'
     | '/connect/callback'
-    | '/settings/agentforge'
+    | '/settings/repokin'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
@@ -224,7 +224,7 @@ export interface FileRouteTypes {
     | '/pair'
     | '/settings'
     | '/connect_/callback'
-    | '/settings/agentforge'
+    | '/settings/repokin'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
@@ -347,11 +347,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsAppearanceRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/settings/agentforge': {
-      id: '/settings/agentforge'
-      path: '/agentforge'
-      fullPath: '/settings/agentforge'
-      preLoaderRoute: typeof SettingsAgentforgeRouteImport
+    '/settings/repokin': {
+      id: '/settings/repokin'
+      path: '/repokin'
+      fullPath: '/settings/repokin'
+      preLoaderRoute: typeof SettingsRepokinRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/connect_/callback': {
@@ -393,7 +393,7 @@ const ChatRouteChildren: ChatRouteChildren = {
 const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 
 interface SettingsRouteChildren {
-  SettingsAgentforgeRoute: typeof SettingsAgentforgeRoute
+  SettingsRepokinRoute: typeof SettingsRepokinRoute
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsArchivedRoute: typeof SettingsArchivedRoute
   SettingsBetaRoute: typeof SettingsBetaRoute
@@ -406,7 +406,7 @@ interface SettingsRouteChildren {
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
-  SettingsAgentforgeRoute: SettingsAgentforgeRoute,
+  SettingsRepokinRoute: SettingsRepokinRoute,
   SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsArchivedRoute: SettingsArchivedRoute,
   SettingsBetaRoute: SettingsBetaRoute,

@@ -34,7 +34,7 @@ it.layer(TestLayer)("previewTeamInstructions", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-preview-",
+        prefix: "repokin-preview-",
       });
       const store = yield* TeamFileStore;
       yield* store.writeAgentProfile(cwd, aria, { commit: false });
@@ -58,7 +58,7 @@ it.layer(TestLayer)("previewTeamInstructions", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-preview-missing-",
+        prefix: "repokin-preview-missing-",
       });
 
       const error = yield* previewTeamInstructions({

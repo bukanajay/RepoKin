@@ -259,7 +259,7 @@ const readRosterFromRef = Effect.fn("TeamFileStore.readRosterFromRef")(function*
   for (const relativePath of yield* gitListTree(
     repoRoot,
     ref,
-    TeamPaths.joinPosix(TeamPaths.agentforgeDirRelative(), "humans"),
+    TeamPaths.joinPosix(TeamPaths.repokinDirRelative(), "humans"),
   )) {
     const text = yield* gitShow(repoRoot, ref, relativePath);
     if (Option.isNone(text)) {
@@ -283,7 +283,7 @@ const readRosterFromRef = Effect.fn("TeamFileStore.readRosterFromRef")(function*
   for (const relativePath of yield* gitListTree(
     repoRoot,
     ref,
-    TeamPaths.joinPosix(TeamPaths.agentforgeDirRelative(), "agents"),
+    TeamPaths.joinPosix(TeamPaths.repokinDirRelative(), "agents"),
   )) {
     const text = yield* gitShow(repoRoot, ref, relativePath);
     if (Option.isNone(text)) {
@@ -311,7 +311,7 @@ const readRosterFromRef = Effect.fn("TeamFileStore.readRosterFromRef")(function*
   } satisfies TeamRosterReadModel;
 });
 
-const commitAgentforgePath = Effect.fn("TeamFileStore.commitAgentforgePath")(function* (input: {
+const commitRepokinPath = Effect.fn("TeamFileStore.commitRepokinPath")(function* (input: {
   readonly repoRoot: string;
   readonly relativePath: string;
   readonly message: string;
@@ -431,7 +431,7 @@ const writeJsonAndMaybeCommit = Effect.fn("TeamFileStore.writeJsonAndMaybeCommit
       } satisfies TeamWriteResult;
     }
 
-    const committed = yield* commitAgentforgePath({
+    const committed = yield* commitRepokinPath({
       repoRoot: repoRoot.value,
       relativePath: input.relativePath,
       message: input.commitMessage,

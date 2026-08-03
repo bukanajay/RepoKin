@@ -28,7 +28,7 @@ it.layer(TestLayer)("readTeamRoster", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-roster-read-",
+        prefix: "repokin-roster-read-",
       });
       const store = yield* TeamFileStore;
       yield* store.writeAgentProfile(cwd, aria, { commit: false });

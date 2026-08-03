@@ -25,7 +25,7 @@ function valueOrFallback(value: string | undefined, fallback = "Not set"): strin
   return value === undefined || value.trim().length === 0 ? fallback : value;
 }
 
-export function SettingsAgentForgeRouteScreen() {
+export function SettingsRepoKinRouteScreen() {
   const insets = useSafeAreaInsets();
   const iconColor = useThemeColor("--color-icon");
   const mutedIconColor = useThemeColor("--color-icon-subtle");

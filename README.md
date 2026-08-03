@@ -138,16 +138,16 @@ Other packaging commands are documented in
 - [Remote access](./docs/user/remote-access.md)
 - [Keeping app and server in sync](./docs/user/updating.md)
 - [Source control integrations](./docs/user/source-control.md)
-- [RepoKin product requirements](./docs/project/agentforge/prd.md)
-- [RepoKin implementation plan](./docs/project/agentforge/implementation-plan.md)
-- [Fork policy and upstream sync](./docs/project/agentforge/fork-policy.md)
+- [RepoKin product requirements](./docs/project/repokin/prd.md)
+- [RepoKin implementation plan](./docs/project/repokin/implementation-plan.md)
+- [Fork policy and upstream sync](./docs/project/repokin/fork-policy.md)
 - [Architecture and internals](./docs/internals/overview.md)
 - [Reference scripts](./docs/internals/scripts.md)
 
 ## Contributing
 
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) and the
-[fork policy](./docs/project/agentforge/fork-policy.md) before opening an
+[fork policy](./docs/project/repokin/fork-policy.md) before opening an
 issue or pull request. RepoKin-specific features should remain isolated
 from upstream code where possible so that upstream T3 Code improvements remain
 easy to merge.
@@ -163,7 +163,7 @@ open, performant, remote-ready foundation that we can extend for RepoKin.
 
 ## Compatibility note
 
-The legacy `.agentforge/` project directory, `agentforge` configuration
+The legacy `.repokin/` project directory, `repokin` configuration
 namespace, and related protocol identifiers remain unchanged for compatibility
 with existing repositories and settings. These are internal storage and
 wire-format names only; the product brand is RepoKin.

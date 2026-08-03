@@ -75,7 +75,7 @@ determines what we cut when we are late.
 | #   | Goal                                                                       | How we know it worked                                                                   |
 | --- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | G1  | Agents persist across sessions with character that changes their output    | Same prompt to two agents produces recognizably different work                          |
-| G2  | The roster (humans + agents) lives in the repo and is reviewable like code | `git log .agentforge/` reads like a team history                                        |
+| G2  | The roster (humans + agents) lives in the repo and is reviewable like code | `git log .repokin/` reads like a team history                                           |
 | G3  | Character is mechanically enforced, not just suggested                     | Character sets model, runtime mode, and tool policy — verifiable without reading output |
 | G4  | Work is attributable to a specific agent                                   | Threads, checkpoints, and commits name the agent                                        |
 | G5  | Team members on different machines can discover and reach each other       | Roster from remote; messages delivered when both online, queued when not                |
@@ -140,7 +140,7 @@ environment at a time.
 This yields a clean and — importantly — implementable trust model:
 
 - **The repository is the key directory.** Each member profile in
-  `.agentforge/` carries the **public key of the environment** that member
+  `.repokin/` carries the **public key of the environment** that member
   operates from. T3 Code already generates and persists an environment keypair
   for relay auth (`getOrCreateEnvironmentKeyPairFromSecretStore` in
   [`cloud/environmentKeys.ts`](../../../apps/server/src/cloud/environmentKeys.ts)).
@@ -149,7 +149,7 @@ This yields a clean and — importantly — implementable trust model:
   invent a second authorization system.
 - **Wire identity is verified against the repo, not asserted.** An inbound
   message claiming to be from `julius@example.com` is only accepted if it is
-  signed by the key that `.agentforge/humans/julius.json` says it should be.
+  signed by the key that `.repokin/humans/julius.json` says it should be.
 
 This also means a _stale roster is a security-relevant condition_, not just a UX
 one: revoking a member is a commit that removes their key. We should say so in
@@ -197,7 +197,7 @@ belong there too once implemented.
 | Term                | Definition                                                                                                                    |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | **Project**         | Unchanged from T3 Code: an environment-local workspace record rooted at a directory. For RepoKin it must be a Git repository. |
-| **Team**            | The set of members declared in `.agentforge/` on a project's team remote.                                                     |
+| **Team**            | The set of members declared in `.repokin/` on a project's team remote.                                                        |
 | **Member**          | A human or agent in the roster. Identified by `MemberId`.                                                                     |
 | **Human member**    | A person. Identity anchored on `git config user.email`, enriched with display name, avatar, and environment public keys.      |
 | **Agent member**    | A persistent agent: name, owner, character, provider binding, home environment.                                               |
@@ -225,7 +225,7 @@ Priorities: **P0** = required for M1 release. **P1** = M2/M3. **P2** = M4+.
 - **FR-1.3** Derive the local human identity from `git config user.name` and
   `user.email`. Allow enrichment, never silent invention. If Git identity is
   unset, prompt — do not guess from the OS user.
-- **FR-1.4** All roster data lives under `.agentforge/` at the repository root
+- **FR-1.4** All roster data lives under `.repokin/` at the repository root
   (§7).
 - **FR-1.5** Roster reads from the team remote's default branch **without
   touching the working tree** — via `git show <remote>/<branch>:<path>` against a
@@ -296,7 +296,7 @@ Requirements:
 - **FR-4.1** Every thread records the agent that ran it. Threads already carry
   `session.providerInstanceId`; the agent binding projects from that.
 - **FR-4.2** Commits produced by an agent carry a trailer identifying it (e.g.
-  `Co-Authored-By: Aria <aria@agents.local>` plus an `X-AgentForge-Agent` id
+  `Co-Authored-By: Aria <aria@agents.local>` plus an `X-RepoKin-Agent` id
   trailer). This works with GitHub today and costs almost nothing.
 - **FR-4.3** Checkpoints and turn diffs are attributable to the agent that
   produced them.
@@ -307,7 +307,7 @@ makes a multi-agent repository legible, and it is cheap.
 
 ### 6.5 Trust and safety for repo-sourced character (P0)
 
-- **FR-5.1** When a project's `.agentforge/` is first seen, or when any
+- **FR-5.1** When a project's `.repokin/` is first seen, or when any
   **mechanical** field changes, the change requires explicit local confirmation
   before it takes effect. Expressive-only changes apply silently.
 - **FR-5.2** The confirmation prompt shows a diff of what changed, in plain
@@ -317,7 +317,7 @@ makes a multi-agent repository legible, and it is cheap.
   mechanical settings, or with safe defaults if never trusted. It never silently
   escalates.
 
-Rationale: `.agentforge/` is pulled from a shared branch. Without this, a merged
+Rationale: `.repokin/` is pulled from a shared branch. Without this, a merged
 PR can flip an agent to `full-access` on every teammate's machine. This is the
 same class of risk that editors handle with workspace trust; we handle it the
 same way and ship it with M1.
@@ -377,7 +377,7 @@ execution. No capability system in v1.
 - **FR-10.2** Team features are additive. A user who never creates an agent sees
   a product that behaves like T3 Code.
 - **FR-10.3** Team features degrade cleanly, not loudly, when the project is not
-  a Git repo, has no remote, or has no `.agentforge/`.
+  a Git repo, has no remote, or has no `.repokin/`.
 - **FR-10.4** Upstream changes keep merging. See
   [fork-policy.md](./fork-policy.md).
 
@@ -386,7 +386,7 @@ execution. No capability system in v1.
 ## 7. Repository data model
 
 ```text
-.agentforge/
+.repokin/
   team.json                 # team-level config: schema version, policy defaults
   humans/
     <member-slug>.json
@@ -406,7 +406,7 @@ authoritative; the filename is a convenience.
 
 ```json
 {
-  "$schema": "https://agentforge.dev/schema/agent.json",
+  "$schema": "https://repokin.dev/schema/agent.json",
   "schemaVersion": 1,
   "id": "agent_01J8XQ2K",
   "name": "Aria",
@@ -496,7 +496,7 @@ close to free. Export is P2.
 
 - Roster commits are meaningful and infrequent; presence and messages never
   touch Git.
-- A team-layer commit touches only `.agentforge/`, never mixes with code
+- A team-layer commit touches only `.repokin/`, never mixes with code
   changes.
 - Commit messages are readable in `git log` without tooling
   (`chore(team): add agent Aria`).
@@ -519,7 +519,7 @@ inventing transport.
 ┌───────────────▼──────────────────────────────────────────┐
 │ Server — new Team domain (apps/server/src/team/)         │
 │                                                           │
-│  TeamFileStore ──── reads/writes .agentforge/  (T0, Git) │
+│  TeamFileStore ──── reads/writes .repokin/  (T0, Git) │
 │  LocalIdentityResolver ── git config user.*              │
 │  RosterSync ──────── git fetch + git show (no checkout)  │
 │  CharacterCompiler ─ character → per-driver bundle       │
@@ -545,7 +545,7 @@ Three existing seams carry most of the weight, which is why this is tractable:
    relay with signed proofs and an aggregate view. Presence is an extension of
    a working mechanism, not a new subsystem.
 3. **`t3.json` + `T3ProjectFileLoader`** already establish the pattern for a
-   checked-in, schema-published, repo-committed project file. `.agentforge/`
+   checked-in, schema-published, repo-committed project file. `.repokin/`
    follows it.
 
 The corresponding constraint: **complexity belongs at the adapter boundary.**
@@ -614,11 +614,11 @@ export, channels, mobile parity.
 | **Repo-sourced character as an attack vector**                   | High     | Trust confirmation on mechanical changes, shipped in M1 (§6.5).                                                                                                   |
 | **Upstream drift makes merges unaffordable**                     | High     | Additive-only file discipline, no broad rebrand, weekly automated merge. [fork-policy.md](./fork-policy.md).                                                      |
 | **Scope explosion**                                              | High     | Milestones gated on validation; M1 explicitly excludes presence and messaging.                                                                                    |
-| **Git noise and conflicts**                                      | Medium   | Per-member files, no presence in Git, explicit publish, `.agentforge/`-only commits.                                                                              |
+| **Git noise and conflicts**                                      | Medium   | Per-member files, no presence in Git, explicit publish, `.repokin/`-only commits.                                                                                 |
 | **Cross-machine connectivity**                                   | Medium   | Reuse existing relay/Tailscale/tunnel work rather than inventing P2P. Deferred to M3 so it does not block value.                                                  |
 | **Two environments running one agent**                           | Medium   | Home/borrowed semantics with visible labeling; no distributed locking attempted.                                                                                  |
 | **Agents messaging each other produces noise, not work**         | Medium   | Agent-to-agent is M4, gated on M2/M3 usage data. Default inbound policy is `manual`.                                                                              |
-| **Team features confuse the 100k existing single-user base**     | Medium   | Additive and invisible until a project has `.agentforge/` (FR-10.2).                                                                                              |
+| **Team features confuse the 100k existing single-user base**     | Medium   | Additive and invisible until a project has `.repokin/` (FR-10.2).                                                                                                 |
 | **We are building a chat app instead of a coding tool**          | Medium   | Messaging exists to route work; every message primitive must reference a thread, diff, or task. No free-floating chat in v1.                                      |
 
 ---
@@ -762,5 +762,5 @@ Stated plainly so it does not get re-litigated every planning cycle:
 - Web-hosted team service or accounts (non-goal).
 - Automatic conflict resolution between agents' work (non-goal for v1).
 - Character marketplace or sharing (interesting, unscheduled — note that
-  `.agentforge/` being plain JSON in a repo makes this nearly free later, which
+  `.repokin/` being plain JSON in a repo makes this nearly free later, which
   is a good reason not to build it now).

@@ -898,10 +898,10 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     }).pipe(Effect.provide(adapterLayer));
   });
 
-  it.effect("sends AgentForge character instructions through the OpenCode system field", () =>
+  it.effect("sends RepoKin character instructions through the OpenCode system field", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
-      const threadId = asThreadId("thread-agentforge-character");
+      const threadId = asThreadId("thread-repokin-character");
       yield* adapter.startSession({
         provider: ProviderDriverKind.make("opencode"),
         threadId,
@@ -915,7 +915,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       yield* adapter.sendTurn({
         threadId,
         input: "Fix it",
-        agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+        repokinCharacterInstructions: "<repokin_character>Aria</repokin_character>",
       });
 
       NodeAssert.deepEqual(runtimeMock.state.promptCalls.at(-1), {
@@ -924,7 +924,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
           providerID: "anthropic",
           modelID: "claude-sonnet-4-5",
         },
-        system: "<agentforge_character>Aria</agentforge_character>",
+        system: "<repokin_character>Aria</repokin_character>",
         parts: [{ type: "text", text: "Fix it" }],
       });
     }),

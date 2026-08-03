@@ -814,8 +814,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             ? { modelSelection: command.modelSelection }
             : {}),
           ...(command.titleSeed !== undefined ? { titleSeed: command.titleSeed } : {}),
-          ...(command.agentforgeAgentId !== undefined
-            ? { agentforgeAgentId: command.agentforgeAgentId }
+          ...(command.repokinAgentId !== undefined
+            ? { repokinAgentId: command.repokinAgentId }
             : {}),
           runtimeMode: targetThread.runtimeMode,
           interactionMode: targetThread.interactionMode,

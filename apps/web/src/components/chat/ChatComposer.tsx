@@ -194,7 +194,7 @@ import {
 } from "lucide-react";
 import { proposedPlanTitle } from "../../proposedPlan";
 import { getProviderDisplayName, getProviderInteractionModeToggle } from "../../providerModels";
-import { providerInstanceHasAgentBinding } from "../../agentforgeBindings";
+import { providerInstanceHasAgentBinding } from "../../repokinBindings";
 import {
   applyProviderInstanceSettings,
   deriveProviderInstanceEntries,
@@ -245,7 +245,7 @@ const runtimeModeConfig: Record<
 };
 
 const runtimeModeOptions = Object.keys(runtimeModeConfig) as RuntimeMode[];
-const NO_AGENTFORGE_AGENT_VALUE = "__agentforge_none__";
+const NO_REPOKIN_AGENT_VALUE = "__repokin_none__";
 const COMPOSER_FLOATING_LAYER_SELECTOR = [
   '[data-slot="popover-popup"]',
   '[data-slot="menu-popup"]',
@@ -286,7 +286,7 @@ function isInsideComposerFloatingLayer(element: Element): boolean {
   return element.closest(COMPOSER_FLOATING_LAYER_SELECTOR) !== null;
 }
 
-function summarizeAgentForgeMechanics(mechanics: CompiledCharacterMechanics): readonly string[] {
+function summarizeRepoKinMechanics(mechanics: CompiledCharacterMechanics): readonly string[] {
   return [
     `Runtime: ${runtimeModeConfig[mechanics.runtimeMode]?.label ?? mechanics.runtimeMode}`,
     `Mode: ${mechanics.interactionMode}`,
@@ -438,7 +438,7 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
   );
 });
 
-const AgentForgeComposerPicker = memo(function AgentForgeComposerPicker(props: {
+const RepoKinComposerPicker = memo(function RepoKinComposerPicker(props: {
   compact: boolean;
   agents: readonly AgentProfile[];
   selectedAgentId: string;
@@ -458,7 +458,7 @@ const AgentForgeComposerPicker = memo(function AgentForgeComposerPicker(props: {
           : "Agent");
   const tooltip =
     selectedAgent === null
-      ? (props.rosterError ?? "Choose an AgentForge agent for this composer.")
+      ? (props.rosterError ?? "Choose an RepoKin agent for this composer.")
       : `${selectedAgent.name} · ${selectedAgent.character.runtimeMode ?? "approval-required"}`;
 
   return (
@@ -474,7 +474,7 @@ const AgentForgeComposerPicker = memo(function AgentForgeComposerPicker(props: {
         <TooltipTrigger
           render={
             <ComposerSelectControl
-              aria-label="AgentForge agent"
+              aria-label="RepoKin agent"
               className={cn(
                 "shrink-0",
                 selectedAgent !== null
@@ -490,7 +490,7 @@ const AgentForgeComposerPicker = memo(function AgentForgeComposerPicker(props: {
           </SelectValue>
         </TooltipTrigger>
         <SelectPopup alignItemWithTrigger={false} className="min-w-56">
-          <SelectItem hideIndicator value={NO_AGENTFORGE_AGENT_VALUE}>
+          <SelectItem hideIndicator value={NO_REPOKIN_AGENT_VALUE}>
             Default agent
           </SelectItem>
           {props.agents.map((agent) => (
@@ -510,7 +510,7 @@ const AgentForgeComposerPicker = memo(function AgentForgeComposerPicker(props: {
   );
 });
 
-const AgentForgeTrustPrompt = memo(function AgentForgeTrustPrompt(props: {
+const RepoKinTrustPrompt = memo(function RepoKinTrustPrompt(props: {
   agent: AgentProfile;
   status: "untrusted" | "changed";
   mechanicalHash: string;
@@ -518,7 +518,7 @@ const AgentForgeTrustPrompt = memo(function AgentForgeTrustPrompt(props: {
   isTrusting: boolean;
   onTrust: () => void;
 }) {
-  const summary = summarizeAgentForgeMechanics(props.mechanics);
+  const summary = summarizeRepoKinMechanics(props.mechanics);
   return (
     <div className="mb-3 rounded-lg border border-amber-500/35 bg-amber-500/8 px-3 py-2.5 text-sm">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
@@ -639,7 +639,7 @@ export interface ChatComposerHandle {
     selectedPromptEffort: string | null;
     selectedModelOptionsForDispatch: unknown;
     selectedModelSelection: ModelSelection;
-    agentforgeAgentId: string | null;
+    repokinAgentId: string | null;
     providerAvailable: boolean;
     selectedProvider: ProviderDriverKind;
     selectedModel: string;
@@ -839,7 +839,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   } = props;
   const isSendDisabled = sendDisabledReason !== null;
   const updateServerSettings = useAtomCommand(serverEnvironment.updateSettings, {
-    label: "trust AgentForge mechanics",
+    label: "trust RepoKin mechanics",
     reportFailure: true,
   });
 
@@ -1119,8 +1119,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const [isComposerFooterCompact, setIsComposerFooterCompact] = useState(false);
   const [isComposerPrimaryActionsCompact, setIsComposerPrimaryActionsCompact] = useState(false);
   const [isComposerModelPickerOpen, setIsComposerModelPickerOpen] = useState(false);
-  const [selectedAgentForgeAgentId, setSelectedAgentForgeAgentId] =
-    useState(NO_AGENTFORGE_AGENT_VALUE);
+  const [selectedRepoKinAgentId, setSelectedRepoKinAgentId] = useState(NO_REPOKIN_AGENT_VALUE);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [composerMenuAnchor, setComposerMenuAnchor] = useState<HTMLDivElement | null>(null);
   const [isStashMenuOpen, setIsStashMenuOpen] = useState(false);
@@ -1131,24 +1130,24 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const isMobileViewport = useMediaQuery("max-sm");
   const isComposerCollapsedMobile =
     isMobileViewport && !forceExpandedOnMobile && !isComposerFocused;
-  const agentForgeRosterAtom =
+  const repoKinRosterAtom =
     gitCwd === null
       ? null
       : teamEnvironment.roster({
           environmentId,
           input: { cwd: gitCwd },
         });
-  const agentForgeRoster = useEnvironmentQuery(agentForgeRosterAtom);
-  const agentForgeAgents = agentForgeRoster.data?.agents ?? [];
-  const selectedAgentForgeAgent = useMemo(
+  const repoKinRoster = useEnvironmentQuery(repoKinRosterAtom);
+  const repoKinAgents = repoKinRoster.data?.agents ?? [];
+  const selectedRepoKinAgent = useMemo(
     () =>
-      selectedAgentForgeAgentId === NO_AGENTFORGE_AGENT_VALUE
+      selectedRepoKinAgentId === NO_REPOKIN_AGENT_VALUE
         ? null
-        : (agentForgeAgents.find((agent) => agent.id === selectedAgentForgeAgentId) ?? null),
-    [agentForgeAgents, selectedAgentForgeAgentId],
+        : (repoKinAgents.find((agent) => agent.id === selectedRepoKinAgentId) ?? null),
+    [repoKinAgents, selectedRepoKinAgentId],
   );
-  const selectedAgentForgeBoundProviderEntry = useMemo(() => {
-    if (selectedAgentForgeAgent === null) {
+  const selectedRepoKinBoundProviderEntry = useMemo(() => {
+    if (selectedRepoKinAgent === null) {
       return null;
     }
     return (
@@ -1160,18 +1159,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           providerInstanceHasAgentBinding(
             settings.providerInstances,
             entry.instanceId,
-            selectedAgentForgeAgent.id,
+            selectedRepoKinAgent.id,
           ),
       ) ?? null
     );
-  }, [providerInstanceEntries, selectedAgentForgeAgent, settings.providerInstances]);
-  const selectedAgentForgeTargetProviderEntry = useMemo(() => {
-    if (selectedAgentForgeAgent === null) {
+  }, [providerInstanceEntries, selectedRepoKinAgent, settings.providerInstances]);
+  const selectedRepoKinTargetProviderEntry = useMemo(() => {
+    if (selectedRepoKinAgent === null) {
       return null;
     }
-    const profileProvider = selectedAgentForgeAgent.character.provider;
+    const profileProvider = selectedRepoKinAgent.character.provider;
     return (
-      selectedAgentForgeBoundProviderEntry ??
+      selectedRepoKinBoundProviderEntry ??
       (profileProvider === undefined
         ? selectedProviderEntry
         : selectedProviderEntry?.driverKind === profileProvider.driver
@@ -1184,61 +1183,59 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     );
   }, [
     providerInstanceEntries,
-    selectedAgentForgeAgent,
-    selectedAgentForgeBoundProviderEntry,
+    selectedRepoKinAgent,
+    selectedRepoKinBoundProviderEntry,
     selectedProviderEntry,
   ]);
-  const selectedAgentForgePreviewDriver =
-    selectedAgentForgeTargetProviderEntry?.driverKind ??
-    selectedAgentForgeAgent?.character.provider?.driver ??
+  const selectedRepoKinPreviewDriver =
+    selectedRepoKinTargetProviderEntry?.driverKind ??
+    selectedRepoKinAgent?.character.provider?.driver ??
     selectedProvider;
-  const agentForgePreviewAtom =
-    gitCwd === null || selectedAgentForgeAgent === null
+  const repoKinPreviewAtom =
+    gitCwd === null || selectedRepoKinAgent === null
       ? null
       : teamEnvironment.instructionPreview({
           environmentId,
           input: {
             cwd: gitCwd,
-            agentId: AgentId.make(selectedAgentForgeAgent.id),
-            driver: selectedAgentForgePreviewDriver,
+            agentId: AgentId.make(selectedRepoKinAgent.id),
+            driver: selectedRepoKinPreviewDriver,
           },
         });
-  const agentForgePreview = useEnvironmentQuery(agentForgePreviewAtom);
-  const selectedAgentForgeTrustedHash =
-    gitCwd === null || selectedAgentForgeAgent === null
+  const repoKinPreview = useEnvironmentQuery(repoKinPreviewAtom);
+  const selectedRepoKinTrustedHash =
+    gitCwd === null || selectedRepoKinAgent === null
       ? undefined
-      : settings.agentforge.trustedMechanics[gitCwd]?.[selectedAgentForgeAgent.id];
-  const selectedAgentForgeTrustStatus =
-    selectedAgentForgeAgent === null || agentForgePreview.data == null
+      : settings.repokin.trustedMechanics[gitCwd]?.[selectedRepoKinAgent.id];
+  const selectedRepoKinTrustStatus =
+    selectedRepoKinAgent === null || repoKinPreview.data == null
       ? null
-      : selectedAgentForgeTrustedHash === undefined
+      : selectedRepoKinTrustedHash === undefined
         ? "untrusted"
-        : selectedAgentForgeTrustedHash === agentForgePreview.data.mechanicalHash
+        : selectedRepoKinTrustedHash === repoKinPreview.data.mechanicalHash
           ? "trusted"
           : "changed";
-  const selectedAgentForgeTrustBlocking =
-    selectedAgentForgeAgent !== null &&
-    (agentForgePreview.isPending ||
-      agentForgePreview.error !== null ||
-      selectedAgentForgeTrustStatus !== "trusted");
-  const [trustedAgentForgeMechanicsKey, setTrustedAgentForgeMechanicsKey] = useState<string | null>(
-    null,
-  );
-  const [isTrustingAgentForgeMechanics, setIsTrustingAgentForgeMechanics] = useState(false);
+  const selectedRepoKinTrustBlocking =
+    selectedRepoKinAgent !== null &&
+    (repoKinPreview.isPending ||
+      repoKinPreview.error !== null ||
+      selectedRepoKinTrustStatus !== "trusted");
+  const [trustedRepoKinMechanicsKey, setTrustedRepoKinMechanicsKey] = useState<string | null>(null);
+  const [isTrustingRepoKinMechanics, setIsTrustingRepoKinMechanics] = useState(false);
 
   useEffect(() => {
     if (
-      selectedAgentForgeAgentId !== NO_AGENTFORGE_AGENT_VALUE &&
-      !agentForgeAgents.some((agent) => agent.id === selectedAgentForgeAgentId)
+      selectedRepoKinAgentId !== NO_REPOKIN_AGENT_VALUE &&
+      !repoKinAgents.some((agent) => agent.id === selectedRepoKinAgentId)
     ) {
-      setSelectedAgentForgeAgentId(NO_AGENTFORGE_AGENT_VALUE);
+      setSelectedRepoKinAgentId(NO_REPOKIN_AGENT_VALUE);
     }
-  }, [agentForgeAgents, selectedAgentForgeAgentId]);
+  }, [repoKinAgents, selectedRepoKinAgentId]);
 
-  const applyAgentForgeMechanics = useCallback(
+  const applyRepoKinMechanics = useCallback(
     (agent: AgentProfile) => {
       const profileProvider = agent.character.provider;
-      const preferredInstance = selectedAgentForgeTargetProviderEntry;
+      const preferredInstance = selectedRepoKinTargetProviderEntry;
       if (preferredInstance !== null) {
         const preferredModel =
           profileProvider?.model ??
@@ -1257,83 +1254,83 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       handleRuntimeModeChange,
       modelOptionsByInstance,
       onProviderModelSelect,
-      selectedAgentForgeTargetProviderEntry,
+      selectedRepoKinTargetProviderEntry,
       selectedInstanceId,
       selectedModel,
     ],
   );
 
-  const handleAgentForgeAgentSelect = useCallback((agentId: string) => {
-    setSelectedAgentForgeAgentId(agentId);
-    setTrustedAgentForgeMechanicsKey(null);
+  const handleRepoKinAgentSelect = useCallback((agentId: string) => {
+    setSelectedRepoKinAgentId(agentId);
+    setTrustedRepoKinMechanicsKey(null);
   }, []);
 
-  const selectedAgentForgeMechanicsKey =
-    selectedAgentForgeAgent !== null && agentForgePreview.data != null
-      ? `${selectedAgentForgeAgent.id}:${agentForgePreview.data?.mechanicalHash ?? ""}`
+  const selectedRepoKinMechanicsKey =
+    selectedRepoKinAgent !== null && repoKinPreview.data != null
+      ? `${selectedRepoKinAgent.id}:${repoKinPreview.data?.mechanicalHash ?? ""}`
       : null;
 
   useEffect(() => {
     if (
-      selectedAgentForgeAgent === null ||
-      selectedAgentForgeTrustStatus !== "trusted" ||
-      selectedAgentForgeMechanicsKey === null ||
-      trustedAgentForgeMechanicsKey === selectedAgentForgeMechanicsKey
+      selectedRepoKinAgent === null ||
+      selectedRepoKinTrustStatus !== "trusted" ||
+      selectedRepoKinMechanicsKey === null ||
+      trustedRepoKinMechanicsKey === selectedRepoKinMechanicsKey
     ) {
       return;
     }
-    applyAgentForgeMechanics(selectedAgentForgeAgent);
-    setTrustedAgentForgeMechanicsKey(selectedAgentForgeMechanicsKey);
+    applyRepoKinMechanics(selectedRepoKinAgent);
+    setTrustedRepoKinMechanicsKey(selectedRepoKinMechanicsKey);
   }, [
-    applyAgentForgeMechanics,
-    selectedAgentForgeAgent,
-    selectedAgentForgeMechanicsKey,
-    selectedAgentForgeTrustStatus,
-    trustedAgentForgeMechanicsKey,
+    applyRepoKinMechanics,
+    selectedRepoKinAgent,
+    selectedRepoKinMechanicsKey,
+    selectedRepoKinTrustStatus,
+    trustedRepoKinMechanicsKey,
   ]);
 
-  const trustSelectedAgentForgeMechanics = useCallback(async () => {
+  const trustSelectedRepoKinMechanics = useCallback(async () => {
     if (
       gitCwd === null ||
-      selectedAgentForgeAgent === null ||
-      agentForgePreview.data == null ||
-      isTrustingAgentForgeMechanics
+      selectedRepoKinAgent === null ||
+      repoKinPreview.data == null ||
+      isTrustingRepoKinMechanics
     ) {
       return;
     }
-    setIsTrustingAgentForgeMechanics(true);
+    setIsTrustingRepoKinMechanics(true);
     const result = await updateServerSettings({
       environmentId,
       input: {
         patch: {
-          agentforge: {
+          repokin: {
             trustedMechanics: {
-              ...settings.agentforge.trustedMechanics,
+              ...settings.repokin.trustedMechanics,
               [gitCwd]: {
-                ...(settings.agentforge.trustedMechanics[gitCwd] ?? {}),
-                [selectedAgentForgeAgent.id]: agentForgePreview.data.mechanicalHash,
+                ...(settings.repokin.trustedMechanics[gitCwd] ?? {}),
+                [selectedRepoKinAgent.id]: repoKinPreview.data.mechanicalHash,
               },
             },
           },
         },
       },
     });
-    setIsTrustingAgentForgeMechanics(false);
+    setIsTrustingRepoKinMechanics(false);
     if (result._tag !== "Success") {
       return;
     }
-    applyAgentForgeMechanics(selectedAgentForgeAgent);
-    setTrustedAgentForgeMechanicsKey(
-      `${selectedAgentForgeAgent.id}:${agentForgePreview.data.mechanicalHash}`,
+    applyRepoKinMechanics(selectedRepoKinAgent);
+    setTrustedRepoKinMechanicsKey(
+      `${selectedRepoKinAgent.id}:${repoKinPreview.data.mechanicalHash}`,
     );
   }, [
-    agentForgePreview.data,
-    applyAgentForgeMechanics,
+    repoKinPreview.data,
+    applyRepoKinMechanics,
     environmentId,
     gitCwd,
-    isTrustingAgentForgeMechanics,
-    selectedAgentForgeAgent,
-    settings.agentforge.trustedMechanics,
+    isTrustingRepoKinMechanics,
+    selectedRepoKinAgent,
+    settings.repokin.trustedMechanics,
     updateServerSettings,
   ]);
 
@@ -1508,7 +1505,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const hasComposerHeader =
     isComposerApprovalState ||
     pendingUserInputs.length > 0 ||
-    selectedAgentForgeTrustBlocking ||
+    selectedRepoKinTrustBlocking ||
     (showPlanFollowUpPrompt && activeProposedPlan !== null);
   const showCollapsedMobilePromptRow =
     isComposerCollapsedMobile && !isComposerApprovalState && pendingUserInputs.length === 0;
@@ -2183,15 +2180,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         event?.preventDefault();
         return;
       }
-      if (selectedAgentForgeTrustBlocking) {
+      if (selectedRepoKinTrustBlocking) {
         event?.preventDefault();
         toastManager.add({
           type: "warning",
-          title: "Trust AgentForge mechanics first",
+          title: "Trust RepoKin mechanics first",
           description:
-            agentForgePreview.error ??
-            (agentForgePreview.isPending
-              ? "AgentForge is still checking this agent's mechanical settings."
+            repoKinPreview.error ??
+            (repoKinPreview.isPending
+              ? "RepoKin is still checking this agent's mechanical settings."
               : "Trust this agent's mechanical settings before starting the turn."),
         });
         return;
@@ -2220,9 +2217,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       isSendDisabled,
       noProviderAvailable,
       onSend,
-      agentForgePreview.error,
-      agentForgePreview.isPending,
-      selectedAgentForgeTrustBlocking,
+      repoKinPreview.error,
+      repoKinPreview.isPending,
+      selectedRepoKinTrustBlocking,
       shouldBlurMobileComposerOnSubmit,
     ],
   );
@@ -2998,10 +2995,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         selectedPromptEffort,
         selectedModelOptionsForDispatch,
         selectedModelSelection,
-        agentforgeAgentId:
-          selectedAgentForgeAgentId === NO_AGENTFORGE_AGENT_VALUE
-            ? null
-            : selectedAgentForgeAgentId,
+        repokinAgentId:
+          selectedRepoKinAgentId === NO_REPOKIN_AGENT_VALUE ? null : selectedRepoKinAgentId,
         providerAvailable: !noProviderAvailable,
         selectedProvider,
         selectedModel,
@@ -3030,7 +3025,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       selectedModel,
       selectedModelOptionsForDispatch,
       selectedModelSelection,
-      selectedAgentForgeAgentId,
+      selectedRepoKinAgentId,
       noProviderAvailable,
       selectedPromptEffort,
       selectedProvider,
@@ -3291,18 +3286,18 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
             {!isComposerCollapsedMobile &&
               !isComposerApprovalState &&
               pendingUserInputs.length === 0 &&
-              selectedAgentForgeAgent !== null &&
-              agentForgePreview.data != null &&
-              (selectedAgentForgeTrustStatus === "untrusted" ||
-                selectedAgentForgeTrustStatus === "changed") && (
-                <AgentForgeTrustPrompt
-                  agent={selectedAgentForgeAgent}
-                  status={selectedAgentForgeTrustStatus}
-                  mechanicalHash={agentForgePreview.data.mechanicalHash}
-                  mechanics={agentForgePreview.data.mechanics}
-                  isTrusting={isTrustingAgentForgeMechanics}
+              selectedRepoKinAgent !== null &&
+              repoKinPreview.data != null &&
+              (selectedRepoKinTrustStatus === "untrusted" ||
+                selectedRepoKinTrustStatus === "changed") && (
+                <RepoKinTrustPrompt
+                  agent={selectedRepoKinAgent}
+                  status={selectedRepoKinTrustStatus}
+                  mechanicalHash={repoKinPreview.data.mechanicalHash}
+                  mechanics={repoKinPreview.data.mechanics}
+                  isTrusting={isTrustingRepoKinMechanics}
                   onTrust={() => {
-                    void trustSelectedAgentForgeMechanics();
+                    void trustSelectedRepoKinMechanics();
                   }}
                 />
               )}
@@ -3520,13 +3515,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               )}
             >
               <div className="-m-1 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <AgentForgeComposerPicker
+                <RepoKinComposerPicker
                   compact={isComposerFooterCompact}
-                  agents={agentForgeAgents}
-                  selectedAgentId={selectedAgentForgeAgentId}
-                  roster={agentForgeRoster.data}
-                  rosterError={agentForgeRoster.error}
-                  onAgentSelect={handleAgentForgeAgentSelect}
+                  agents={repoKinAgents}
+                  selectedAgentId={selectedRepoKinAgentId}
+                  roster={repoKinRoster.data}
+                  rosterError={repoKinRoster.error}
+                  onAgentSelect={handleRepoKinAgentSelect}
                 />
 
                 {noProviderAvailable ? (

@@ -1,13 +1,13 @@
 /**
- * AgentForge team contracts — roster, character, and compiled character shapes.
+ * RepoKin team contracts — roster, character, and compiled character shapes.
  *
  * Lives on the `./team` subpath export so it never touches the main contracts
  * barrel (fork-policy: additive only). Schema only; no runtime logic.
  *
  * Repository layout (see PRD §7):
- *   .agentforge/team.json
- *   .agentforge/humans/<slug>.json
- *   .agentforge/agents/<slug>.json
+ *   .repokin/team.json
+ *   .repokin/humans/<slug>.json
+ *   .repokin/agents/<slug>.json
  *
  * @module team
  */
@@ -38,9 +38,9 @@ import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance.ts";
 // ---------------------------------------------------------------------------
 
 /** Directory at the repository root that holds the team roster. */
-export const AGENTFORGE_DIR_NAME = ".agentforge";
+export const REPOKIN_DIR_NAME = ".repokin";
 
-/** Team-level config file name under {@link AGENTFORGE_DIR_NAME}. */
+/** Team-level config file name under {@link REPOKIN_DIR_NAME}. */
 export const TEAM_FILE_NAME = "team.json";
 
 /** Subdirectory of human member profiles. */
@@ -49,9 +49,9 @@ export const TEAM_HUMANS_DIR_NAME = "humans";
 /** Subdirectory of agent member profiles. */
 export const TEAM_AGENTS_DIR_NAME = "agents";
 
-export const TEAM_FILE_SCHEMA_URL = "https://agentforge.dev/schema/team.json";
-export const HUMAN_PROFILE_SCHEMA_URL = "https://agentforge.dev/schema/human.json";
-export const AGENT_PROFILE_SCHEMA_URL = "https://agentforge.dev/schema/agent.json";
+export const TEAM_FILE_SCHEMA_URL = "https://repokin.dev/schema/team.json";
+export const HUMAN_PROFILE_SCHEMA_URL = "https://repokin.dev/schema/human.json";
+export const AGENT_PROFILE_SCHEMA_URL = "https://repokin.dev/schema/agent.json";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -357,7 +357,7 @@ export const HumanProfile = preserveUnknownFields(
   }).annotate({
     title: "Human member profile",
     description:
-      "Checked-in human member profile under .agentforge/humans/. No secrets, tokens, or private keys.",
+      "Checked-in human member profile under .repokin/humans/. No secrets, tokens, or private keys.",
   }),
 );
 export type HumanProfile = typeof HumanProfile.Type;
@@ -398,7 +398,7 @@ export const AgentProfile = preserveUnknownFields(
   }).annotate({
     title: "Agent member profile",
     description:
-      "Checked-in agent profile under .agentforge/agents/. Character only — never provider credentials or sensitive env vars.",
+      "Checked-in agent profile under .repokin/agents/. Character only — never provider credentials or sensitive env vars.",
   }),
 );
 export type AgentProfile = typeof AgentProfile.Type;
@@ -438,9 +438,9 @@ export const TeamFile = preserveUnknownFields(
       }),
     ),
   }).annotate({
-    title: "AgentForge team file",
+    title: "RepoKin team file",
     description:
-      "Team-level config at .agentforge/team.json. Roster members live as separate files under humans/ and agents/.",
+      "Team-level config at .repokin/team.json. Roster members live as separate files under humans/ and agents/.",
   }),
 );
 export type TeamFile = typeof TeamFile.Type;
@@ -491,7 +491,7 @@ export const TeamInstructionPreviewInput = Schema.Struct({
   agentId: AgentId,
   driver: ProviderDriverKind,
 }).annotate({
-  description: "Preview the provider-specific instruction text compiled for one AgentForge agent.",
+  description: "Preview the provider-specific instruction text compiled for one RepoKin agent.",
 });
 export type TeamInstructionPreviewInput = typeof TeamInstructionPreviewInput.Type;
 
@@ -504,7 +504,7 @@ export const TeamInstructionPreviewResult = Schema.Struct({
   mechanicalHash: TrimmedNonEmptyString,
 }).annotate({
   description:
-    "Provider-specific AgentForge instruction preview plus the mechanical settings/hash for trust UI.",
+    "Provider-specific RepoKin instruction preview plus the mechanical settings/hash for trust UI.",
 });
 export type TeamInstructionPreviewResult = typeof TeamInstructionPreviewResult.Type;
 
@@ -528,7 +528,7 @@ export class TeamInstructionPreviewError extends Schema.TaggedErrorClass<TeamIns
 export const TeamRosterReadInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
 }).annotate({
-  description: "Read the AgentForge roster from one working-tree repository.",
+  description: "Read the RepoKin roster from one working-tree repository.",
 });
 export type TeamRosterReadInput = typeof TeamRosterReadInput.Type;
 
@@ -564,7 +564,7 @@ export const TeamRosterReadModel = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed([] as string[] as readonly string[])),
   ),
 }).annotate({
-  description: "In-memory roster snapshot projected from .agentforge/.",
+  description: "In-memory roster snapshot projected from .repokin/.",
 });
 export type TeamRosterReadModel = typeof TeamRosterReadModel.Type;
 
@@ -572,7 +572,7 @@ export const TeamProfileWriteResult = Schema.Struct({
   path: TrimmedNonEmptyString,
   committed: Schema.Boolean,
 }).annotate({
-  description: "Result of writing one AgentForge profile file.",
+  description: "Result of writing one RepoKin profile file.",
 });
 export type TeamProfileWriteResult = typeof TeamProfileWriteResult.Type;
 
@@ -585,7 +585,7 @@ export const TeamAgentUpsertInput = Schema.Struct({
    */
   commit: Schema.optionalKey(Schema.Boolean),
 }).annotate({
-  description: "Create or update one agent profile in the selected repository's .agentforge tree.",
+  description: "Create or update one agent profile in the selected repository's .repokin tree.",
 });
 export type TeamAgentUpsertInput = typeof TeamAgentUpsertInput.Type;
 
@@ -593,7 +593,7 @@ export const TeamAgentUpsertResult = Schema.Struct({
   write: TeamProfileWriteResult,
   roster: TeamRosterReadModel,
 }).annotate({
-  description: "Profile write metadata plus the refreshed AgentForge roster.",
+  description: "Profile write metadata plus the refreshed RepoKin roster.",
 });
 export type TeamAgentUpsertResult = typeof TeamAgentUpsertResult.Type;
 
@@ -613,7 +613,7 @@ export const TeamFileUpdateInput = Schema.Struct({
   team: TeamFile,
   commit: Schema.optionalKey(Schema.Boolean),
 }).annotate({
-  description: "Create or update the selected repository's .agentforge/team.json file.",
+  description: "Create or update the selected repository's .repokin/team.json file.",
 });
 export type TeamFileUpdateInput = typeof TeamFileUpdateInput.Type;
 
@@ -621,7 +621,7 @@ export const TeamFileUpdateResult = Schema.Struct({
   write: TeamProfileWriteResult,
   roster: TeamRosterReadModel,
 }).annotate({
-  description: "Team file write metadata plus the refreshed AgentForge roster.",
+  description: "Team file write metadata plus the refreshed RepoKin roster.",
 });
 export type TeamFileUpdateResult = typeof TeamFileUpdateResult.Type;
 
@@ -638,7 +638,7 @@ export class TeamFileUpdateError extends Schema.TaggedErrorClass<TeamFileUpdateE
 export const TeamRosterSyncInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
 }).annotate({
-  description: "Fetch and read the explicitly configured AgentForge team remote roster.",
+  description: "Fetch and read the explicitly configured RepoKin team remote roster.",
 });
 export type TeamRosterSyncInput = typeof TeamRosterSyncInput.Type;
 
@@ -648,7 +648,7 @@ export const TeamRosterSyncResult = Schema.Struct({
   ref: TrimmedNonEmptyString,
   roster: TeamRosterReadModel,
 }).annotate({
-  description: "Fetched remote roster details plus the decoded AgentForge roster.",
+  description: "Fetched remote roster details plus the decoded RepoKin roster.",
 });
 export type TeamRosterSyncResult = typeof TeamRosterSyncResult.Type;
 
@@ -750,7 +750,7 @@ export const TeamRelayEnvelope = Schema.Union([
   TeamSignedMessageEnvelope,
   TeamSignedDeliveryReceiptEnvelope,
 ]).annotate({
-  description: "Signed AgentForge message or delivery receipt transported through the relay.",
+  description: "Signed RepoKin message or delivery receipt transported through the relay.",
 });
 export type TeamRelayEnvelope = typeof TeamRelayEnvelope.Type;
 
@@ -830,7 +830,7 @@ export const TeamMemberUpsertCommand = Schema.Struct({
   type: Schema.Literal("team.member.upsert"),
   profile: MemberProfile,
 }).annotate({
-  description: "Upsert a human or agent profile into the local .agentforge/ tree.",
+  description: "Upsert a human or agent profile into the local .repokin/ tree.",
 });
 export type TeamMemberUpsertCommand = typeof TeamMemberUpsertCommand.Type;
 
@@ -963,7 +963,7 @@ export const TeamMemberUpsertedEvent = Schema.Struct({
   at: IsoDateTime,
   metadata: TeamEventMetadata,
 }).annotate({
-  description: "A member profile was written under .agentforge/.",
+  description: "A member profile was written under .repokin/.",
 });
 export type TeamMemberUpsertedEvent = typeof TeamMemberUpsertedEvent.Type;
 

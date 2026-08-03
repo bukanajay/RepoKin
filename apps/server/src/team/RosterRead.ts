@@ -1,5 +1,5 @@
 /**
- * AgentForge roster read query.
+ * RepoKin roster read query.
  *
  * @module RosterRead
  */
@@ -21,7 +21,7 @@ export const readTeamRoster = Effect.fn("TeamRoster.read")(function* (
       (cause) =>
         new TeamRosterReadError({
           cwd: input.cwd,
-          message: "Failed to read AgentForge roster.",
+          message: "Failed to read RepoKin roster.",
           cause,
         }),
     ),

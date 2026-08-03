@@ -18,7 +18,7 @@ export type AgentAwarenessPhase =
 export interface AgentAwarenessState {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
-  readonly agentforgeAgentId: string | null;
+  readonly repokinAgentId: string | null;
   readonly projectTitle: string;
   readonly threadTitle: string;
   readonly phase: AgentAwarenessPhase;
@@ -42,7 +42,7 @@ export interface ProjectThreadAwarenessInput {
     | "updatedAt"
     | "hasPendingApprovals"
     | "hasPendingUserInput"
-    | "agentforgeAgentId"
+    | "repokinAgentId"
   >;
 }
 
@@ -79,7 +79,7 @@ export function projectThreadAwareness(
   return {
     environmentId,
     threadId: thread.id,
-    agentforgeAgentId: thread.agentforgeAgentId ?? null,
+    repokinAgentId: thread.repokinAgentId ?? null,
     projectTitle: project.title,
     threadTitle: thread.title,
     phase,

@@ -42,7 +42,7 @@ describe("CharacterCompiler", () => {
       compiled,
       driver: CODEX_DRIVER,
     });
-    expect(codexInstructions).toContain("<agentforge_character>");
+    expect(codexInstructions).toContain("<repokin_character>");
     expect(codexInstructions).toContain("Agent identity: Aria (agent_aria).");
     expect(codexInstructions).toContain("Provider driver: Codex.");
     expect(codexInstructions).toContain("Prefer small additive files.");

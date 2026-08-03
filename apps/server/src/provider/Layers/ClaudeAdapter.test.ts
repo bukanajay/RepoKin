@@ -3432,7 +3432,7 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
-  it.effect("appends AgentForge character instructions to the Claude Code preset", () => {
+  it.effect("appends RepoKin character instructions to the Claude Code preset", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
@@ -3441,13 +3441,13 @@ describe("ClaudeAdapterLive", () => {
         threadId: THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
         runtimeMode: "approval-required",
-        agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+        repokinCharacterInstructions: "<repokin_character>Aria</repokin_character>",
       });
 
       assert.deepEqual(harness.getLastCreateQueryInput()?.options.systemPrompt, {
         type: "preset",
         preset: "claude_code",
-        append: "<agentforge_character>Aria</agentforge_character>",
+        append: "<repokin_character>Aria</repokin_character>",
       });
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),

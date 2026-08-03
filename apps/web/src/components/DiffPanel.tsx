@@ -214,8 +214,8 @@ export default function DiffPanel({
   });
   const activeThreadId = routeThreadRef?.threadId ?? null;
   const activeThread = useThread(routeThreadRef);
-  const activeAgentForgeAgentLabel = activeThread?.agentforgeAgentId
-    ? `@${activeThread.agentforgeAgentId}`
+  const activeRepoKinAgentLabel = activeThread?.repokinAgentId
+    ? `@${activeThread.repokinAgentId}`
     : null;
   const activeProjectId = activeThread?.projectId ?? null;
   const activeProject = useProject(
@@ -595,10 +595,10 @@ export default function DiffPanel({
                       onClick={() => selectTurn(summary.turnId)}
                     >
                       <span>Turn {turnCount}</span>
-                      {activeAgentForgeAgentLabel ? (
+                      {activeRepoKinAgentLabel ? (
                         <span className="ml-2 inline-flex max-w-24 items-center gap-1 truncate text-[10px] text-muted-foreground">
                           <BotIcon className="size-3 shrink-0" />
-                          <span className="truncate">{activeAgentForgeAgentLabel}</span>
+                          <span className="truncate">{activeRepoKinAgentLabel}</span>
                         </span>
                       ) : null}
                       <span className="ml-auto text-xs tabular-nums text-muted-foreground">
@@ -611,18 +611,18 @@ export default function DiffPanel({
             </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>
-        {activeAgentForgeAgentLabel ? (
+        {activeRepoKinAgentLabel ? (
           <Tooltip>
             <TooltipTrigger
               render={
                 <span className="inline-flex max-w-32 shrink-0 items-center gap-1 rounded-sm border border-border/80 bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground">
                   <BotIcon className="size-3" />
-                  <span className="min-w-0 truncate">{activeAgentForgeAgentLabel}</span>
+                  <span className="min-w-0 truncate">{activeRepoKinAgentLabel}</span>
                 </span>
               }
             />
             <TooltipPopup side="top">
-              Turn diffs attributed to {activeAgentForgeAgentLabel}
+              Turn diffs attributed to {activeRepoKinAgentLabel}
             </TooltipPopup>
           </Tooltip>
         ) : null}

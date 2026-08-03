@@ -29,7 +29,7 @@ import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
-import { normalizeAgentforgeCharacterInstructions } from "../../team/ProviderCharacterInstructions.ts";
+import { normalizeRepokinCharacterInstructions } from "../../team/ProviderCharacterInstructions.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import {
   ProviderAdapterProcessError,
@@ -1482,8 +1482,8 @@ export function makeOpenCodeAdapter(
         });
       }
 
-      const agentforgeCharacterInstructions = normalizeAgentforgeCharacterInstructions(
-        input.agentforgeCharacterInstructions,
+      const repokinCharacterInstructions = normalizeRepokinCharacterInstructions(
+        input.repokinCharacterInstructions,
       );
       yield* runOpenCodeSdk("session.promptAsync", () =>
         context.client.session.promptAsync({
@@ -1491,7 +1491,7 @@ export function makeOpenCodeAdapter(
           model: parsedModel,
           ...(context.activeAgent ? { agent: context.activeAgent } : {}),
           ...(context.activeVariant ? { variant: context.activeVariant } : {}),
-          ...(agentforgeCharacterInstructions ? { system: agentforgeCharacterInstructions } : {}),
+          ...(repokinCharacterInstructions ? { system: repokinCharacterInstructions } : {}),
           parts: [...(text ? [{ type: "text" as const, text }] : []), ...fileParts],
         }),
       ).pipe(

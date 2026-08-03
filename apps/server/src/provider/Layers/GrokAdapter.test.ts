@@ -189,9 +189,9 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
     }),
   );
 
-  it.effect("prepends AgentForge character instructions to ACP prompt text", () =>
+  it.effect("prepends RepoKin character instructions to ACP prompt text", () =>
     Effect.gen(function* () {
-      const threadId = ThreadId.make("grok-agentforge-character-probe");
+      const threadId = ThreadId.make("grok-repokin-character-probe");
       const tempDir = yield* Effect.promise(() =>
         NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "grok-acp-")),
       );
@@ -214,14 +214,14 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
         threadId,
         input: "fix the navbar",
         attachments: [],
-        agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+        repokinCharacterInstructions: "<repokin_character>Aria</repokin_character>",
       });
 
       const requests = yield* Effect.promise(() => readJsonLines(requestLogPath));
       const promptRequest = requests.find((entry) => entry.method === "session/prompt");
       assert.isDefined(promptRequest);
       const promptPayload = yield* encodeUnknownJsonString(promptRequest?.params);
-      assert.include(promptPayload, "<agentforge_character>Aria</agentforge_character>");
+      assert.include(promptPayload, "<repokin_character>Aria</repokin_character>");
       assert.include(promptPayload, "<user_prompt>");
       assert.include(promptPayload, "fix the navbar");
 

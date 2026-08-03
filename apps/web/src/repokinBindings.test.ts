@@ -8,26 +8,26 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   providerConfigWithAgentBinding,
   providerInstanceHasAgentBinding,
-  readAgentforgeAgentIds,
-} from "./agentforgeBindings";
+  readRepokinAgentIds,
+} from "./repokinBindings";
 
-describe("AgentForge provider-instance bindings", () => {
+describe("RepoKin provider-instance bindings", () => {
   it("adds and removes agent ids without dropping unrelated provider config", () => {
     const initial = {
       homePath: "~/.codex_work",
-      agentforge: {
+      repokin: {
         agentIds: ["agent_reviewer"],
         note: "local only",
       },
     };
 
     const bound = providerConfigWithAgentBinding(initial, "agent_aria", true);
-    expect(readAgentforgeAgentIds(bound)).toEqual(["agent_reviewer", "agent_aria"]);
+    expect(readRepokinAgentIds(bound)).toEqual(["agent_reviewer", "agent_aria"]);
     expect(bound.homePath).toBe("~/.codex_work");
-    expect((bound.agentforge as { note?: string }).note).toBe("local only");
+    expect((bound.repokin as { note?: string }).note).toBe("local only");
 
     const unbound = providerConfigWithAgentBinding(bound, "agent_reviewer", false);
-    expect(readAgentforgeAgentIds(unbound)).toEqual(["agent_aria"]);
+    expect(readRepokinAgentIds(unbound)).toEqual(["agent_aria"]);
     expect(unbound.homePath).toBe("~/.codex_work");
   });
 

@@ -3,18 +3,16 @@ import { describe, expect, it } from "vite-plus/test";
 import * as TeamPaths from "./TeamPaths.ts";
 
 describe("TeamPaths", () => {
-  it("builds absolute and relative .agentforge paths", () => {
-    expect(TeamPaths.agentforgeDir("/repo")).toBe("/repo/.agentforge");
-    expect(TeamPaths.teamFilePath("/repo")).toBe("/repo/.agentforge/team.json");
-    expect(TeamPaths.humansDir("/repo")).toBe("/repo/.agentforge/humans");
-    expect(TeamPaths.agentsDir("/repo")).toBe("/repo/.agentforge/agents");
-    expect(TeamPaths.humanProfilePath("/repo", "julius")).toBe(
-      "/repo/.agentforge/humans/julius.json",
-    );
-    expect(TeamPaths.agentProfilePath("/repo", "aria")).toBe("/repo/.agentforge/agents/aria.json");
-    expect(TeamPaths.teamFilePathRelative()).toBe(".agentforge/team.json");
-    expect(TeamPaths.humanProfilePathRelative("julius")).toBe(".agentforge/humans/julius.json");
-    expect(TeamPaths.agentProfilePathRelative("aria")).toBe(".agentforge/agents/aria.json");
+  it("builds absolute and relative .repokin paths", () => {
+    expect(TeamPaths.repokinDir("/repo")).toBe("/repo/.repokin");
+    expect(TeamPaths.teamFilePath("/repo")).toBe("/repo/.repokin/team.json");
+    expect(TeamPaths.humansDir("/repo")).toBe("/repo/.repokin/humans");
+    expect(TeamPaths.agentsDir("/repo")).toBe("/repo/.repokin/agents");
+    expect(TeamPaths.humanProfilePath("/repo", "julius")).toBe("/repo/.repokin/humans/julius.json");
+    expect(TeamPaths.agentProfilePath("/repo", "aria")).toBe("/repo/.repokin/agents/aria.json");
+    expect(TeamPaths.teamFilePathRelative()).toBe(".repokin/team.json");
+    expect(TeamPaths.humanProfilePathRelative("julius")).toBe(".repokin/humans/julius.json");
+    expect(TeamPaths.agentProfilePathRelative("aria")).toBe(".repokin/agents/aria.json");
   });
 
   it("slugifies human emails from the local-part", () => {

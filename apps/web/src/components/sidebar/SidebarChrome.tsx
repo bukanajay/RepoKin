@@ -80,7 +80,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
       )}
       to="/"
     >
-      <AgentForgeMark />
+      <RepoKinMark />
       <span
         className={cn(
           "truncate text-sm font-semibold tracking-tight",
@@ -94,7 +94,7 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
 }
 
 /** Monochrome mark for the sidebar brand (uses currentColor). */
-function AgentForgeMark() {
+function RepoKinMark() {
   return (
     <svg
       aria-hidden

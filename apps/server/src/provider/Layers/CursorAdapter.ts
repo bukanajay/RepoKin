@@ -43,7 +43,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
-import { prependAgentforgePromptText } from "../../team/ProviderCharacterInstructions.ts";
+import { prependRepokinPromptText } from "../../team/ProviderCharacterInstructions.ts";
 import {
   ProviderAdapterProcessError,
   ProviderAdapterRequestError,
@@ -962,9 +962,9 @@ export function makeCursorAdapter(
           }
 
           const promptParts: Array<EffectAcpSchema.ContentBlock> = [];
-          const promptText = prependAgentforgePromptText(
+          const promptText = prependRepokinPromptText(
             input.input,
-            input.agentforgeCharacterInstructions,
+            input.repokinCharacterInstructions,
           );
           if (promptText) {
             promptParts.push({ type: "text", text: promptText });

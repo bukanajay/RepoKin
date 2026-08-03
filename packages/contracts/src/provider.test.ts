@@ -113,17 +113,15 @@ describe("ProviderSessionStartInput", () => {
     expect(parsed.modelSelection?.instanceId).toBe("ollama_local");
   });
 
-  it("accepts AgentForge character instructions", () => {
+  it("accepts RepoKin character instructions", () => {
     const parsed = decodeProviderSessionStartInput({
       threadId: "thread-1",
       providerInstanceId: "codex",
       runtimeMode: "approval-required",
-      agentforgeCharacterInstructions: " <agentforge_character>Aria</agentforge_character> ",
+      repokinCharacterInstructions: " <repokin_character>Aria</repokin_character> ",
     });
 
-    expect(parsed.agentforgeCharacterInstructions).toBe(
-      "<agentforge_character>Aria</agentforge_character>",
-    );
+    expect(parsed.repokinCharacterInstructions).toBe("<repokin_character>Aria</repokin_character>");
   });
 });
 
@@ -165,16 +163,14 @@ describe("ProviderSendTurnInput", () => {
     expect(getOptionValue(parsed.modelSelection?.options, "fastMode")).toBe(true);
   });
 
-  it("accepts per-turn AgentForge character instructions", () => {
+  it("accepts per-turn RepoKin character instructions", () => {
     const parsed = decodeProviderSendTurnInput({
       threadId: "thread-1",
       input: "hello",
-      agentforgeCharacterInstructions: " <agentforge_character>Docs</agentforge_character> ",
+      repokinCharacterInstructions: " <repokin_character>Docs</repokin_character> ",
     });
 
-    expect(parsed.agentforgeCharacterInstructions).toBe(
-      "<agentforge_character>Docs</agentforge_character>",
-    );
+    expect(parsed.repokinCharacterInstructions).toBe("<repokin_character>Docs</repokin_character>");
   });
 });
 

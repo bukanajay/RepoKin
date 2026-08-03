@@ -7,10 +7,10 @@ export default Effect.gen(function* () {
     PRAGMA table_info(projection_threads)
   `;
 
-  if (!columns.some((column) => column.name === "agentforge_agent_id")) {
+  if (!columns.some((column) => column.name === "repokin_agent_id")) {
     yield* sql`
       ALTER TABLE projection_threads
-      ADD COLUMN agentforge_agent_id TEXT
+      ADD COLUMN repokin_agent_id TEXT
     `;
   }
 });

@@ -25,10 +25,10 @@ it.layer(TestLayer)("LocalIdentityResolver", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-local-identity-",
+        prefix: "repokin-local-identity-",
       });
       const isolatedHome = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-git-home-",
+        prefix: "repokin-git-home-",
       });
       const env = {
         ...process.env,
@@ -60,7 +60,7 @@ it.layer(TestLayer)("LocalIdentityResolver", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-local-identity-nongit-",
+        prefix: "repokin-local-identity-nongit-",
       });
 
       const resolver = yield* LocalIdentityResolverTag;

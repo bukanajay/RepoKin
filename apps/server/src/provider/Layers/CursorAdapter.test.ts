@@ -483,11 +483,11 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     }),
   );
 
-  it.effect("prepends AgentForge character instructions to ACP prompt text", () =>
+  it.effect("prepends RepoKin character instructions to ACP prompt text", () =>
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const serverSettings = yield* ServerSettingsService;
-      const threadId = ThreadId.make("cursor-agentforge-character-probe");
+      const threadId = ThreadId.make("cursor-repokin-character-probe");
       const tempDir = yield* Effect.promise(() =>
         NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "cursor-acp-")),
       );
@@ -510,7 +510,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
         threadId,
         input: "fix the navbar",
         attachments: [],
-        agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+        repokinCharacterInstructions: "<repokin_character>Aria</repokin_character>",
       });
       yield* adapter.stopSession(threadId);
 
@@ -518,7 +518,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
       const promptRequest = requests.find((entry) => entry.method === "session/prompt");
       assert.isDefined(promptRequest);
       const promptPayload = yield* encodeUnknownJsonString(promptRequest?.params);
-      assert.include(promptPayload, "<agentforge_character>Aria</agentforge_character>");
+      assert.include(promptPayload, "<repokin_character>Aria</repokin_character>");
       assert.include(promptPayload, "<user_prompt>");
       assert.include(promptPayload, "fix the navbar");
     }),

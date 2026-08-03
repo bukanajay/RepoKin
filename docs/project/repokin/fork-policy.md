@@ -122,7 +122,7 @@ New, ours-only — merge cost zero:
 | Team UI (web)      | `apps/web/src/components/team/**`                 |
 | Team client logic  | `packages/client-runtime/src/team/**`             |
 | Team UI (mobile)   | `apps/mobile/**/team/**`                          |
-| Fork docs          | `docs/project/agentforge/**`                      |
+| Fork docs          | `docs/project/repokin/**`                         |
 | Migrations         | `apps/server/src/persistence/Migrations/1xx_*.ts` |
 
 **Migration numbering.** Upstream is at `034` and counting. If we allocate `035`,
@@ -155,7 +155,7 @@ payloads round-trip without loss.
 
 That means an agent's runtime binding and any local per-agent config can ride
 inside an existing settings structure with **no upstream schema change at all**.
-Namespace our payload (`config.agentforge`) and it survives upstream upgrades,
+Namespace our payload (`config.repokin`) and it survives upstream upgrades,
 downgrades, and users bouncing between our build and stock T3 Code.
 
 ### 5.2 The relay already publishes agent activity
@@ -171,7 +171,7 @@ the right shape.
 
 [`t3ProjectFile.ts`](../../../packages/contracts/src/t3ProjectFile.ts) and
 [`T3ProjectFileLoader.ts`](../../../apps/server/src/project/T3ProjectFileLoader.ts)
-establish everything `.agentforge/` needs: a repo-root file, a published JSON
+establish everything `.repokin/` needs: a repo-root file, a published JSON
 Schema, annotations on the encoded side, trimming and validation on decode.
 Copy the pattern rather than inventing one; it also means upstream improvements
 to that pattern are cheap for us to adopt.
@@ -250,10 +250,10 @@ Every RepoKin PR:
       logic live in our file?
 - [ ] Any new migration numbered ≥ `100`?
 - [ ] Any secret, token, or `sensitive` env var at risk of reaching
-      `.agentforge/`? (Should be structurally impossible — verify the test
+      `.repokin/`? (Should be structurally impossible — verify the test
       exists.)
 - [ ] Does the feature degrade cleanly with no Git repo, no remote, or no
-      `.agentforge/`?
+      `.repokin/`?
 - [ ] Does the single-user T3 Code experience still look untouched?
 - [ ] Web, desktop, mobile: which surfaces apply, and is each handled or
       explicitly deferred? (See [AGENTS.md](../../../AGENTS.md) "Hit every

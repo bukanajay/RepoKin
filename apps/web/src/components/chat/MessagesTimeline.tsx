@@ -125,7 +125,7 @@ interface TimelineRowSharedState {
   timestampFormat: TimestampFormat;
   routeThreadKey: string;
   threadRef: ScopedThreadRef | null;
-  agentForgeAgentLabel: string | null;
+  repoKinAgentLabel: string | null;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
   workspaceRoot: string | undefined;
@@ -166,7 +166,7 @@ interface MessagesTimelineProps {
   runningTurnId: TurnId | null;
   turnDiffSummaryByAssistantMessageId: Map<MessageId, TurnDiffSummary>;
   routeThreadKey: string;
-  agentForgeAgentLabel: string | null;
+  repoKinAgentLabel: string | null;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
@@ -202,7 +202,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   runningTurnId,
   turnDiffSummaryByAssistantMessageId,
   routeThreadKey,
-  agentForgeAgentLabel,
+  repoKinAgentLabel,
   onOpenTurnDiff,
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
@@ -423,7 +423,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       timestampFormat,
       routeThreadKey,
       threadRef: parseScopedThreadKey(routeThreadKey),
-      agentForgeAgentLabel,
+      repoKinAgentLabel,
       markdownCwd,
       resolvedTheme,
       workspaceRoot,
@@ -438,7 +438,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     [
       timestampFormat,
       routeThreadKey,
-      agentForgeAgentLabel,
+      repoKinAgentLabel,
       markdownCwd,
       resolvedTheme,
       workspaceRoot,
@@ -1037,7 +1037,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
         <AssistantChangedFilesSection
           turnSummary={row.assistantTurnDiffSummary}
           routeThreadKey={ctx.routeThreadKey}
-          agentForgeAgentLabel={ctx.agentForgeAgentLabel}
+          repoKinAgentLabel={ctx.repoKinAgentLabel}
           resolvedTheme={ctx.resolvedTheme}
           onOpenTurnDiff={ctx.onOpenTurnDiff}
         />
@@ -1244,13 +1244,13 @@ function WorkGroupToggleTimelineRow({
 const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection({
   turnSummary,
   routeThreadKey,
-  agentForgeAgentLabel,
+  repoKinAgentLabel,
   resolvedTheme,
   onOpenTurnDiff,
 }: {
   turnSummary: TurnDiffSummary | undefined;
   routeThreadKey: string;
-  agentForgeAgentLabel: string | null;
+  repoKinAgentLabel: string | null;
   resolvedTheme: "light" | "dark";
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
 }) {
@@ -1263,7 +1263,7 @@ const AssistantChangedFilesSection = memo(function AssistantChangedFilesSection(
       turnSummary={turnSummary}
       checkpointFiles={checkpointFiles}
       routeThreadKey={routeThreadKey}
-      agentForgeAgentLabel={agentForgeAgentLabel}
+      repoKinAgentLabel={repoKinAgentLabel}
       resolvedTheme={resolvedTheme}
       onOpenTurnDiff={onOpenTurnDiff}
     />
@@ -1276,14 +1276,14 @@ function AssistantChangedFilesSectionInner({
   turnSummary,
   checkpointFiles,
   routeThreadKey,
-  agentForgeAgentLabel,
+  repoKinAgentLabel,
   resolvedTheme,
   onOpenTurnDiff,
 }: {
   turnSummary: TurnDiffSummary;
   checkpointFiles: TurnDiffSummary["files"];
   routeThreadKey: string;
-  agentForgeAgentLabel: string | null;
+  repoKinAgentLabel: string | null;
   resolvedTheme: "light" | "dark";
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
 }) {
@@ -1304,7 +1304,7 @@ function AssistantChangedFilesSectionInner({
       turnId={turnSummary.turnId}
       files={checkpointFiles}
       expanded={expanded}
-      agentForgeAgentLabel={agentForgeAgentLabel}
+      repoKinAgentLabel={repoKinAgentLabel}
       showCompactPreview={isLatestTurn}
       allDirectoriesExpanded={allDirectoriesExpanded}
       resolvedTheme={resolvedTheme}

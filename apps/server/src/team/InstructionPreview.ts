@@ -1,5 +1,5 @@
 /**
- * AgentForge instruction preview query.
+ * RepoKin instruction preview query.
  *
  * Reads the working-tree roster, compiles one agent, and returns the
  * provider-specific expressive instructions with mechanical trust metadata.
@@ -33,7 +33,7 @@ export const previewTeamInstructions = Effect.fn("TeamInstructionPreview.preview
           cwd: input.cwd,
           agentId: input.agentId,
           driver: input.driver,
-          message: "Failed to read AgentForge roster.",
+          message: "Failed to read RepoKin roster.",
           cause,
         }),
     ),
@@ -46,7 +46,7 @@ export const previewTeamInstructions = Effect.fn("TeamInstructionPreview.preview
       cwd: input.cwd,
       agentId: input.agentId,
       driver: input.driver,
-      message: `Agent ${input.agentId} was not found in the AgentForge roster.`,
+      message: `Agent ${input.agentId} was not found in the RepoKin roster.`,
     });
   }
 
@@ -58,7 +58,7 @@ export const previewTeamInstructions = Effect.fn("TeamInstructionPreview.preview
           cwd: input.cwd,
           agentId: input.agentId,
           driver: input.driver,
-          message: `Failed to compile AgentForge character for ${input.agentId}.`,
+          message: `Failed to compile RepoKin character for ${input.agentId}.`,
           cause,
         }),
     ),

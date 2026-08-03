@@ -1,5 +1,5 @@
 /**
- * AgentForge agent profile write command.
+ * RepoKin agent profile write command.
  *
  * @module AgentUpsert
  */
@@ -28,7 +28,7 @@ export const upsertTeamAgent = Effect.fn("TeamAgent.upsert")(function* (
             reason: "write-failed",
             cwd: input.cwd,
             agentId: input.profile.id,
-            message: "Failed to write AgentForge agent profile.",
+            message: "Failed to write RepoKin agent profile.",
             cause,
           }),
       ),

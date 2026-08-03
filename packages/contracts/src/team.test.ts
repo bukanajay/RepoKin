@@ -69,7 +69,7 @@ const ariaCharacter = {
 };
 
 const ariaProfile = {
-  $schema: "https://agentforge.dev/schema/agent.json",
+  $schema: "https://repokin.dev/schema/agent.json",
   schemaVersion: 1 as const,
   id: "agent_aria",
   type: "agent" as const,
@@ -83,7 +83,7 @@ const ariaProfile = {
 };
 
 const juliusProfile = {
-  $schema: "https://agentforge.dev/schema/human.json",
+  $schema: "https://repokin.dev/schema/human.json",
   schemaVersion: 1 as const,
   id: "human_julius",
   type: "human" as const,
@@ -271,7 +271,7 @@ describe("TeamFile", () => {
       decodeTeamRosterSyncResult({
         remote: "upstream",
         branch: "main",
-        ref: "refs/agentforge/rosters/abc123",
+        ref: "refs/repokin/rosters/abc123",
         roster: {
           team: { schemaVersion: 1, teamRemote: "upstream" },
           humans: [],
@@ -491,7 +491,7 @@ describe("TeamAgentUpsertResult", () => {
   it("decodes write metadata with a refreshed roster", () => {
     const decoded = decodeAgentUpsertResult({
       write: {
-        path: "/tmp/repo/.agentforge/agents/agent_aria.json",
+        path: "/tmp/repo/.repokin/agents/agent_aria.json",
         committed: false,
       },
       roster: {
@@ -520,7 +520,7 @@ describe("secret exclusion invariant", () => {
         { name: "OPENAI_API_KEY", value: secret, sensitive: true },
         { name: "CODEX_API_KEY", value: secret, sensitive: true },
       ],
-      config: { agentforge: { note: "bindings stay local" } },
+      config: { repokin: { note: "bindings stay local" } },
     });
 
     // Round-trip the provider config to prove the secret is present there.

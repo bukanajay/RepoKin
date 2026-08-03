@@ -220,7 +220,7 @@ export const WS_METHODS = {
   // Review methods
   reviewGetDiffPreview: "review.getDiffPreview",
 
-  // AgentForge team methods
+  // RepoKin team methods
   teamReadRoster: "team.readRoster",
   teamUpsertAgent: "team.upsertAgent",
   teamUpdateTeamFile: "team.updateTeamFile",

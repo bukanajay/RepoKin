@@ -514,7 +514,7 @@ const makeWsRpcLayer = (
         return new TeamRosterSyncError({
           reason: "roster-read-failed",
           cwd,
-          message: cause instanceof Error ? cause.message : "Failed to sync AgentForge roster.",
+          message: cause instanceof Error ? cause.message : "Failed to sync RepoKin roster.",
           cause,
         });
       };

@@ -273,7 +273,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
             { id: "reasoningEffort", value: "high" },
             { id: "fastMode", value: true },
           ]),
-          agentforgeAgentId: "agent_aria",
+          repokinAgentId: "agent_aria",
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
           runtimeMode: "approval-required",
           createdAt: now,
@@ -298,7 +298,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
           { id: "reasoningEffort", value: "high" },
           { id: "fastMode", value: true },
         ]),
-        agentforgeAgentId: "agent_aria",
+        repokinAgentId: "agent_aria",
         runtimeMode: "approval-required",
       });
     }),

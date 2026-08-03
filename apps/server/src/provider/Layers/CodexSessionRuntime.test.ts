@@ -292,16 +292,16 @@ describe("buildCodexDeveloperInstructions", () => {
     NodeAssert.doesNotMatch(instructions, /<runtime_info>[^<]*\n/);
   });
 
-  it("appends AgentForge character instructions before runtime info", () => {
+  it("appends RepoKin character instructions before runtime info", () => {
     const instructions = buildCodexDeveloperInstructions("default", {
       model: "gpt-5.3-codex",
       reasoningEffort: "medium",
-      agentforgeCharacterInstructions: "<agentforge_character>Aria</agentforge_character>",
+      repokinCharacterInstructions: "<repokin_character>Aria</repokin_character>",
     });
 
-    NodeAssert.match(instructions, /<agentforge_character>Aria<\/agentforge_character>/);
+    NodeAssert.match(instructions, /<repokin_character>Aria<\/repokin_character>/);
     NodeAssert.ok(
-      instructions.indexOf("<agentforge_character>") < instructions.indexOf("<runtime_info>"),
+      instructions.indexOf("<repokin_character>") < instructions.indexOf("<runtime_info>"),
     );
   });
 });

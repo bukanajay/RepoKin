@@ -996,7 +996,7 @@ export default function GitActionsControl({
   const activeServerThread = useThread(activeThreadRef, {
     waitForShell: activeDraftThread !== null,
   });
-  const activeAgentForgeAgentId = activeServerThread?.agentforgeAgentId ?? null;
+  const activeRepoKinAgentId = activeServerThread?.repokinAgentId ?? null;
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
   const [isCommitDialogOpen, setIsCommitDialogOpen] = useState(false);
   const [dialogCommitMessage, setDialogCommitMessage] = useState("");
@@ -1393,7 +1393,7 @@ export default function GitActionsControl({
         actionId,
         action,
         ...(commitMessage ? { commitMessage } : {}),
-        ...(activeAgentForgeAgentId ? { agentforgeAgentId: activeAgentForgeAgentId } : {}),
+        ...(activeRepoKinAgentId ? { repokinAgentId: activeRepoKinAgentId } : {}),
         ...(featureBranch ? { featureBranch } : {}),
         ...(filePaths ? { filePaths } : {}),
         onProgress: applyProgressEvent,

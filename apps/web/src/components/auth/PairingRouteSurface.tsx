@@ -29,7 +29,7 @@ export function PairingPendingSurface() {
             alt=""
             className="size-8 rounded-lg shadow-sm"
             height={32}
-            src="/agentforge-mark.png"
+            src="/repokin-mark.png"
             width={32}
           />
           <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
@@ -119,7 +119,7 @@ export function PairingRouteSurface({
             alt=""
             className="size-8 rounded-lg shadow-sm"
             height={32}
-            src="/agentforge-mark.png"
+            src="/repokin-mark.png"
             width={32}
           />
           <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">
@@ -264,7 +264,7 @@ export function HostedPairingRouteSurface() {
             alt=""
             className="size-8 rounded-lg shadow-sm"
             height={32}
-            src="/agentforge-mark.png"
+            src="/repokin-mark.png"
             width={32}
           />
           <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">

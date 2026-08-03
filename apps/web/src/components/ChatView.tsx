@@ -2398,8 +2398,8 @@ function ChatViewContent(props: ChatViewProps) {
   ] = useDraftHeroLayoutTransition(isDraftHeroState);
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);
-  const activeAgentForgeAgentLabel = activeThread?.agentforgeAgentId
-    ? `@${activeThread.agentforgeAgentId}`
+  const activeRepoKinAgentLabel = activeThread?.repokinAgentId
+    ? `@${activeThread.repokinAgentId}`
     : null;
   const turnDiffSummaryByAssistantMessageId = useMemo(() => {
     const byMessageId = new Map<MessageId, TurnDiffSummary>();
@@ -4587,7 +4587,7 @@ function ChatViewContent(props: ChatViewProps) {
       selectedProviderModels: ctxSelectedProviderModels,
       selectedPromptEffort: ctxSelectedPromptEffort,
       selectedModelSelection: ctxSelectedModelSelection,
-      agentforgeAgentId: ctxAgentforgeAgentId,
+      repokinAgentId: ctxRepokinAgentId,
     } = sendCtx;
     const promptForSend = promptRef.current;
     const {
@@ -4888,7 +4888,7 @@ function ChatViewContent(props: ChatViewProps) {
           },
           modelSelection: ctxSelectedModelSelection,
           titleSeed: title,
-          ...(ctxAgentforgeAgentId === null ? {} : { agentforgeAgentId: ctxAgentforgeAgentId }),
+          ...(ctxRepokinAgentId === null ? {} : { repokinAgentId: ctxRepokinAgentId }),
           runtimeMode,
           interactionMode,
           ...(bootstrap ? { bootstrap } : {}),
@@ -5165,7 +5165,7 @@ function ChatViewContent(props: ChatViewProps) {
         selectedProviderModels: ctxSelectedProviderModels,
         selectedPromptEffort: ctxSelectedPromptEffort,
         selectedModelSelection: ctxSelectedModelSelection,
-        agentforgeAgentId: ctxAgentforgeAgentId,
+        repokinAgentId: ctxRepokinAgentId,
       } = sendCtx;
 
       const threadIdForSend = activeThread.id;
@@ -5242,7 +5242,7 @@ function ChatViewContent(props: ChatViewProps) {
             },
             modelSelection: ctxSelectedModelSelection,
             titleSeed: activeThread.title,
-            ...(ctxAgentforgeAgentId === null ? {} : { agentforgeAgentId: ctxAgentforgeAgentId }),
+            ...(ctxRepokinAgentId === null ? {} : { repokinAgentId: ctxRepokinAgentId }),
             runtimeMode,
             interactionMode: nextInteractionMode,
             ...(nextInteractionMode === "default" && activeProposedPlan
@@ -5330,7 +5330,7 @@ function ChatViewContent(props: ChatViewProps) {
       selectedProviderModels: ctxSelectedProviderModels,
       selectedPromptEffort: ctxSelectedPromptEffort,
       selectedModelSelection: ctxSelectedModelSelection,
-      agentforgeAgentId: ctxAgentforgeAgentId,
+      repokinAgentId: ctxRepokinAgentId,
     } = sendCtx;
 
     const createdAt = new Date().toISOString();
@@ -5384,7 +5384,7 @@ function ChatViewContent(props: ChatViewProps) {
           },
           modelSelection: ctxSelectedModelSelection,
           titleSeed: nextThreadTitle,
-          ...(ctxAgentforgeAgentId === null ? {} : { agentforgeAgentId: ctxAgentforgeAgentId }),
+          ...(ctxRepokinAgentId === null ? {} : { repokinAgentId: ctxRepokinAgentId }),
           runtimeMode,
           interactionMode: "default",
           sourceProposedPlan: {
@@ -5822,7 +5822,7 @@ function ChatViewContent(props: ChatViewProps) {
                 turnDiffSummaryByAssistantMessageId={turnDiffSummaryByAssistantMessageId}
                 activeThreadEnvironmentId={activeThread.environmentId}
                 routeThreadKey={routeThreadKey}
-                agentForgeAgentLabel={activeAgentForgeAgentLabel}
+                repoKinAgentLabel={activeRepoKinAgentLabel}
                 onOpenTurnDiff={onOpenTurnDiff}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}

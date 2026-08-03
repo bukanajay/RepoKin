@@ -43,7 +43,7 @@ const initRepo = (cwd: string) =>
 const teamFile: TeamFile = {
   schemaVersion: 1,
   teamRemote: "origin",
-  displayName: "AgentForge",
+  displayName: "RepoKin",
 };
 
 const julius: HumanProfile = {
@@ -70,11 +70,11 @@ const aria: AgentProfile = {
 const TestLayer = TeamFileStore.layer.pipe(Layer.provideMerge(NodeServices.layer));
 
 it.layer(TestLayer)("TeamFileStore", (it) => {
-  it.effect("returns an empty roster when .agentforge is missing", () =>
+  it.effect("returns an empty roster when .repokin is missing", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-store-empty-",
+        prefix: "repokin-store-empty-",
       });
       yield* initRepo(cwd);
 
@@ -88,12 +88,12 @@ it.layer(TestLayer)("TeamFileStore", (it) => {
     }),
   );
 
-  it.effect("writes profiles, commits only under .agentforge, and reads them back", () =>
+  it.effect("writes profiles, commits only under .repokin, and reads them back", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-store-write-",
+        prefix: "repokin-store-write-",
       });
       yield* initRepo(cwd);
 
@@ -108,19 +108,19 @@ it.layer(TestLayer)("TeamFileStore", (it) => {
       expect(agentWrite.committed).toBe(true);
 
       const roster = yield* store.readRoster(cwd);
-      expect(roster.team).toMatchObject({ schemaVersion: 1, displayName: "AgentForge" });
+      expect(roster.team).toMatchObject({ schemaVersion: 1, displayName: "RepoKin" });
       expect(roster.humans).toHaveLength(1);
       expect(roster.humans[0]?.id).toBe("human_julius");
       expect(roster.agents).toHaveLength(1);
       expect(roster.agents[0]?.name).toBe("Aria");
       expect(roster.warnings).toEqual([]);
 
-      // Outside .agentforge must not appear in the latest team commits as accidental staging.
+      // Outside .repokin must not appear in the latest team commits as accidental staging.
       const log = yield* git(cwd, ["log", "--oneline"]);
       expect(log.stdout).toContain("chore(team):");
 
       // Working tree should contain the files at expected paths.
-      const ariaPath = path.join(cwd, ".agentforge", "agents", "aria.json");
+      const ariaPath = path.join(cwd, ".repokin", "agents", "aria.json");
       const ariaRaw = yield* fileSystem.readFileString(ariaPath);
       expect(ariaRaw).toContain("agent_aria");
       expect(ariaRaw).not.toContain("OPENAI_API_KEY");
@@ -132,7 +132,7 @@ it.layer(TestLayer)("TeamFileStore", (it) => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const root = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-store-clones-",
+        prefix: "repokin-store-clones-",
       });
       const remote = path.join(root, "team.git");
       const firstClone = path.join(root, "first");
@@ -156,7 +156,7 @@ it.layer(TestLayer)("TeamFileStore", (it) => {
       yield* git(root, ["clone", remote, secondClone]);
       const clonedRoster = yield* store.readRoster(secondClone);
 
-      expect(clonedRoster.team?.displayName).toBe("AgentForge");
+      expect(clonedRoster.team?.displayName).toBe("RepoKin");
       expect(clonedRoster.humans.map((human) => human.id)).toEqual(["human_julius"]);
       expect(clonedRoster.agents.map((agent) => agent.id)).toEqual(["agent_aria"]);
       expect(clonedRoster.warnings).toEqual([]);
@@ -168,14 +168,14 @@ it.layer(TestLayer)("TeamFileStore", (it) => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-store-malformed-",
+        prefix: "repokin-store-malformed-",
       });
       yield* initRepo(cwd);
 
       const store = yield* TeamFileStoreTag;
       yield* store.writeAgentProfile(cwd, aria, { commit: false });
 
-      const badPath = path.join(cwd, ".agentforge", "agents", "broken.json");
+      const badPath = path.join(cwd, ".repokin", "agents", "broken.json");
       yield* fileSystem.writeFileString(badPath, "{ not json");
 
       const roster = yield* store.readRoster(cwd);
@@ -190,7 +190,7 @@ it.layer(TestLayer)("TeamFileStore", (it) => {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-store-ref-",
+        prefix: "repokin-store-ref-",
       });
       yield* initRepo(cwd);
 
@@ -200,7 +200,7 @@ it.layer(TestLayer)("TeamFileStore", (it) => {
 
       // Dirty the working tree after commit — ref read must not depend on it.
       yield* fileSystem.writeFileString(
-        path.join(cwd, ".agentforge", "agents", "aria.json"),
+        path.join(cwd, ".repokin", "agents", "aria.json"),
         encodeUnknownJson({
           ...aria,
           name: "Dirty Working Tree Aria",
@@ -221,7 +221,7 @@ it.layer(TestLayer)("TeamFileStore", (it) => {
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const cwd = yield* fileSystem.makeTempDirectoryScoped({
-        prefix: "agentforge-store-unknown-",
+        prefix: "repokin-store-unknown-",
       });
       yield* initRepo(cwd);
 

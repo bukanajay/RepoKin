@@ -512,11 +512,11 @@ describe("ProviderCommandReactor", () => {
     };
   }
 
-  function writeAgentforgeTestProfile(workspaceRoot: string): {
+  function writeRepokinTestProfile(workspaceRoot: string): {
     readonly profile: AgentProfile;
     readonly trustedHash: string;
   } {
-    const agentsDir = NodePath.join(workspaceRoot, ".agentforge", "agents");
+    const agentsDir = NodePath.join(workspaceRoot, ".repokin", "agents");
     NodeFS.mkdirSync(agentsDir, { recursive: true });
     const profile: AgentProfile = {
       schemaVersion: 1,
@@ -583,15 +583,15 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
 
-  it("injects selected AgentForge character instructions into provider start and turn", async () => {
+  it("injects selected RepoKin character instructions into provider start and turn", async () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-reactor-"));
     const workspaceRoot = NodePath.join(baseDir, "workspace");
-    const { trustedHash } = writeAgentforgeTestProfile(workspaceRoot);
+    const { trustedHash } = writeRepokinTestProfile(workspaceRoot);
     const harness = await createHarness({
       baseDir,
       workspaceRoot,
       serverSettings: {
-        agentforge: {
+        repokin: {
           trustedMechanics: {
             [workspaceRoot]: {
               agent_aria: trustedHash,
@@ -605,15 +605,15 @@ describe("ProviderCommandReactor", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.turn.start",
-        commandId: CommandId.make("cmd-turn-start-agentforge"),
+        commandId: CommandId.make("cmd-turn-start-repokin"),
         threadId: ThreadId.make("thread-1"),
         message: {
-          messageId: asMessageId("user-message-agentforge"),
+          messageId: asMessageId("user-message-repokin"),
           role: "user",
           text: "review this patch",
           attachments: [],
         },
-        agentforgeAgentId: "agent_aria",
+        repokinAgentId: "agent_aria",
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,
@@ -623,37 +623,37 @@ describe("ProviderCommandReactor", () => {
     await waitFor(() => harness.startSession.mock.calls.length === 1);
     await waitFor(() => harness.sendTurn.mock.calls.length === 1);
     const startInput = harness.startSession.mock.calls[0]?.[1] as
-      | { agentforgeCharacterInstructions?: string }
+      | { repokinCharacterInstructions?: string }
       | undefined;
     const sendInput = harness.sendTurn.mock.calls[0]?.[0] as
-      | { agentforgeCharacterInstructions?: string }
+      | { repokinCharacterInstructions?: string }
       | undefined;
 
-    expect(startInput?.agentforgeCharacterInstructions).toContain("Aria");
-    expect(startInput?.agentforgeCharacterInstructions).toContain("Direct reviewer");
-    expect(sendInput?.agentforgeCharacterInstructions).toContain("Aria");
-    expect(sendInput?.agentforgeCharacterInstructions).toContain("Lead with risks");
+    expect(startInput?.repokinCharacterInstructions).toContain("Aria");
+    expect(startInput?.repokinCharacterInstructions).toContain("Direct reviewer");
+    expect(sendInput?.repokinCharacterInstructions).toContain("Aria");
+    expect(sendInput?.repokinCharacterInstructions).toContain("Lead with risks");
   });
 
-  it("rejects selected AgentForge character mechanics before trust", async () => {
+  it("rejects selected RepoKin character mechanics before trust", async () => {
     const baseDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3code-reactor-"));
     const workspaceRoot = NodePath.join(baseDir, "workspace");
-    writeAgentforgeTestProfile(workspaceRoot);
+    writeRepokinTestProfile(workspaceRoot);
     const harness = await createHarness({ baseDir, workspaceRoot });
     const now = "2026-01-01T00:00:00.000Z";
 
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.turn.start",
-        commandId: CommandId.make("cmd-turn-start-agentforge-untrusted"),
+        commandId: CommandId.make("cmd-turn-start-repokin-untrusted"),
         threadId: ThreadId.make("thread-1"),
         message: {
-          messageId: asMessageId("user-message-agentforge-untrusted"),
+          messageId: asMessageId("user-message-repokin-untrusted"),
           role: "user",
           text: "review this patch",
           attachments: [],
         },
-        agentforgeAgentId: "agent_aria",
+        repokinAgentId: "agent_aria",
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
         createdAt: now,

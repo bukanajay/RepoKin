@@ -28,7 +28,7 @@ export const ProjectionThread = Schema.Struct({
   threadId: ThreadId,
   projectId: ProjectId,
   title: Schema.String,
-  agentforgeAgentId: Schema.NullOr(Schema.String),
+  repokinAgentId: Schema.NullOr(Schema.String),
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,

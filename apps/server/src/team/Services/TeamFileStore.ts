@@ -1,9 +1,9 @@
 /**
- * TeamFileStore — read and write the `.agentforge/` roster.
+ * TeamFileStore — read and write the `.repokin/` roster.
  *
  * Reads never checkout or pull. Remote roster reads use `git show <ref>:<path>`.
  * Malformed profiles become warnings, never fatal failures.
- * Writes touch only `.agentforge/` and optionally produce their own commit.
+ * Writes touch only `.repokin/` and optionally produce their own commit.
  *
  * @module TeamFileStore
  */
@@ -41,7 +41,7 @@ export interface TeamWriteResult {
 
 export interface TeamFileStoreShape {
   /**
-   * Read the full roster from the working tree under `.agentforge/`.
+   * Read the full roster from the working tree under `.repokin/`.
    * Missing directory → empty roster. Bad files → warnings only.
    */
   readonly readRoster: (workspaceRoot: string) => Effect.Effect<TeamRosterReadModel>;
