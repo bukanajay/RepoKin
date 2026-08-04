@@ -41,13 +41,18 @@ import {
 
 const TEAM_RELAY_POLL_INTERVAL = "10 seconds";
 
-/** The domain events replicated across environments (channel posts + task events). */
+/**
+ * The domain events replicated across environments: channel posts, task events,
+ * and (R2.3) delegation requests + their responses.
+ */
 const REPLICATED_EVENT_TYPES = new Set<TeamEvent["type"]>([
   "team.channel.posted",
   "team.task.created",
   "team.task.moved",
   "team.task.updated",
   "team.task.assigned",
+  "team.request.created",
+  "team.request.responded",
 ]);
 
 function isReplicatedTeamEvent(event: TeamEvent): event is ReplicatedTeamEvent {
@@ -67,6 +72,22 @@ function replicatedEventActorId(event: ReplicatedTeamEvent): MemberId {
       return event.updatedById;
     case "team.task.assigned":
       return event.assignedById;
+    case "team.request.created":
+      return event.fromMemberId;
+    case "team.request.responded":
+      return event.responderId;
+  }
+}
+
+/** When a replicated event occurred — R2 events carry `at`, requests do not. */
+function replicatedEventOccurredAt(event: ReplicatedTeamEvent): string {
+  switch (event.type) {
+    case "team.request.created":
+      return event.createdAt;
+    case "team.request.responded":
+      return event.respondedAt;
+    default:
+      return event.at;
   }
 }
 
@@ -326,7 +347,7 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
               senderEnvironmentId: localEnvironmentId,
               recipientEnvironmentId,
               event,
-              sentAt: event.at,
+              sentAt: replicatedEventOccurredAt(event),
             };
             const envelope = yield* signTeamEventEnvelope({
               privateKey: keyPair.privateKey,

@@ -538,3 +538,101 @@ it.effect("drops a replicated event when the roster key does not verify the proo
     expect(result).toMatchObject({ _tag: "dropped", reason: "proof-invalid" });
   }),
 );
+
+it.effect("replicates a delegation request as a request.create command", () =>
+  Effect.gen(function* () {
+    const requestCreatedEvent: ReplicatedTeamEvent = {
+      sequence: 7,
+      eventId: EventId.make("event-req-created"),
+      aggregateKind: "project",
+      aggregateId: ProjectId.make("project-1"),
+      type: "team.request.created",
+      commandId: CommandId.make("cmd-req"),
+      causationEventId: null,
+      correlationId: null,
+      requestId: MessageId.make("req-1"),
+      kind: "handoff",
+      fromMemberId: decodeMemberId(julius.id),
+      toMemberId: decodeMemberId(aria.id),
+      threadId: null,
+      taskId: TaskId.make("task-1"),
+      message: "Please take this",
+      createdAt: "2026-07-30T00:00:00.000Z",
+      expiresAt: null,
+      metadata: { actorMemberId: decodeMemberId(julius.id) },
+    };
+    const envelope = yield* signTeamEventEnvelope({
+      privateKey: senderKeys.privateKey,
+      relayIssuer,
+      payload: { ...eventPayload, event: requestCreatedEvent },
+      jti: "event-jti-req",
+      now,
+    });
+
+    const result = yield* verifyTeamEventEnvelope({
+      envelope,
+      roster,
+      relayIssuer,
+      nowEpochSeconds,
+    });
+
+    expect(result._tag).toBe("accepted");
+    if (result._tag === "accepted") {
+      expect(result.command).toMatchObject({
+        type: "team.request.create",
+        requestId: "req-1",
+        kind: "handoff",
+        fromMemberId: "human_julius",
+        toMemberId: "agent_aria",
+        taskId: "task-1",
+        message: "Please take this",
+      });
+      expect(result.command).not.toHaveProperty("threadId");
+    }
+  }),
+);
+
+it.effect("replicates a request response as a request.respond command", () =>
+  Effect.gen(function* () {
+    const respondedEvent: ReplicatedTeamEvent = {
+      sequence: 8,
+      eventId: EventId.make("event-req-responded"),
+      aggregateKind: "project",
+      aggregateId: ProjectId.make("project-1"),
+      type: "team.request.responded",
+      commandId: CommandId.make("cmd-resp"),
+      causationEventId: null,
+      correlationId: null,
+      requestId: MessageId.make("req-1"),
+      responderId: decodeMemberId(aria.id),
+      response: "accepted",
+      message: null,
+      respondedAt: "2026-07-30T00:01:00.000Z",
+      metadata: { actorMemberId: decodeMemberId(aria.id) },
+    };
+    const envelope = yield* signTeamEventEnvelope({
+      privateKey: senderKeys.privateKey,
+      relayIssuer,
+      payload: { ...eventPayload, senderId: decodeMemberId(aria.id), event: respondedEvent },
+      jti: "event-jti-resp",
+      now,
+    });
+
+    const result = yield* verifyTeamEventEnvelope({
+      envelope,
+      roster,
+      relayIssuer,
+      nowEpochSeconds,
+    });
+
+    expect(result._tag).toBe("accepted");
+    if (result._tag === "accepted") {
+      expect(result.command).toMatchObject({
+        type: "team.request.respond",
+        requestId: "req-1",
+        responderId: "agent_aria",
+        response: "accepted",
+      });
+    }
+  }),
+);

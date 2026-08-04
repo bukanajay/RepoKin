@@ -1535,6 +1535,10 @@ export const ReplicatedTeamEvent = Schema.Union([
   TeamTaskMovedEvent,
   TeamTaskUpdatedEvent,
   TeamTaskAssignedEvent,
+  // R2.3 delegation across environments: the handoff request and its response
+  // ride the same fan-out so a cross-environment mention → task → accept works.
+  TeamRequestCreatedEvent,
+  TeamRequestRespondedEvent,
 ]).annotate({
   description: "Team domain events replicated to other roster environments over the relay.",
 });
