@@ -9,12 +9,21 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TeamRouteImport } from './routes/team'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PairRouteImport } from './routes/pair'
 import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ChatRouteImport } from './routes/_chat'
+import { Route as TeamIndexRouteImport } from './routes/team.index'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
+import { Route as TeamPeopleRouteImport } from './routes/team.people'
+import { Route as TeamMapRouteImport } from './routes/team.map'
+import { Route as TeamInboxRouteImport } from './routes/team.inbox'
+import { Route as TeamChannelsRouteImport } from './routes/team.channels'
+import { Route as TeamBoardRouteImport } from './routes/team.board'
+import { Route as TeamActivityRouteImport } from './routes/team.activity'
 import { Route as SettingsSourceControlRouteImport } from './routes/settings.source-control'
+import { Route as SettingsRepokinRouteImport } from './routes/settings.repokin'
 import { Route as SettingsProvidersRouteImport } from './routes/settings.providers'
 import { Route as SettingsKeybindingsRouteImport } from './routes/settings.keybindings'
 import { Route as SettingsGeneralRouteImport } from './routes/settings.general'
@@ -23,11 +32,19 @@ import { Route as SettingsConnectionsRouteImport } from './routes/settings.conne
 import { Route as SettingsBetaRouteImport } from './routes/settings.beta'
 import { Route as SettingsArchivedRouteImport } from './routes/settings.archived'
 import { Route as SettingsAppearanceRouteImport } from './routes/settings.appearance'
-import { Route as SettingsRepokinRouteImport } from './routes/settings.repokin'
 import { Route as ConnectCallbackRouteImport } from './routes/connect_.callback'
+import { Route as TeamPeopleIndexRouteImport } from './routes/team.people.index'
+import { Route as TeamChannelsIndexRouteImport } from './routes/team.channels.index'
+import { Route as TeamPeopleMemberIdRouteImport } from './routes/team.people.$memberId'
+import { Route as TeamChannelsChannelIdRouteImport } from './routes/team.channels.$channelId'
 import { Route as ChatDraftDraftIdRouteImport } from './routes/_chat.draft.$draftId'
 import { Route as ChatEnvironmentIdThreadIdRouteImport } from './routes/_chat.$environmentId.$threadId'
 
+const TeamRoute = TeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -47,14 +64,54 @@ const ChatRoute = ChatRouteImport.update({
   id: '/_chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TeamIndexRoute = TeamIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => TeamRoute,
+} as any)
 const ChatIndexRoute = ChatIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => ChatRoute,
 } as any)
+const TeamPeopleRoute = TeamPeopleRouteImport.update({
+  id: '/people',
+  path: '/people',
+  getParentRoute: () => TeamRoute,
+} as any)
+const TeamMapRoute = TeamMapRouteImport.update({
+  id: '/map',
+  path: '/map',
+  getParentRoute: () => TeamRoute,
+} as any)
+const TeamInboxRoute = TeamInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => TeamRoute,
+} as any)
+const TeamChannelsRoute = TeamChannelsRouteImport.update({
+  id: '/channels',
+  path: '/channels',
+  getParentRoute: () => TeamRoute,
+} as any)
+const TeamBoardRoute = TeamBoardRouteImport.update({
+  id: '/board',
+  path: '/board',
+  getParentRoute: () => TeamRoute,
+} as any)
+const TeamActivityRoute = TeamActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => TeamRoute,
+} as any)
 const SettingsSourceControlRoute = SettingsSourceControlRouteImport.update({
   id: '/source-control',
   path: '/source-control',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsRepokinRoute = SettingsRepokinRouteImport.update({
+  id: '/repokin',
+  path: '/repokin',
   getParentRoute: () => SettingsRoute,
 } as any)
 const SettingsProvidersRoute = SettingsProvidersRouteImport.update({
@@ -97,15 +154,30 @@ const SettingsAppearanceRoute = SettingsAppearanceRouteImport.update({
   path: '/appearance',
   getParentRoute: () => SettingsRoute,
 } as any)
-const SettingsRepokinRoute = SettingsRepokinRouteImport.update({
-  id: '/repokin',
-  path: '/repokin',
-  getParentRoute: () => SettingsRoute,
-} as any)
 const ConnectCallbackRoute = ConnectCallbackRouteImport.update({
   id: '/connect_/callback',
   path: '/connect/callback',
   getParentRoute: () => rootRouteImport,
+} as any)
+const TeamPeopleIndexRoute = TeamPeopleIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => TeamPeopleRoute,
+} as any)
+const TeamChannelsIndexRoute = TeamChannelsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => TeamChannelsRoute,
+} as any)
+const TeamPeopleMemberIdRoute = TeamPeopleMemberIdRouteImport.update({
+  id: '/$memberId',
+  path: '/$memberId',
+  getParentRoute: () => TeamPeopleRoute,
+} as any)
+const TeamChannelsChannelIdRoute = TeamChannelsChannelIdRouteImport.update({
+  id: '/$channelId',
+  path: '/$channelId',
+  getParentRoute: () => TeamChannelsRoute,
 } as any)
 const ChatDraftDraftIdRoute = ChatDraftDraftIdRouteImport.update({
   id: '/draft/$draftId',
@@ -124,8 +196,8 @@ export interface FileRoutesByFullPath {
   '/connect': typeof ConnectRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/team': typeof TeamRouteWithChildren
   '/connect/callback': typeof ConnectCallbackRoute
-  '/settings/repokin': typeof SettingsRepokinRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
@@ -134,16 +206,27 @@ export interface FileRoutesByFullPath {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/repokin': typeof SettingsRepokinRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
+  '/team/activity': typeof TeamActivityRoute
+  '/team/board': typeof TeamBoardRoute
+  '/team/channels': typeof TeamChannelsRouteWithChildren
+  '/team/inbox': typeof TeamInboxRoute
+  '/team/map': typeof TeamMapRoute
+  '/team/people': typeof TeamPeopleRouteWithChildren
+  '/team/': typeof TeamIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/team/channels/$channelId': typeof TeamChannelsChannelIdRoute
+  '/team/people/$memberId': typeof TeamPeopleMemberIdRoute
+  '/team/channels/': typeof TeamChannelsIndexRoute
+  '/team/people/': typeof TeamPeopleIndexRoute
 }
 export interface FileRoutesByTo {
   '/connect': typeof ConnectRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
   '/connect/callback': typeof ConnectCallbackRoute
-  '/settings/repokin': typeof SettingsRepokinRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
@@ -152,10 +235,20 @@ export interface FileRoutesByTo {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/repokin': typeof SettingsRepokinRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
+  '/team/activity': typeof TeamActivityRoute
+  '/team/board': typeof TeamBoardRoute
+  '/team/inbox': typeof TeamInboxRoute
+  '/team/map': typeof TeamMapRoute
   '/': typeof ChatIndexRoute
+  '/team': typeof TeamIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/team/channels/$channelId': typeof TeamChannelsChannelIdRoute
+  '/team/people/$memberId': typeof TeamPeopleMemberIdRoute
+  '/team/channels': typeof TeamChannelsIndexRoute
+  '/team/people': typeof TeamPeopleIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -163,8 +256,8 @@ export interface FileRoutesById {
   '/connect': typeof ConnectRoute
   '/pair': typeof PairRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/team': typeof TeamRouteWithChildren
   '/connect_/callback': typeof ConnectCallbackRoute
-  '/settings/repokin': typeof SettingsRepokinRoute
   '/settings/appearance': typeof SettingsAppearanceRoute
   '/settings/archived': typeof SettingsArchivedRoute
   '/settings/beta': typeof SettingsBetaRoute
@@ -173,10 +266,22 @@ export interface FileRoutesById {
   '/settings/general': typeof SettingsGeneralRoute
   '/settings/keybindings': typeof SettingsKeybindingsRoute
   '/settings/providers': typeof SettingsProvidersRoute
+  '/settings/repokin': typeof SettingsRepokinRoute
   '/settings/source-control': typeof SettingsSourceControlRoute
+  '/team/activity': typeof TeamActivityRoute
+  '/team/board': typeof TeamBoardRoute
+  '/team/channels': typeof TeamChannelsRouteWithChildren
+  '/team/inbox': typeof TeamInboxRoute
+  '/team/map': typeof TeamMapRoute
+  '/team/people': typeof TeamPeopleRouteWithChildren
   '/_chat/': typeof ChatIndexRoute
+  '/team/': typeof TeamIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/_chat/draft/$draftId': typeof ChatDraftDraftIdRoute
+  '/team/channels/$channelId': typeof TeamChannelsChannelIdRoute
+  '/team/people/$memberId': typeof TeamPeopleMemberIdRoute
+  '/team/channels/': typeof TeamChannelsIndexRoute
+  '/team/people/': typeof TeamPeopleIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -185,8 +290,8 @@ export interface FileRouteTypes {
     | '/connect'
     | '/pair'
     | '/settings'
+    | '/team'
     | '/connect/callback'
-    | '/settings/repokin'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
@@ -195,16 +300,27 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/keybindings'
     | '/settings/providers'
+    | '/settings/repokin'
     | '/settings/source-control'
+    | '/team/activity'
+    | '/team/board'
+    | '/team/channels'
+    | '/team/inbox'
+    | '/team/map'
+    | '/team/people'
+    | '/team/'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
+    | '/team/channels/$channelId'
+    | '/team/people/$memberId'
+    | '/team/channels/'
+    | '/team/people/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/connect'
     | '/pair'
     | '/settings'
     | '/connect/callback'
-    | '/settings/repokin'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
@@ -213,18 +329,28 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/keybindings'
     | '/settings/providers'
+    | '/settings/repokin'
     | '/settings/source-control'
+    | '/team/activity'
+    | '/team/board'
+    | '/team/inbox'
+    | '/team/map'
     | '/'
+    | '/team'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
+    | '/team/channels/$channelId'
+    | '/team/people/$memberId'
+    | '/team/channels'
+    | '/team/people'
   id:
     | '__root__'
     | '/_chat'
     | '/connect'
     | '/pair'
     | '/settings'
+    | '/team'
     | '/connect_/callback'
-    | '/settings/repokin'
     | '/settings/appearance'
     | '/settings/archived'
     | '/settings/beta'
@@ -233,10 +359,22 @@ export interface FileRouteTypes {
     | '/settings/general'
     | '/settings/keybindings'
     | '/settings/providers'
+    | '/settings/repokin'
     | '/settings/source-control'
+    | '/team/activity'
+    | '/team/board'
+    | '/team/channels'
+    | '/team/inbox'
+    | '/team/map'
+    | '/team/people'
     | '/_chat/'
+    | '/team/'
     | '/_chat/$environmentId/$threadId'
     | '/_chat/draft/$draftId'
+    | '/team/channels/$channelId'
+    | '/team/people/$memberId'
+    | '/team/channels/'
+    | '/team/people/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -244,11 +382,19 @@ export interface RootRouteChildren {
   ConnectRoute: typeof ConnectRoute
   PairRoute: typeof PairRoute
   SettingsRoute: typeof SettingsRouteWithChildren
+  TeamRoute: typeof TeamRouteWithChildren
   ConnectCallbackRoute: typeof ConnectCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/team': {
+      id: '/team'
+      path: '/team'
+      fullPath: '/team'
+      preLoaderRoute: typeof TeamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -277,6 +423,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/team/': {
+      id: '/team/'
+      path: '/'
+      fullPath: '/team/'
+      preLoaderRoute: typeof TeamIndexRouteImport
+      parentRoute: typeof TeamRoute
+    }
     '/_chat/': {
       id: '/_chat/'
       path: '/'
@@ -284,11 +437,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatIndexRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/team/people': {
+      id: '/team/people'
+      path: '/people'
+      fullPath: '/team/people'
+      preLoaderRoute: typeof TeamPeopleRouteImport
+      parentRoute: typeof TeamRoute
+    }
+    '/team/map': {
+      id: '/team/map'
+      path: '/map'
+      fullPath: '/team/map'
+      preLoaderRoute: typeof TeamMapRouteImport
+      parentRoute: typeof TeamRoute
+    }
+    '/team/inbox': {
+      id: '/team/inbox'
+      path: '/inbox'
+      fullPath: '/team/inbox'
+      preLoaderRoute: typeof TeamInboxRouteImport
+      parentRoute: typeof TeamRoute
+    }
+    '/team/channels': {
+      id: '/team/channels'
+      path: '/channels'
+      fullPath: '/team/channels'
+      preLoaderRoute: typeof TeamChannelsRouteImport
+      parentRoute: typeof TeamRoute
+    }
+    '/team/board': {
+      id: '/team/board'
+      path: '/board'
+      fullPath: '/team/board'
+      preLoaderRoute: typeof TeamBoardRouteImport
+      parentRoute: typeof TeamRoute
+    }
+    '/team/activity': {
+      id: '/team/activity'
+      path: '/activity'
+      fullPath: '/team/activity'
+      preLoaderRoute: typeof TeamActivityRouteImport
+      parentRoute: typeof TeamRoute
+    }
     '/settings/source-control': {
       id: '/settings/source-control'
       path: '/source-control'
       fullPath: '/settings/source-control'
       preLoaderRoute: typeof SettingsSourceControlRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/repokin': {
+      id: '/settings/repokin'
+      path: '/repokin'
+      fullPath: '/settings/repokin'
+      preLoaderRoute: typeof SettingsRepokinRouteImport
       parentRoute: typeof SettingsRoute
     }
     '/settings/providers': {
@@ -347,19 +549,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsAppearanceRouteImport
       parentRoute: typeof SettingsRoute
     }
-    '/settings/repokin': {
-      id: '/settings/repokin'
-      path: '/repokin'
-      fullPath: '/settings/repokin'
-      preLoaderRoute: typeof SettingsRepokinRouteImport
-      parentRoute: typeof SettingsRoute
-    }
     '/connect_/callback': {
       id: '/connect_/callback'
       path: '/connect/callback'
       fullPath: '/connect/callback'
       preLoaderRoute: typeof ConnectCallbackRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/team/people/': {
+      id: '/team/people/'
+      path: '/'
+      fullPath: '/team/people/'
+      preLoaderRoute: typeof TeamPeopleIndexRouteImport
+      parentRoute: typeof TeamPeopleRoute
+    }
+    '/team/channels/': {
+      id: '/team/channels/'
+      path: '/'
+      fullPath: '/team/channels/'
+      preLoaderRoute: typeof TeamChannelsIndexRouteImport
+      parentRoute: typeof TeamChannelsRoute
+    }
+    '/team/people/$memberId': {
+      id: '/team/people/$memberId'
+      path: '/$memberId'
+      fullPath: '/team/people/$memberId'
+      preLoaderRoute: typeof TeamPeopleMemberIdRouteImport
+      parentRoute: typeof TeamPeopleRoute
+    }
+    '/team/channels/$channelId': {
+      id: '/team/channels/$channelId'
+      path: '/$channelId'
+      fullPath: '/team/channels/$channelId'
+      preLoaderRoute: typeof TeamChannelsChannelIdRouteImport
+      parentRoute: typeof TeamChannelsRoute
     }
     '/_chat/draft/$draftId': {
       id: '/_chat/draft/$draftId'
@@ -393,7 +616,6 @@ const ChatRouteChildren: ChatRouteChildren = {
 const ChatRouteWithChildren = ChatRoute._addFileChildren(ChatRouteChildren)
 
 interface SettingsRouteChildren {
-  SettingsRepokinRoute: typeof SettingsRepokinRoute
   SettingsAppearanceRoute: typeof SettingsAppearanceRoute
   SettingsArchivedRoute: typeof SettingsArchivedRoute
   SettingsBetaRoute: typeof SettingsBetaRoute
@@ -402,11 +624,11 @@ interface SettingsRouteChildren {
   SettingsGeneralRoute: typeof SettingsGeneralRoute
   SettingsKeybindingsRoute: typeof SettingsKeybindingsRoute
   SettingsProvidersRoute: typeof SettingsProvidersRoute
+  SettingsRepokinRoute: typeof SettingsRepokinRoute
   SettingsSourceControlRoute: typeof SettingsSourceControlRoute
 }
 
 const SettingsRouteChildren: SettingsRouteChildren = {
-  SettingsRepokinRoute: SettingsRepokinRoute,
   SettingsAppearanceRoute: SettingsAppearanceRoute,
   SettingsArchivedRoute: SettingsArchivedRoute,
   SettingsBetaRoute: SettingsBetaRoute,
@@ -415,6 +637,7 @@ const SettingsRouteChildren: SettingsRouteChildren = {
   SettingsGeneralRoute: SettingsGeneralRoute,
   SettingsKeybindingsRoute: SettingsKeybindingsRoute,
   SettingsProvidersRoute: SettingsProvidersRoute,
+  SettingsRepokinRoute: SettingsRepokinRoute,
   SettingsSourceControlRoute: SettingsSourceControlRoute,
 }
 
@@ -422,11 +645,62 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
   SettingsRouteChildren,
 )
 
+interface TeamChannelsRouteChildren {
+  TeamChannelsChannelIdRoute: typeof TeamChannelsChannelIdRoute
+  TeamChannelsIndexRoute: typeof TeamChannelsIndexRoute
+}
+
+const TeamChannelsRouteChildren: TeamChannelsRouteChildren = {
+  TeamChannelsChannelIdRoute: TeamChannelsChannelIdRoute,
+  TeamChannelsIndexRoute: TeamChannelsIndexRoute,
+}
+
+const TeamChannelsRouteWithChildren = TeamChannelsRoute._addFileChildren(
+  TeamChannelsRouteChildren,
+)
+
+interface TeamPeopleRouteChildren {
+  TeamPeopleMemberIdRoute: typeof TeamPeopleMemberIdRoute
+  TeamPeopleIndexRoute: typeof TeamPeopleIndexRoute
+}
+
+const TeamPeopleRouteChildren: TeamPeopleRouteChildren = {
+  TeamPeopleMemberIdRoute: TeamPeopleMemberIdRoute,
+  TeamPeopleIndexRoute: TeamPeopleIndexRoute,
+}
+
+const TeamPeopleRouteWithChildren = TeamPeopleRoute._addFileChildren(
+  TeamPeopleRouteChildren,
+)
+
+interface TeamRouteChildren {
+  TeamActivityRoute: typeof TeamActivityRoute
+  TeamBoardRoute: typeof TeamBoardRoute
+  TeamChannelsRoute: typeof TeamChannelsRouteWithChildren
+  TeamInboxRoute: typeof TeamInboxRoute
+  TeamMapRoute: typeof TeamMapRoute
+  TeamPeopleRoute: typeof TeamPeopleRouteWithChildren
+  TeamIndexRoute: typeof TeamIndexRoute
+}
+
+const TeamRouteChildren: TeamRouteChildren = {
+  TeamActivityRoute: TeamActivityRoute,
+  TeamBoardRoute: TeamBoardRoute,
+  TeamChannelsRoute: TeamChannelsRouteWithChildren,
+  TeamInboxRoute: TeamInboxRoute,
+  TeamMapRoute: TeamMapRoute,
+  TeamPeopleRoute: TeamPeopleRouteWithChildren,
+  TeamIndexRoute: TeamIndexRoute,
+}
+
+const TeamRouteWithChildren = TeamRoute._addFileChildren(TeamRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRouteWithChildren,
   ConnectRoute: ConnectRoute,
   PairRoute: PairRoute,
   SettingsRoute: SettingsRouteWithChildren,
+  TeamRoute: TeamRouteWithChildren,
   ConnectCallbackRoute: ConnectCallbackRoute,
 }
 export const routeTree = rootRouteImport

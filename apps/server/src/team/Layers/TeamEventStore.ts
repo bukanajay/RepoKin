@@ -62,6 +62,13 @@ function eventOccurredAt(event: PlannedTeamEvent): string {
       return event.createdAt;
     case "team.request.responded":
       return event.respondedAt;
+    case "team.channel.declared":
+    case "team.channel.posted":
+    case "team.task.created":
+    case "team.task.moved":
+    case "team.task.updated":
+    case "team.task.assigned":
+      return event.at;
   }
 }
 

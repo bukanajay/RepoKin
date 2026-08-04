@@ -47,9 +47,9 @@ import Migration0031 from "./Migrations/031_AuthAuthorizationScopes.ts";
 import Migration0032 from "./Migrations/032_AuthPairingProofKeyThumbprint.ts";
 import Migration0033 from "./Migrations/033_ProjectionThreadsSettled.ts";
 import Migration0034 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
-import Migration0035 from "./Migrations/035_ProjectionThreadsRepoKinAttribution.ts";
 import Migration0035TitleRegeneration from "./Migrations/035_ProjectionThreadTitleRegeneration.ts";
 import Migration0100 from "./Migrations/100_TeamMembers.ts";
+import Migration0101 from "./Migrations/101_ProjectionThreadsRepoKinAttribution.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -96,9 +96,12 @@ export const migrationEntries = [
   [32, "AuthPairingProofKeyThumbprint", Migration0032],
   [33, "ProjectionThreadsSettled", Migration0033],
   [34, "ProjectionThreadsSnoozed", Migration0034],
-  [35, "ProjectionThreadsRepoKinAttribution", Migration0035],
   [35, "ProjectionThreadTitleRegeneration", Migration0035TitleRegeneration],
   [100, "TeamMembers", Migration0100],
+  // RepoKin migrations live in the 1xx range (fork-policy). 101 re-adds the
+  // attribution column for databases created before the upstream 35 collision
+  // and the rebrand; the migration itself is column-guarded and idempotent.
+  [101, "ProjectionThreadsRepoKinAttribution", Migration0101],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);

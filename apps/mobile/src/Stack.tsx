@@ -52,6 +52,7 @@ import { NewTaskFlowProvider } from "./features/threads/new-task-flow-provider";
 import { NewTaskRouteScreen } from "./features/threads/NewTaskRouteScreen";
 import { SettingsAppearanceRouteScreen } from "./features/settings/SettingsAppearanceRouteScreen";
 import { SettingsRepoKinRouteScreen } from "./features/settings/SettingsRepoKinRouteScreen";
+import { TeamHomeRouteScreen } from "./features/team/TeamHomeRouteScreen";
 import { SettingsClientStorageRouteScreen } from "./features/settings/SettingsClientStorageRouteScreen";
 import { SettingsAuthRouteScreen } from "./features/settings/SettingsAuthRouteScreen";
 import { SettingsEnvironmentsRouteScreen } from "./features/settings/SettingsEnvironmentsRouteScreen";
@@ -168,11 +169,18 @@ const SettingsSheetStack = createNativeStackNavigator({
         title: "Environments",
       },
     }),
+    SettingsTeam: createNativeStackScreen({
+      screen: TeamHomeRouteScreen,
+      linking: "team",
+      options: {
+        title: "Team",
+      },
+    }),
     SettingsRepoKin: createNativeStackScreen({
       screen: SettingsRepoKinRouteScreen,
       linking: "agent-forge",
       options: {
-        title: "RepoKin",
+        title: "People",
       },
     }),
     SettingsEnvironmentNew: createNativeStackScreen({

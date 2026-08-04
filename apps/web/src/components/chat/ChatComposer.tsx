@@ -447,18 +447,18 @@ const RepoKinComposerPicker = memo(function RepoKinComposerPicker(props: {
   onAgentSelect: (agentId: string) => void;
 }) {
   const selectedAgent = props.agents.find((agent) => agent.id === props.selectedAgentId) ?? null;
-  const label =
-    selectedAgent?.name ??
-    (props.rosterError
+  const label = selectedAgent
+    ? `Talk to ${selectedAgent.name}`
+    : props.rosterError
       ? "Agents unavailable"
       : props.roster === null
         ? "Agents"
         : props.agents.length === 0
           ? "No agents"
-          : "Agent");
+          : "Agent";
   const tooltip =
     selectedAgent === null
-      ? (props.rosterError ?? "Choose an RepoKin agent for this composer.")
+      ? (props.rosterError ?? "Choose an agent for this conversation.")
       : `${selectedAgent.name} · ${selectedAgent.character.runtimeMode ?? "approval-required"}`;
 
   return (
@@ -474,7 +474,7 @@ const RepoKinComposerPicker = memo(function RepoKinComposerPicker(props: {
         <TooltipTrigger
           render={
             <ComposerSelectControl
-              aria-label="RepoKin agent"
+              aria-label="Choose agent for this conversation"
               className={cn(
                 "shrink-0",
                 selectedAgent !== null

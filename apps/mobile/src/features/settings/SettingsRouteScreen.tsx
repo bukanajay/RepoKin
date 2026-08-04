@@ -125,9 +125,9 @@ function LocalSettingsRouteScreen() {
           />
           <View className="border-border border-t">
             <SettingsRow
-              icon={{ ios: "sparkles", android: "auto_awesome" }}
-              label="RepoKin"
-              target="SettingsRepoKin"
+              icon={{ ios: "person.2", android: "group" }}
+              label="Team"
+              target="SettingsTeam"
             />
           </View>
         </SettingsSection>
@@ -486,9 +486,9 @@ function ConfiguredSettingsRouteScreen() {
           />
           <View className="border-border border-t">
             <SettingsRow
-              icon={{ ios: "sparkles", android: "auto_awesome" }}
-              label="RepoKin"
-              target="SettingsRepoKin"
+              icon={{ ios: "person.2", android: "group" }}
+              label="Team"
+              target="SettingsTeam"
             />
           </View>
           <SettingsSwitchRow

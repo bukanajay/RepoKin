@@ -1,5 +1,6 @@
 export type SettingsSheetTarget =
   | "SettingsEnvironments"
+  | "SettingsTeam"
   | "SettingsRepoKin"
   | "SettingsArchive"
   | "SettingsAppearance"

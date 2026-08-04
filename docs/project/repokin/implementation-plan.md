@@ -1,554 +1,355 @@
-# RepoKin — Implementation Plan
+# RepoKin — Implementation Plan (R1–R3)
 
-**Companion to:** [prd.md](./prd.md) · [fork-policy.md](./fork-policy.md)
-**Date:** 2026-07-30
-**Status:** M0-M3 implemented locally; external and live acceptance gates remain
-
-This plan is ordered so that each milestone is shippable and each one _earns_
-the next. Effort estimates assume one to two engineers who know the codebase;
-double them for the first month while Effect and the orchestration pattern are
-still unfamiliar.
+**Companion to:** [prd.md](./prd.md) (v0.3 "The Workplace") · [fork-policy.md](./fork-policy.md)
+**Date:** 2026-08-04
+**Status:** supersedes the M0–M3 plan (all M0–M3 items landed locally; the
+prior plan text lives in git history of this file). Open M1–M3 exit gates are
+absorbed into R1.9.
 
 ---
 
-## Conventions this plan follows
+## 0. Strategy: UI-complete first, fixtures where the backend isn't
 
-Taken from [AGENTS.md](../../../AGENTS.md), because ignoring them is how a fork
-becomes unmergeable and a codebase becomes unrecognizable:
+The R1 build order inverts the M-series habit. We build the **entire Team
+space UI** — including the R2/R3 screens (channels, board, work map) — in R1,
+so the product's look, feel, and information architecture are locked and
+reviewable early. Where the backend already exists (roster, presence,
+inbox, activity — all landed in M0–M3), screens wire to **live data from day
+one**. Where it does not (channels, tasks, work map), screens render from
+**fixtures** that are progressively deleted as R2/R3 land the real domains.
 
-- **Services vs Layers.** `Services/` holds `Context.Service` tags, `Layers/`
-  holds implementations. The team domain mirrors
-  [`orchestration/`](../../../apps/server/src/orchestration/) exactly.
-- **Contracts are schema only.** No runtime logic in
-  `packages/contracts`.
-- **Complexity at the adapter boundary.** Orchestration stays pure, UI stays
-  dumb.
-- **Tests wait on receipts, never on sleeps.** The server is event-sourced and
-  emits typed receipts; a test that needs a timeout is wrong.
-- **Hit every surface.** Web, desktop, mobile; five providers; local, remote,
-  and tunnel connection modes. Every provider-shaped change needs a per-adapter
-  decision, including "not supported here."
-- **Additive-only file discipline.** See [fork-policy.md §1](./fork-policy.md).
+Fixture rules — these are what keep "mock-first" from becoming "mock-forever":
 
----
+1. **One seam per surface.** Every screen consumes data exclusively through a
+   per-surface hook (`useTeamHomeData`, `useChannelData`, `useBoardData`, …)
+   in its own file. Flipping fixture → live is an edit to that one hook; the
+   rendering components never know the difference.
+2. **Fixtures are quarantined and greppable.** All mock data lives in
+   `apps/web/src/components/team/fixtures/`, every export prefixed
+   `FIXTURE_`. `grep -rn "FIXTURE_" apps/web/src --include="*.tsx" -l`
+   outside `fixtures/` must list exactly the surface hooks still on mock
+   data — nothing else. That grep is the mock-debt report.
+3. **Fixture-backed surfaces say so.** A visible `Preview` badge renders on
+   any surface whose hook is fixture-backed. No silent fakery — a user (or a
+   screenshot in review) can always tell design preview from live product.
+4. **Fixtures never leak into the server or contracts.** Mocking is a web
+   client concern only. Server code and `packages/contracts` gain no
+   test-double pathways for this.
+5. **Every fixture has a scheduled death.** See the tracker (§5). A milestone
+   is not done while a fixture it was supposed to kill is alive.
 
-## M0 — Fork foundation
-
-**Goal:** be able to build without drifting from upstream.
-**Estimate:** ~1 week. **Ships:** nothing user-visible.
-**Status:** mostly landed on `forge` (2026-07-30). Remaining: push `forge`,
-set default branch on GitHub, and verify a manual sync-workflow dispatch.
-
-### M0.1 Branch model and sync automation
-
-1. ~~Add the `upstream` remote, create `forge` from `main`.~~ **Done locally.**
-   Still need: push `forge`, set `forge` as the fork's default branch on GitHub.
-2. ~~Add `.github/workflows/sync-upstream.yml`~~ **Done** — weekly + manual
-   dispatch; FF `main` from upstream; open merge PR into `forge`.
-3. ~~Enable `rerere`~~ **Done** in local repo config + sync workflow.
-4. ~~Adjust CI to run on `forge` and `forge/**`~~ **Done**.
-
-**Done when:** a manual dispatch of the sync workflow opens a green PR.
-
-### M0.2 Branding indirection
-
-5. ~~Set `APP_BASE_NAME` / product name to RepoKin~~ **Done** (web branding,
-   desktop packaging `productName`, desktop `APP_BASE_NAME`, electron launcher
-   display name). Package names / paths stay `@t3tools/*`.
-6. ~~Decide the product spelling and rename the GitHub repository to match.~~
-   **In progress 2026-08-03** — the product name is **RepoKin**; the repository
-   rename from `bukanajay/RepoKin` to `bukanajay/RepoKin` is pending GitHub
-   account access. Existing internal compatibility identifiers remain unchanged.
-
-### M0.3 Ground rules in writing
-
-7. ~~Land these three documents.~~ **Done** under `docs/project/repokin/`.
-8. ~~Add the review checklist to `.github/pull_request_template.md`.~~ **Done**.
+Interaction stubs on fixture surfaces (drag a card, send a post) mutate local
+component state only, so the design of the _interactions_ is also reviewable
+in R1 — they just don't persist.
 
 ---
 
-## M1 — Persistent agents with character
+## 1. Conventions carried forward
 
-**Goal:** the product thesis, on one machine. Named agents whose character
-demonstrably changes their output, with attribution.
-**Estimate:** ~4–6 weeks. **Ships:** the MVP for the solo power user.
-**Explicitly excluded:** presence, messaging, anything cross-machine.
+From [AGENTS.md](../../../AGENTS.md) and the M-series, unchanged and binding:
 
-### M1.1 Contracts — `packages/contracts/src/team.ts`
+- **Services vs Layers**: `Services/` holds `Context.Service` tags, `Layers/`
+  holds implementations; the team domain mirrors `orchestration/`.
+- **Contracts are schema only**, additive, in
+  [`packages/contracts/src/team.ts`](../../../packages/contracts/src/team.ts)
+  via the `./team` subpath — never the barrel.
+- **Complexity at the adapter boundary; orchestration pure; UI dumb.**
+- **Tests wait on receipts/drains, never sleeps.**
+- **Migrations in the RepoKin range** (`1xx`, next free after
+  `100_TeamMembers.ts`).
+- **Additive-only file discipline** ([fork-policy.md §1](./fork-policy.md));
+  bounded edits to upstream files are budgeted per touch-point (§6 there).
+- **Presence never animates continuously.** Cardinal sin.
+- **§7.4 PRD rule:** diverge freely in files upstream will never touch;
+  diverge never in files it will.
 
-**Status:** landed on `forge` (2026-07-30).
+New for the R series:
 
-New file. Follow [`t3ProjectFile.ts`](../../../packages/contracts/src/t3ProjectFile.ts)
-precisely: annotations on the encoded side so they survive into the published
-JSON Schema, trimming and validation on decode.
+- **Social features are projections first** (PRD §9): before adding an event
+  source, prove the feature cannot be projected from events we already emit.
+- **Every new client surface lives under fork-owned paths**:
+  `apps/web/src/routes/team.*` and `apps/web/src/components/team/**`.
 
-Define:
+---
 
-- ~~`MemberId`, `AgentId`, `HumanId`~~ branded slugs
-- ~~`Character`~~ expressive + mechanical halves, `characterVersion: 1`
-- ~~`AgentProfile`, `HumanProfile`, `TeamFile`~~
-- ~~`CompiledCharacter`~~ compiler output for adapters
-- ~~Team commands, events, and read-model shapes~~ (thin for M1)
+## 2. R1 — The Team space (UI revamp)
 
-Then ~~add the `./team` subpath~~ to `packages/contracts/package.json` — not an
-`index.ts` edit.
+**Goal:** the complete workplace UI. Live where plumbing exists, fixture
+previews where it doesn't, Settings reduced to environment-local config.
+**Estimate:** ~4–5 weeks. **Ships:** PRD §6.1, §6.5 (feed + inbox), §7.
 
-**Two invariants (tests in `team.test.ts`):**
+### R1.1 Design foundation — `apps/web/src/components/team/`
 
-- Profile schema has no field that can hold a secret; provider-instance
-  sensitive env values cannot appear in profile serialization.
-- Unknown fields survive decode → encode (`onExcessProperty: "preserve"`).
+The primitive kit everything else composes. Build these first, with
+Storybook-style harness pages if useful, because every later screen is
+assembled from them:
 
-### M1.2 Repository store — `apps/server/src/team/`
+| Primitive       | Notes                                                                                                                                                                                                          |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MemberAvatar`  | Humans: initials/photo. Agents: generated geometric identicon on accent color + small AI glyph. Sizes.                                                                                                         |
+| `PresenceDot`   | Static dot, four states + stale→offline collapse. State-transition micro-animation only.                                                                                                                       |
+| `MemberChip`    | Avatar + name + optional presence + optional `borrowed`/`on <env>` badge. Used in rows, cards, mentions.                                                                                                       |
+| `AgentBadgeRow` | Mechanical facts as badges: model, runtime mode, path scope, tool policy summary.                                                                                                                              |
+| `TeamCard`      | Base card: accent edge, header, live-state slot, deep-link affordance. Thread/diff/task/digest variants.                                                                                                       |
+| `ActivityRow`   | Timeline row: actor chip, verb, object link, timestamp.                                                                                                                                                        |
+| `PreviewBadge`  | The fixture marker (§0.3).                                                                                                                                                                                     |
+| Theme tokens    | Additive CSS variables in a new `team/theme.css` imported from [`index.css`](../../../apps/web/src/index.css) (one-line bounded edit). Extends existing tokens; never redefines them. Dark-first, both themes. |
 
-**Status:** landed on `forge` (2026-07-30) and wired through typed WebSocket
-RPCs, client-runtime atoms, the web/desktop RepoKin settings surface, and a
-read-only mobile roster.
+Accent-color derivation (agent identity thread, PRD §7.3) is a pure helper
+shared with the existing composer agent picker.
 
-| File                                                        | Responsibility                                                                                                                                              |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~~`Services/TeamFileStore.ts` + `Layers/TeamFileStore.ts`~~ | Read and write `.repokin/`. Atomic writes; optional git commit scoped to pathspecs under `.repokin/`. `readRosterFromRef` uses `git show` / `ls-tree` only. |
-| ~~`Services/LocalIdentityResolver.ts` + layer~~             | `git config user.name` / `user.email` via ProcessRunner, cached per repo root.                                                                              |
-| ~~`TeamPaths.ts`~~                                          | Path construction and slug derivation. Pure.                                                                                                                |
+### R1.2 Routes and shell
 
-Behavior notes that matter:
-
-- Reading the roster from a remote ref uses `git show <ref>:<path>` — **never**
-  checkout, never merge, never `pull`. The user's working tree is theirs.
-- A malformed profile is skipped with a surfaced warning, never fatal. One
-  teammate's bad JSON must not break your roster.
-- Writes touch only `.repokin/`, and produce their own commit.
-
-### M1.3 Character compiler — the heart of M1
-
-**Status:** started on `forge` (2026-07-30). Landed the pure compiler, thin
-service/layer, deterministic mechanical hash, and per-driver instruction preview
-for Codex, Claude Code, Cursor, Grok, and OpenCode. Adapter/provider wiring is
-landed for Codex, Claude Code, Cursor, Grok, and OpenCode. Typed preview API
-exposure is in place through `team.previewInstructions`; roster read exposure is
-in place through `team.readRoster`; local agent profile writes are exposed
-through `team.upsertAgent`; all three have client-runtime atoms. Composer
-selection now passes `repokinAgentId` through orchestration and provider
-reactors so compiled instructions are supplied at provider session start and
-send-turn time. M1.6 attribution polish is now landed locally.
-
-`apps/server/src/team/CharacterCompiler.ts` (pure) plus a thin service for
-adapter access.
+File-based TanStack routes, following the `settings.*` pattern:
 
 ```text
-Character (from Git)
-        │
-        ├─ expressive half ──► instruction text, per driver
-        └─ mechanical half ──► model, runtimeMode, interactionMode,
-                               toolPolicy, pathScope
-        ▼
-  CompiledCharacter  ──► adapter splices instructions
-                     └─► harness applies mechanics at session start
+apps/web/src/routes/
+  team.tsx                     # layout: Team nav rail + project scope
+  team.index.tsx               # Home
+  team.people.tsx              # roster
+  team.people.$memberId.tsx    # member profile
+  team.activity.tsx            # activity feed
+  team.inbox.tsx               # notification inbox
+  team.channels.tsx            # channel list          (fixture in R1)
+  team.channels.$channelId.tsx # channel view          (fixture in R1)
+  team.board.tsx               # kanban board          (fixture in R1)
+  team.map.tsx                 # work map + radar      (fixture in R1)
 ```
 
-Per-driver decision table — every provider needs an answer, and "not supported"
-is an answer that must then be visible in the UI:
+Project scoping follows the pattern the existing settings surface uses (a
+project selector owned by the `team.tsx` layout, persisted per client);
+promoting the project into the URL path is a follow-up decision once deep
+links from the inbox demand it — noted, not blocking.
 
-| Driver   | Instruction path                                                                                   | M1 decision                             |
-| -------- | -------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| Codex    | [`CodexDeveloperInstructions.ts`](../../../apps/server/src/provider/CodexDeveloperInstructions.ts) | Full support                            |
-| Claude   | `systemPrompt` in [`ClaudeAdapter.ts`](../../../apps/server/src/provider/Layers/ClaudeAdapter.ts)  | Full support                            |
-| Cursor   | [`CursorAdapter.ts`](../../../apps/server/src/provider/Layers/CursorAdapter.ts)                    | Investigate; mechanical half at minimum |
-| Grok     | [`GrokAdapter.ts`](../../../apps/server/src/provider/Layers/GrokAdapter.ts)                        | Investigate; mechanical half at minimum |
-| OpenCode | [`OpenCodeAdapter.ts`](../../../apps/server/src/provider/Layers/OpenCodeAdapter.ts)                | Investigate; mechanical half at minimum |
+Bounded upstream edits (fork-policy budget, a few lines each):
 
-The mechanical half is driver-independent and therefore works everywhere from
-day one — which is precisely why it is the load-bearing part of the anti-cosmetic
-argument.
+- Sidebar entry for the Team space in
+  [`AppSidebarLayout.tsx`](../../../apps/web/src/components/AppSidebarLayout.tsx).
+- Command palette verbs ("open Team home", "open #team", "message …",
+  "open board") in the palette's command registry.
 
-**Adapter edits stay at one call each.** If character logic starts accumulating
-inside an adapter, stop and move it back into the compiler
-([fork-policy.md §6](./fork-policy.md#6-unavoidable-upstream-touch-points--and-the-budget-for-each)).
+### R1.3 Team Home — live
 
-Also ship **instruction preview** (PRD FR-3.4): render the exact compiled text
-for an agent on a chosen driver. Character you cannot inspect is character you
-cannot debug, and this will be the single most-used feature during development.
+Wired to existing RPCs from
+[`state/team.ts`](../../../packages/client-runtime/src/state/team.ts):
+`teamReadRoster`, `teamReadLocalState` (presence, inbox, assignments,
+activity), plus the publish-state atoms.
 
-### M1.4 Agent → runtime binding
+Above the fold (PRD FR-11.2): my agents with live status · teammates with
+presence (+ environment label for remote) · waiting-on-me (trust prompts,
+queued messages, unpublished roster changes) · recent activity. Empty state
+doubles as onboarding: "create your first agent" (FR-11.7).
 
-**Status:** landed locally (2026-07-30). Settings → RepoKin stores local
-agent bindings under `ProviderInstanceConfig.config.repokin.agentIds`, and
-the composer picker prefers that machine-local binding before falling back to an
-agent profile's provider preference. Unavailable/error provider instances are
-shown but cannot be saved as a binding.
+### R1.4 People and member profiles — live
 
-An agent's runtime is a provider instance. The binding
-(`agentId → providerInstanceId`) is **machine-specific and stays out of Git** —
-it lives in local settings, namespaced under `config.repokin` inside
-`ProviderInstanceConfig`, which upstream already preserves verbatim for exactly
-this kind of fork payload.
+Decompose the 1,859-line
+[`RepoKinSettings.tsx`](../../../apps/web/src/components/settings/RepoKinSettings.tsx)
+into `components/team/` pieces; the settings panel shrinks to env-local
+config only (team remote, trust store, provider bindings, publish prefs).
 
-- Creating an agent optionally creates or adopts a provider instance.
-- An agent whose driver is unavailable in this build shows as unavailable rather
-  than failing — mirroring how upstream already degrades unknown drivers.
+Member profile page (FR-11.4): identity header · expressive character
+rendered readably · mechanical character via `AgentBadgeRow` ("may edit
+`apps/web/**`") · compiled-instruction preview per provider (existing
+`teamPreviewInstructions`) · recent threads/commits (attribution projection)
+· edit form (existing `teamUpsertAgent` flow) when local policy allows.
 
-### M1.5 Trust prompt (PRD §6.5)
+### R1.5 Activity feed — live, one additive read model
 
-**Status:** landed locally (2026-07-30). Added environment-local
-`settings.repokin.trustedMechanics`, pure trust evaluation helpers, and a
-Settings → RepoKin preview affordance, and composer send-flow prompt to mark
-the currently compiled mechanical hash trusted for a workspace/agent. Provider
-turns with untrusted or changed RepoKin mechanics are rejected before
-provider session start. The current prompt summarizes the mechanical settings in
-plain language; richer before/after copy can continue as UX polish outside the
-M1 gate.
+The feed is a projection over events we already store (team events, thread
+attribution, trust decisions, publishes). Expected server work: one additive
+read-model query (e.g. `team.readActivity` with cursor + filters) in the
+existing engine/projector — no new event sources. Contracts additive.
 
-`apps/server/src/team/CharacterTrust.ts` + UI.
+### R1.6 Notification inbox — live
 
-- Hash the **mechanical** half of each agent's character. Store trusted hashes
-  per project, environment-locally.
-- On first sight or on hash change, hold the new mechanical settings pending and
-  prompt.
-- The prompt renders a plain-language diff — "Aria may now edit files outside
-  `docs/`", "Aria will now run without asking for approval" — not raw JSON.
-- Pending-trust agents run with previously-trusted mechanics, or safe defaults
-  (`approval-required`, no `pathScope` widening) if never trusted.
+Unifies existing per-feature affordances: inbox messages (M2), trust
+prompts (M1.5), queued/expired delivery states (M3), publish tray (Q2).
+Every item actionable in place, deep-linking to its surface. Cross-device
+read state rides the existing team command path (`team.dispatchCommand`).
 
-This is small, and it is the difference between a shareable roster and a supply
-chain hole. It ships with M1, not after.
+### R1.7 Fixture previews — channels, board, work map
 
-### M1.6 Attribution
+Full-fidelity screens per PRD §6.2/§6.7/§6.4 designs, rendering from
+`fixtures/` with local-state interactions (compose a post, drag a card
+across columns, hover the treemap) and `Preview` badges. This is where the
+R2/R3 UI gets designed for real, on realistic data shapes: fixture types
+mirror the _planned_ contract schemas so the R2 contract PR starts from
+already-exercised shapes.
 
-- **Status:** landed locally (2026-07-30). `repokinAgentId` is projected
-  onto thread rows from turn-start events, emitted in thread/shell snapshots,
-  shown as a compact `@agent` chip in web thread rows, surfaced on checkpoint
-  changed-file cards and turn-diff headers, and forwarded through web/mobile git
-  actions for commit trailers.
-- Add agent trailers to commits produced through
-  [`GitManager.ts`](../../../apps/server/src/git/GitManager.ts) — the commit
-  message construction path already exists and already takes a writing style.
-  **Landed:** `RepoKin-Agent: <agentId>` trailer on attributed commits.
+### R1.8 Mobile
 
-### M1.7 UI
+Home + People, read-only, reusing the existing mobile roster work. Fixture
+surfaces are **not** shipped on mobile — previews are a desktop/web review
+tool.
 
-**Web (primary):**
+### R1.9 Exit gates
 
-- [x] Team panel: roster of humans and agents, per-project.
-- [x] Agent editor: local profile create/edit form for expressive character and
-      enforced runtime defaults.
-- [x] Instruction preview.
-- [x] Agent picker in the composer: reads the active project roster and applies
-      profile provider/runtime/interaction defaults to the current draft controls.
-- [x] Publish affordance: local RepoKin saves create scoped commits and a
-      persistent "team changes ready to publish" control pushes only when the
-      user chooses it (PRD Q2). Default-branch pushes require confirmation.
-
-**Desktop:** inherits web. Verify the trust prompt renders correctly in the
-Electron shell.
-
-**Mobile:** [x] read-only roster and agent detail, with project selection and an
-explicit editing-unavailable state. Editing remains M4.
-
-### M1.8 Testing
-
-- Pure unit tests for `CharacterCompiler`, slug derivation, and trust hashing —
-  these are where the logic actually lives, and they are cheap.
-- Store tests against temporary Git repositories.
-- Adapter tests asserting compiled instructions reach each provider's launch
-  path.
-- Round-trip tests for unknown-field preservation and secret exclusion.
-- One integrated pass in a real client via the `test-t3-app` skill, once, after
-  integration.
-
-### M1 exit criteria
-
-- [ ] Two agents with different characters produce recognizably different output
-      on the same prompt — the blind A/B in [PRD §13](./prd.md#13-success-metrics).
-- [ ] Mechanical settings verifiably applied on all five drivers.
-- [x] Roster survives clone → edit → commit → clone elsewhere. Covered by an
-      independent-clone Git integration test in `TeamFileStore.test.ts`.
-- [ ] A project with no `.repokin/` is indistinguishable from stock T3 Code.
-- [ ] No p95 regression on thread open.
-- [ ] Upstream sync still merges in under two hours.
+- [ ] A new user can create an agent, see it on Home, watch it in the
+      activity feed, and never open Settings (PRD R1 gate).
+- [ ] Settings → RepoKin contains only env-local config; every removed
+      capability has a home in the Team space.
+- [ ] Fixture grep (§0.2) lists exactly: channels, board, work map hooks.
+- [ ] The open M-series gates, closed here: blind character A/B (M1),
+      mechanical settings verified on all five drivers (M1), two-machine
+      roster/message acceptance (M3), no p95 regression on thread open and
+      project switch, `.repokin/`-less project indistinguishable from stock.
+- [ ] Upstream sync still merges; new surfaces produce zero conflicts.
 
 ---
 
-## M2 — Local presence and inbox
+## 3. R2 — Channels, delegation, and the board (fixtures → real)
 
-**Goal:** coordination for one person running several agents.
-**Estimate:** ~3–4 weeks. **Gated on:** M1 validating.
+**Goal:** kill the three biggest fixtures with real domains.
+**Estimate:** ~5–6 weeks. **Gated on:** R1 shipped; contract shapes reviewed.
 
-### M2.1 Team domain
+### R2.1 Contracts — additive families in `team.ts`
 
-**Status:** landed locally (2026-07-30). Landed typed M2 command/event/read
-models in `packages/contracts/src/team.ts`, pure
-`apps/server/src/team/decider.ts` / `projector.ts` /
-`commandInvariants.ts`, SQLite `team_events` + `team_command_receipts`
-migration `100_TeamMembers.ts`, `TeamEventStore`, command receipts, and
-`Layers/TeamEngine.ts` with serial dispatch and idempotent command receipts.
-The domain is exposed through typed WebSocket RPCs and client-runtime atoms;
-web/desktop RepoKin settings render the inbox, assignments, and activity.
+- Channel: `ChannelId`, channel declaration schema
+  (`.repokin/channels/<slug>.json`, T0), post schema with the typed-post
+  union (`text` / `thread-card` / `diff-card` / `task-card` / `event` /
+  `digest`), delivery/gap read models.
+- Task: `TaskId`, task schema (title, description-as-prompt, labels, refs,
+  assignee, four states), lifecycle events, board read model.
+- Commands/events named like the existing families
+  (`team.channel.post`, `team.task.create`, `team.task.move`, …).
 
-Mirror the orchestration pattern exactly — `decider.ts` (pure), `projector.ts`,
-`commandInvariants.ts`, `Layers/TeamEngine.ts`. Reusing the shape means reusing
-the team's intuition and the existing test ergonomics.
+Fixture types from R1.7 are the starting point; divergences discovered in
+review are fed back into the UI before the flip.
 
-- Commands: `team.member.upsert`, `team.agent.assign`, `team.message.send`,
-  `team.request.respond`.
-- Events: the corresponding `*-ed` facts.
-- Migrations start at **`100_TeamMembers.ts`**
-  ([fork-policy.md §4](./fork-policy.md#4-where-repokin-code-goes)).
+### R2.2 Server domain — decider/projector/engine extensions
 
-### M2.2 Presence
+- New event families in the existing `decider.ts` / `projector.ts` /
+  `TeamEngine` — same serial dispatch, same receipts. Migration `101_…`
+  for channel posts + tasks tables.
+- **Transport reuse:** posts and task events fan out as signed envelopes on
+  the existing `relay_team_messages` queue (`TeamRelayMessaging`), one
+  envelope kind per family; verification against roster keys unchanged.
+  Per-sender causal order + arrival tiebreak; gap markers where TTL was
+  exceeded (PRD Q7).
+- Last-writer-wins per field for concurrent task edits, every transition an
+  attributed event (FR-18.6).
 
-**Status:** landed locally (2026-08-03). Extended
-`packages/shared/src/agentAwareness.ts` with local member presence projection:
-awareness phases map to `online` / `busy` / `away` / `offline`, with a
-30-second staleness horizon. Settings → RepoKin now shows non-animated
-presence chips for roster agents when thread shells are attributed with
-`repokinAgentId`. Human app-presence follows FR-6.3: throttled web/desktop
-pointer and keyboard activity, plus mobile foreground/touch activity, publish
-an authenticated environment heartbeat. The existing 30-second staleness
-horizon turns missing or stale activity into `offline`; durable team-domain
-presence events are intentionally not required because presence is ephemeral.
+### R2.3 Delegation flow
 
-Extend [`agentAwareness.ts`](../../../packages/shared/src/agentAwareness.ts)
-rather than adding a parallel model. Map existing session phases onto
-`online`/`busy`/`away`/`offline`, add a staleness horizon, and make sure the
-indicator never animates continuously.
+- Mention → `team.task.create` (+ assignment) → assignee environment's
+  policy gate (existing inbound policy) → on accept, task `in-progress` and
+  a normal thread starts on the home environment, attributed, task ref on
+  the thread (reuses `repokinAgentId` plumbing).
+- Coarse progress states project onto the task card; the terminal report
+  posts a `task-card`/`diff-card` back to the origin channel. Review
+  requests are tasks with a diff ref + structured verdict (FR-13.6).
+- **Safety invariants tested explicitly:** no inbound request bypasses
+  runtime mode / tool policy / path scope / trust (NFR-3); an agent never
+  self-assigns and never marks its own task `done` (FR-18.2/18.3).
 
-### M2.3 Inbox
+### R2.4 The flips
 
-**Status:** landed locally (2026-07-30). Added local inbox command/event
-schemas and WebSocket RPCs, exposed `team.readLocalState` /
-`team.dispatchCommand` through client runtime atoms, and added a visible
-Settings -> RepoKin local inbox control for sending messages to the selected
-agent and marking delivered messages read. Server-side delivery now uses
-`TeamInboxDeliveryReactorLive` with presence-aware queued/delivered/expired
-decisions and focused tests for domain transitions plus online delivery.
-Messages without an explicit expiry receive a deterministic 24-hour TTL when
-the queued event is decided, so offline messages cannot remain queued forever.
+Each flip = rewrite one hook (`useChannelData`, `useBoardData`) against live
+atoms, delete its fixture file, drop the `Preview` badge. UI components
+should not change; where they must, that is a finding about R1's seam, fixed
+in the seam.
 
-- Durable queue in the team event store, drained by a reactor built on
-  [`DrainableWorker`](../../../packages/shared/src/DrainableWorker.ts) so tests
-  can wait on drains instead of sleeping.
-- Delivery states: queued / delivered / read / expired, with TTL.
-- Local delivery only in M2 — no relay yet.
+### R2.5 Exit gates
 
-### M2.4 Handoff
-
-**Status:** landed locally (2026-07-30). The local team domain records
-`team.agent.assign` as a durable assignment plus `thread.assigned` activity.
-Settings -> RepoKin now exposes a local handoff control that selects a
-project thread, assigns it to the selected agent, refreshes the team read model,
-and shows current assignments plus recent team activity.
-
-Assign or claim a thread for an agent; hand off preserving history; record the
-handoff as an activity so it shows in the timeline.
-
-### M2 exit criteria
-
-- [ ] Presence reflects real agent state within 2s locally, with no visible
-      repaint cost.
-- [x] Messages to a busy agent queue and deliver on idle. Covered by the
-      drainable delivery-reactor test without sleeps or polling.
-- [x] Handoff preserves the thread reference and is visible as
-      `thread.assigned` in the activity timeline.
+- [ ] PRD R2 gate: backlog task → assign to agent → accept → run →
+      diff-card → human review → Done, across two environments, entirely
+      in-product.
+- [ ] Fixture grep returns only the work-map hook.
+- [ ] Channel scroll smooth at 10k posts (NFR-1, virtualized).
+- [ ] Agents cannot post unprompted — tested at the decider (FR-12.6).
+- [ ] Offline-past-TTL member sees gap markers, not silent loss.
 
 ---
 
-## M3 — Cross-environment
+## 4. R3 — Visibility (work map, radar, digests)
 
-**Goal:** the actual team product.
-**Estimate:** ~5–7 weeks, **with the widest error bars in the plan** — NAT,
-relay capacity, and key rotation are all genuinely unknown until we are in them.
-Plan for slip; do not let M1 or M2 depend on this landing on time.
+**Goal:** the last fixture dies; the wedge features ship.
+**Estimate:** ~3–4 weeks.
 
-### M3.1 Roster sync
-
-`apps/server/src/team/Layers/RosterSync.ts`:
-
-**Status:** landed locally (2026-07-30). Added the explicit `teamRemote` save
-path, manual Settings -> RepoKin roster sync, upstream-then-origin suggestion
-helper, default-branch resolution, fetch into RepoKin-owned refs, and
-`git show`/`ls-tree` roster reads from the fetched ref without checkout. Roster
-sync is also retained by visible VCS status subscriptions: one coalesced poller
-per cwd, off the interaction path, and gated by `BackgroundPolicy` scoped work.
-
-- Periodic `git fetch <teamRemote> <defaultBranch>` — coalesced, off the
-  interaction path, skipped when the project is not visible.
-- Read profiles from the fetched ref with `git show`. Working tree untouched.
-- Team remote is an **explicit visible setting**, defaulted by the
-  `upstream`-then-`origin` order but never silently inferred (PRD Q4).
-
-### M3.2 Signed environment-to-environment messaging
-
-**Status:** landed locally (2026-07-31). `SignedMessaging.ts` signs and
-verifies envelopes using the environment keypair from `environmentKeys.ts` and
-the signed-proof pattern from `AgentAwarenessRelay.ts`. The relay gained a
-durable `relay_team_messages` queue (`infra/relay/src/teamMessages/`) behind
-`deliverTeamMessage` (POST) and `pollTeamMessages` (GET), both
-environment-authenticated; `deliverTeamMessage` rejects envelopes whose
-claimed sender doesn't match the caller's authenticated environment.
-`TeamRelayMessaging.ts` forwards a locally queued message through the relay
-when its recipient is a roster agent whose `homeEnvironment` differs from
-this environment, or a human with exactly one unambiguous linked remote
-environment (M3.4 changed the local delivery bookkeeping around this — see
-below); a 10s poll loop verifies inbound envelopes against the owning
-project's roster and dispatches accepted ones into the local team engine,
-dropping unverifiable ones without surfacing them. Human recipients with one
-linked remote environment route there directly. For humans with multiple
-linked environments, recent app activity selects the destination only when
-exactly one environment is active; ambiguous presence remains queued, and the
-relay cycle reconsiders it when presence changes.
-Message and receipt proofs remain valid for the same 24-hour window as the
-offline relay queue; the focused suite verifies consumption after several
-offline hours rather than only immediately after signing.
-
-- Reuse the environment keypair from
-  [`environmentKeys.ts`](../../../apps/server/src/cloud/environmentKeys.ts) and
-  the signed-proof pattern already used by
-  [`AgentAwarenessRelay.ts`](../../../apps/server/src/relay/AgentAwarenessRelay.ts).
-- Verify every inbound envelope against the public key the roster declares for
-  that member. Unverifiable messages are **dropped**, not surfaced as "unknown
-  sender" — a rejected message the user never sees is correct; a spoofable one
-  they do see is not.
-- Extend the relay with an environment-to-environment envelope endpoint.
-
-### M3.3 Cross-machine presence
-
-**Status:** landed locally (2026-08-03). Rather than fan out the full
-`RelayAgentActivityAggregateState` (project/thread titles) across account
-boundaries, the relay exposes a coarser `getEnvironmentPresence` query over
-the same underlying activity rows: only phase and its timestamp, per
-requested environment id — the same minimal-exposure default the local
-(M2.2) presence model already uses. `TeamRelayPresence` polls it every 10s
-for every roster agent's home environment seen across open projects and
-caches the result; `TeamPresenceResolver` now falls back to that cache when
-a member has no local thread activity and its roster profile's
-`homeEnvironment` differs from this one. `team.readLocalState` returns a
-`presences` list (resolved for every project member, local or remote) so the
-web UI doesn't need its own copy of the resolution logic; Settings ->
-RepoKin shows the owning human's roster environment label next to a
-remote agent's presence chip, e.g. `Busy (on julius-mbp)`.
-
-Human presence uses a separate minimal relay heartbeat keyed only by the
-authenticated environment id and `activeAt`; it carries no project, thread, or
-input data. Web/desktop and mobile report recent interaction without a timer
-animation. `TeamPresenceResolver` maps linked human environments to the same
-`online` / `offline` read model, and multiple-device message routing proceeds
-only when one active destination is unambiguous.
-
-Fan out through the existing relay aggregate
-(`RelayAgentActivityAggregateState`), scoped to roster members. Presence carries
-the environment id so the UI can show `Aria (on julius-mbp)`.
-
-### M3.4 Offline queue and borrowed agents
-
-**Status:** landed locally (2026-08-03). The relay's `relay_team_messages`
-queue is swept on the existing 5-minute cron alongside the agent-activity
-prune. `TeamRelayMessaging` does not mark a forwarded message "delivered" on
-relay hand-off — handing off only means the recipient environment _can_ pick
-it up. After the recipient durably accepts and verifies the message, it signs
-a delivery receipt with its environment key and queues that receipt back to
-the original sender environment. The sender verifies the recipient's current
-roster key, checks the signed sender/recipient tuple against its queued local
-message, and only then dispatches `team.message.deliver`. Wrong-key and
-tampered receipts are dropped. Messages and receipts share the queue's
-24-hour validity window, and messages without an explicit expiry now receive
-that TTL in the local event domain.
-
-The relay queue and human-presence tables ship with generated Postgres
-migration `20260802175214_repokin_team_transport`; the earlier TypeScript
-schema alone was not deployable. A process-local forwarded-message set prevents
-the 10-second retry scan from flooding the relay while still allowing messages
-that were initially unroutable, or failed a transient send, to be retried. The
-same cycle retries receipts from persisted inbound-message provenance until the
-relay accepts them, so a transient receipt-send failure does not strand the
-sender in `queued` after recipient acceptance.
-
-Fixing the earlier optimistic state surfaced a real bug: since M3.3 made
-`TeamPresenceResolver` resolve a non-null presence for remote-home agents,
-`TeamInboxDeliveryReactor` would otherwise have started marking their messages
-"delivered" locally the moment the relay reported them online — wrong, since
-only `TeamRelayMessaging` can actually get a message to a remote agent. It
-checks the recipient's roster `homeEnvironment` and only ever "wait"s or
-"expire"s a remote-home agent's message itself.
-
-Borrowed-agent visibility ships without any new state: M1.4's local
-agent-to-provider binding is already an explicit, environment-local opt-in,
-so a roster agent whose `homeEnvironment` differs from here _and_ that has a
-local binding here is being run from this machine right now. Settings ->
-RepoKin shows a "Borrowed here" badge for exactly that case — no new
-relay endpoint, no new settings key, no locking, no enforcement; unbinding
-the agent (already-existing UI) is the "way out."
-
-- Queue with TTL and visible expiry.
-- Home vs borrowed semantics with explicit local opt-in and permanent labeling.
-  No distributed locking — visibility instead.
-
-### M3 exit criteria
-
-- [ ] Two machines, one repo: both rosters converge within the staleness target.
-- [ ] Messages deliver when both online; queue and deliver later when not.
-- [x] A forged message signed by the wrong key is rejected — with a test.
-- [x] Revoking a member by removing their profile actually cuts them off — with
-      a focused signed-envelope test.
+- **R3.1 Work signals.** Coarse directory-level activity from running
+  threads + working tree, throttled/coalesced, published over the existing
+  presence transport (T2, ephemeral, roster-scoped). Per-environment kill
+  switch (FR-14.4). No new steady-state traffic beyond the bounded heartbeat.
+- **R3.2 Work map + radar.** Treemap projection with member avatars; overlap
+  detection as a pure function over signals + published-branch diffstat
+  (`git fetch` + `diff --stat` against RepoKin-owned refs — never checkout);
+  passive dismissible surfacing on Home and affected threads (FR-14.3).
+  Flip `useWorkMapData`; delete the last fixture.
+- **R3.3 Digests + standup mode.** Local generation over T1 read models;
+  bound provider instance when available, deterministic template fallback
+  (Q10). `digest` post kind already shipped in R2 contracts. One-action
+  standup posts my environment's digest to `#team` (FR-15.3).
+- **R3.4 Exit gates:** PRD R3 gates (overlap surfaces within staleness
+  horizon; one-action standup) · fixture grep returns empty · zero
+  steady-state GPU cost on the map (NFR-2).
 
 ---
 
-## M4 — Inter-agent workflows
+## 5. Mock-removal tracker
 
-Open-ended, and deliberately unplanned in detail until M3 usage data exists.
-Candidates in rough priority order: review requests, richer agent-to-agent
-protocols, channels, audit export, mobile editing parity, permission
-refinement.
+The §0 contract, in table form. R1 creates every row; later milestones only
+delete rows. **A milestone with a live row it was meant to kill is not done.**
 
-**Do not start M4 items opportunistically during M1–M3.** They are the most
-fun to build and the least validated, which is exactly the combination that
-kills roadmaps.
+| Surface        | Fixture file           | Hook              | Dies in | Gate           |
+| -------------- | ---------------------- | ----------------- | ------- | -------------- |
+| Channel list   | `fixtures/channels.ts` | `useChannelsData` | R2      | R2.5 grep gate |
+| Channel view   | `fixtures/posts.ts`    | `useChannelData`  | R2      | R2.5 grep gate |
+| Board          | `fixtures/tasks.ts`    | `useBoardData`    | R2      | R2.5 grep gate |
+| Work map/radar | `fixtures/workmap.ts`  | `useWorkMapData`  | R3      | R3.4 grep gate |
+
+Everything else in the Team space is live from R1. No other surface may be
+added to this table without a PRD change — fixtures are a bridge for these
+four, not a general pattern.
 
 ---
 
-## Sequencing and parallelism
+## 6. Sequencing
 
 ```text
-M0 ──► M1.1 contracts ──┬──► M1.2 store ────┬──► M1.6 attribution ──┐
-                        ├──► M1.3 compiler ─┤                       ├──► M1.7 UI ──► ship
-                        └──► M1.4 binding ──┴──► M1.5 trust ────────┘
+R1.1 primitives ─┬─► R1.3 Home ──────┬─► R1.9 gates ─► ship R1
+R1.2 routes ─────┤   R1.4 People     │
+                 │   R1.5 Activity   │
+                 │   R1.6 Inbox      │
+                 └─► R1.7 fixtures ──┘         (R1.7 parallels live screens)
+
+R2.1 contracts ─► R2.2 domain ─┬─► R2.3 delegation ─► R2.4 flips ─► R2.5 gates
+                               └───────────────────────┘ (board flip can lead)
+
+R3.1 signals ─► R3.2 map+radar ─► R3.4 gates
+R3.3 digests ────────────────────┘ (independent of signals)
 ```
 
-- M1.1 gates everything; write it first and get the schema review done early.
-- M1.2, M1.3, and M1.4 genuinely parallelize.
-- M1.7 needs M1.2 and M1.3 only — UI work can start against fixtures as soon as
-  the contracts land.
-- M2 and M3 are strictly sequential after M1.
+- R1.1 gates everything visual; review the primitive kit early and hard.
+- R1.7 fixture screens parallelize with the live screens once primitives
+  exist — good second-track work.
+- R2.1 contract review is the schema moment for channels _and_ tasks; do it
+  once, properly, with the R1.7 fixture types on the table.
 
 ---
 
-## Risk register for execution
+## 7. Risk register for execution
 
-| Risk                                  | Watch for                                        | Response                                                                      |
-| ------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------- |
-| Character logic leaks into adapters   | Adapter diffs growing past a few lines           | Extract to `CharacterCompiler` immediately; this is the fork's main tax lever |
-| Contracts become a merge battleground | Conflicts in `packages/contracts` on sync        | All team schema in `team.ts`; subpath export, never the barrel                |
-| Migration collision                   | Upstream ships a migration in our range          | Ours start at `100`                                                           |
-| Roster sync stomps the working tree   | Any `git pull`/`checkout` in team code           | `git fetch` + `git show` only — make it a review checklist item               |
-| Presence repaints and burns GPU       | Any continuous animation in a presence indicator | T3 Code cardinal sin; catch it in review                                      |
-| Secrets reach `.repokin/`             | Any profile field that could hold a credential   | Schema-level impossibility plus the M1.1 test                                 |
-| M3 slips                              | NAT and relay unknowns                           | M1 and M2 ship value without it; do not couple them                           |
-| Scope creep into M4                   | "While we're here…"                              | The milestone gates exist for this                                            |
+| Risk                                            | Watch for                                       | Response                                                                |
+| ----------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------- |
+| Mock-forever drift                              | Fixture grep list not shrinking per milestone   | §5 tracker is a milestone gate, not advice                              |
+| Fixture shapes diverge from real contracts      | R2.4 flips forcing component rewrites           | R2.1 starts from fixture types; divergences fixed in the seam, logged   |
+| R1 becomes a T3 Code redesign                   | Diffs in upstream screen files                  | §7.4 PRD rule; sidebar + palette edits are the entire upstream budget   |
+| Channel/board tables become a second Jira/Slack | Fields, workflows, or post kinds beyond the PRD | FR-18.8 / FR-12.6 are scope law; PR review checklist item               |
+| Delegation safety regression                    | Any accept path skipping the policy gate        | Decider-level tests (R2.3) run per PR; NFR-3 named in review checklist  |
+| Relay queue load from posts                     | Fan-out cost growing with roster × posts        | Bounded per-post fan-out; measure in R2; batching is the lever, not Git |
+| Presence/map repaint cost                       | Continuous animation or per-member polling      | Cardinal sin; catch in review; NFR-2 gate                               |
+| Upstream sync pain                              | Conflicts in `routes/` or components            | All new files fork-owned; weekly sync unchanged                         |
 
 ---
 
-## First week, concretely
+## 8. First week, concretely
 
-If this plan is accepted, the first five working days:
-
-1. **Day 1** — M0.1 branch model and the sync workflow. Verify a manual sync
-   opens a clean PR.
-2. ~~**Day 1** — Decide the product spelling; rename the repo.~~ **Done.**
-3. **Day 2–3** — M1.1 `packages/contracts/src/team.ts`, the `./team` subpath
-   export, and the two invariant tests. Review the schema properly before
-   anything depends on it.
-4. **Day 3–4** — M1.2 `TeamFileStore` and `LocalIdentityResolver` against a
-   temporary repository fixture.
-5. **Day 5** — Spike `CharacterCompiler` against Codex and Claude only, and get
-   the instruction preview working. **The fastest possible answer to "does
-   character actually change output?" is worth more than a week of scaffolding**
-   — and if the answer is no, this plan changes.
+1. **Day 1–2** — R1.1 primitive kit: tokens, `MemberAvatar` (identicon
+   included), `PresenceDot`, `MemberChip`, `TeamCard`, on a harness page.
+2. **Day 2** — R1.2 route skeleton + sidebar entry; empty screens navigable.
+3. **Day 3–4** — R1.3 Team Home wired live to `teamReadRoster` /
+   `teamReadLocalState`; the waiting-on-me rail.
+4. **Day 5** — First fixture screen: the board (it is the most
+   self-contained), with `PreviewBadge` and drag interactions on local
+   state. **End of week one, the product demos as a workplace** — which is
+   the point of the whole revamp.

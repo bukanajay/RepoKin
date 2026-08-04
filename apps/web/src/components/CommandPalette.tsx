@@ -38,6 +38,7 @@ import {
   SettingsIcon,
   SquarePenIcon,
   TextSearchIcon,
+  UsersIcon,
 } from "lucide-react";
 import {
   useCallback,
@@ -1463,6 +1464,28 @@ function OpenCommandPaletteDialog(props: {
       },
     });
   }
+
+  actionItems.push({
+    kind: "action",
+    value: "action:team-home",
+    searchTerms: ["team", "home", "roster", "people", "agents", "workplace"],
+    title: "Open Team home",
+    icon: <UsersIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/team" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:team-board",
+    searchTerms: ["team", "board", "kanban", "tasks", "backlog"],
+    title: "Open Team board",
+    icon: <UsersIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/team/board" });
+    },
+  });
 
   actionItems.push({
     kind: "action",

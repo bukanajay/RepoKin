@@ -25,6 +25,7 @@ interface ChatHeaderProps {
   activeThreadId: ThreadId;
   draftId?: DraftId;
   activeThreadTitle: string;
+  activeAgentLabel: string | null;
   activeProjectName: string | undefined;
   activeProjectCwd: string | null;
   openInCwd: string | null;
@@ -61,6 +62,7 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadId,
   draftId,
   activeThreadTitle,
+  activeAgentLabel,
   activeProjectName,
   activeProjectCwd,
   openInCwd,
@@ -132,6 +134,12 @@ export const ChatHeader = memo(function ChatHeader({
           />
           <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
         </Tooltip>
+        {activeAgentLabel ? (
+          <span className="inline-flex max-w-48 shrink-0 items-center gap-1 rounded-full border border-primary/25 bg-primary/8 px-2 py-0.5 text-xs text-primary">
+            <span className="size-1.5 rounded-full bg-primary" aria-hidden />
+            <span className="truncate">Talking to {activeAgentLabel}</span>
+          </span>
+        ) : null}
       </div>
       <div
         data-chat-header-actions

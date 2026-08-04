@@ -13,11 +13,16 @@ import * as Schema from "effect/Schema";
 import type * as PlatformError from "effect/PlatformError";
 
 import {
+  isAgentMember,
+  requireChannel,
   requireMember,
   requireMessageAbsent,
+  requirePromptedPost,
   requireQueuedMessage,
   requireReadableMessage,
   requireOpenRequest,
+  requireTask,
+  requireTaskAbsent,
 } from "./commandInvariants.ts";
 import { TeamCommandInvariantError } from "./Errors.ts";
 import { projectTeamEvent } from "./projector.ts";
@@ -180,6 +185,135 @@ export const decideTeamCommand = Effect.fn("decideTeamCommand")(function* ({
         response: command.response,
         message: command.message ?? null,
         respondedAt: occurredAt,
+      };
+    }
+
+    case "team.channel.declare": {
+      return {
+        ...base,
+        type: "team.channel.declared",
+        channelId: command.declaration.id,
+        declaration: command.declaration,
+        at: occurredAt,
+      };
+    }
+
+    case "team.channel.post": {
+      yield* requireMember({ readModel, command, memberId: command.authorId });
+      yield* requireChannel({ readModel, command, channelId: command.channelId });
+      yield* requirePromptedPost({
+        readModel,
+        command,
+        authorId: command.authorId,
+        content: command.content,
+      });
+      return {
+        ...base,
+        type: "team.channel.posted",
+        postId: command.postId,
+        channelId: command.channelId,
+        authorId: command.authorId,
+        authorEnvironmentId: command.metadata?.environmentId ?? null,
+        content: command.content,
+        postedAt: occurredAt,
+        at: occurredAt,
+      };
+    }
+
+    case "team.task.create": {
+      yield* requireMember({ readModel, command, memberId: command.createdById });
+      yield* requireTaskAbsent({ readModel, command, taskId: command.taskId });
+      if (command.assigneeId !== undefined) {
+        yield* requireMember({ readModel, command, memberId: command.assigneeId });
+        // FR-18.2: an agent never self-assigns.
+        if (
+          command.assigneeId === command.createdById &&
+          isAgentMember(readModel, command.projectId, command.createdById)
+        ) {
+          return yield* new TeamCommandInvariantError({
+            commandType: command.type,
+            detail: `Agent '${command.createdById}' cannot self-assign task '${command.taskId}' (FR-18.2).`,
+          });
+        }
+      }
+      return {
+        ...base,
+        type: "team.task.created",
+        taskId: command.taskId,
+        title: command.title,
+        description: command.description ?? null,
+        labels: command.labels ?? [],
+        refs: command.refs ?? null,
+        createdById: command.createdById,
+        assigneeId: command.assigneeId ?? null,
+        at: occurredAt,
+      };
+    }
+
+    case "team.task.move": {
+      yield* requireMember({ readModel, command, memberId: command.movedById });
+      const task = yield* requireTask({ readModel, command, taskId: command.taskId });
+      // FR-18.3: an agent never marks its own task done — human review is required.
+      if (
+        command.toState === "done" &&
+        task.assigneeId === command.movedById &&
+        isAgentMember(readModel, command.projectId, command.movedById)
+      ) {
+        return yield* new TeamCommandInvariantError({
+          commandType: command.type,
+          detail: `Agent '${command.movedById}' cannot mark its own task '${command.taskId}' done (FR-18.3).`,
+        });
+      }
+      return {
+        ...base,
+        type: "team.task.moved",
+        taskId: command.taskId,
+        fromState: task.state,
+        toState: command.toState,
+        movedById: command.movedById,
+        at: occurredAt,
+      };
+    }
+
+    case "team.task.update": {
+      yield* requireMember({ readModel, command, memberId: command.updatedById });
+      yield* requireTask({ readModel, command, taskId: command.taskId });
+      return {
+        ...base,
+        type: "team.task.updated",
+        taskId: command.taskId,
+        updatedById: command.updatedById,
+        title: command.title ?? null,
+        description: command.description ?? null,
+        labels: command.labels ?? null,
+        refs: command.refs ?? null,
+        at: occurredAt,
+      };
+    }
+
+    case "team.task.assign": {
+      yield* requireMember({ readModel, command, memberId: command.assignedById });
+      yield* requireTask({ readModel, command, taskId: command.taskId });
+      if (command.assigneeId !== null) {
+        yield* requireMember({ readModel, command, memberId: command.assigneeId });
+        // FR-18.2: an agent never self-assigns.
+        if (
+          command.assigneeId === command.assignedById &&
+          isAgentMember(readModel, command.projectId, command.assignedById)
+        ) {
+          return yield* new TeamCommandInvariantError({
+            commandType: command.type,
+            detail: `Agent '${command.assignedById}' cannot self-assign task '${command.taskId}' (FR-18.2).`,
+          });
+        }
+      }
+      return {
+        ...base,
+        type: "team.task.assigned",
+        taskId: command.taskId,
+        assigneeId: command.assigneeId,
+        assignedById: command.assignedById,
+        at: occurredAt,
       };
     }
   }

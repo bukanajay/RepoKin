@@ -1,766 +1,677 @@
 # RepoKin — Product Requirements Document
 
-**Status:** Draft v0.2 (refined) — implementation started on `forge`
+**Status:** Draft v0.3 — "The Workplace" revision
 **Based on:** fork of [T3 Code](https://github.com/pingdotgg/t3code)
-**Date:** 2026-07-30
-**Supersedes:** PRD v0.1
+**Date:** 2026-08-04
+**Supersedes:** PRD v0.2
 
 Companion documents:
 
-- [Implementation plan](./implementation-plan.md)
+- [Implementation plan](./implementation-plan.md) — R1–R3 execution plan
+  against this PRD (M0–M3 landed; prior plan in git history).
 - [Fork policy — staying mergeable with upstream](./fork-policy.md)
 
 ---
 
-## 0. What changed from v0.1
+## 0. What changed from v0.2
 
-v0.1 was directionally right. This revision changes six things, each of which
-materially changes what gets built:
+v0.2 was the disciplined version: prove that persistent, characterful agents
+are real before building anything social. **That proof-of-architecture work
+(M0–M3) is now implemented locally** — roster in Git, character compilation
+across five providers, trust prompts, attribution, local inbox and handoff,
+signed cross-environment messaging and presence.
 
-1. **Git is not the source of truth for identity — it is the source of truth for
-   the _roster and the keys_.** The distinction matters because T3 Code has no
-   multi-human user model at all. See §3.
-2. **"Team member" across machines means _environment federation_, not user
-   accounts.** An agent is a process on someone's machine holding someone's
-   provider credentials. There is no shared runtime to join. See §3.2.
-3. **Character must have mechanical effects, not just prose.** Model, runtime
-   mode, interaction mode, and tool policy are part of character. Otherwise
-   character is cosmetic and the differentiator evaporates. See §6.3.
-4. **Repo-sourced character is an attack surface.** A PR that edits an agent's
-   tool policy edits what your machine will do unattended. v0.1 did not mention
-   this. It is a P0 requirement, not a v2 hardening pass. See §8.3.
-5. **The MVP is smaller.** Persistent named agents with real character and
-   attribution, on one machine, is the whole first release. Presence, messaging,
-   and cross-machine are separately-earned milestones. See §10.
-6. **Upstream mergeability is a product requirement with a real cost model**,
-   not a footnote. It constrains where code may be written. See
-   [fork-policy.md](./fork-policy.md).
+v0.3 widens the aperture. Six changes, each of which materially changes what
+gets built next:
+
+1. **The vision is a workplace, not a layer.** RepoKin is where a team —
+   humans _and_ their agents — works on one GitHub repo from their own
+   laptops while staying connected: communication, visibility, and delegation
+   across the whole hybrid team. v0.2 framed the team features as an addition
+   to T3 Code; v0.3 frames them as the product.
+2. **The team surface becomes first-class UI.** Today every RepoKin feature
+   lives inside a single Settings page. That was correct for validating
+   plumbing and is now the product's biggest liability. v0.3 specifies a
+   dedicated Team space with its own design language (§7).
+3. **Channels are promoted from "M4 if earned" to a core pillar** — with an
+   anti-noise design that keeps them a coordination surface, not a chat app
+   (§6.2).
+4. **Visibility is a new pillar.** Live work map, overlap radar, and digests:
+   the "I have no idea what anyone else's agents are doing" problem is the
+   sharpest pain in the target market, and most of the data already exists in
+   presence and thread state (§6.4, §6.5).
+5. **Delegation becomes a first-class primitive.** @mention an agent →
+   structured task → streamed progress → reviewable result. This is the verb
+   that makes a hybrid team feel like a team (§6.3).
+6. **Q6 (visual continuity) is partially reversed — deliberately.** Inherited
+   T3 Code surfaces stay visually untouched for merge safety, but the new
+   RepoKin surfaces get their own contemporary design language in fork-owned
+   files (§7.4).
+
+**What did _not_ change** — these v0.2 sections remain normative and are
+carried forward by reference:
+
+- The three-tier truth model: Git (T0) / environment event store (T1) /
+  relay (T2). Nothing that changes more than daily is ever committed.
+- Environment federation: there is no shared runtime and no accounts system.
+  Repo write access is the authorization root; wire identity is verified
+  against roster public keys.
+- Character with a mechanical, harness-enforced half; trust confirmation for
+  repo-sourced mechanical changes.
+- No secrets in `.repokin/`, ever. Structurally impossible, tested.
+- Offline-first; upstream mergeability as a product requirement.
 
 ---
 
 ## 1. Vision
 
-Software teams should be able to treat AI coding agents as **persistent, named,
-opinionated team members** rather than anonymous sessions.
+> **RepoKin is the workplace for hybrid teams.** A team works on a single
+> GitHub repository, each person on their own laptop with their own agents and
+> their own credentials — yet everyone can see who is working on what, talk to
+> each other, and hand work to any teammate, human or AI.
 
-An agent has a durable identity and character — its expertise, conventions,
-model, guardrails, and voice — and that identity lives in the Git repository
-next to the code it works on. Because the repository is the shared artifact a
-team already agrees on, it is also the natural registry of who is on the team,
-human or otherwise.
+Development teams already have a workplace for humans (Slack, Linear) and a
+workplace for code (GitHub). Neither has a seat for agents: agents today are
+anonymous tabs on one person's machine, invisible to the rest of the team,
+with no identity, no inbox, no accountability.
 
-RepoKin is T3 Code plus a Git-native team layer.
+RepoKin gives agents that seat — and gives humans a shared room. The repo is
+the office; `.repokin/` is the org chart; presence, channels, and delegation
+make the distributed hybrid team feel like it shares a room.
 
 ### The one-line pitch
 
-> Your repo already knows who wrote every line. RepoKin makes it know _who
-> your agents are_ — and lets them work like colleagues instead of tabs.
+> Your repo already knows who wrote every line. RepoKin makes it a workplace
+> where humans and AI agents work as one team — named, visible, reachable —
+> each from their own laptop.
 
 ### What we are betting on
 
-The bet is **not** that agent-to-agent chat is valuable. The bet is that
-**persistent character plus attribution** changes how teams work: you learn that
-"Aria reviews for accessibility and is picky about test coverage" the same way
-you learn it about a human, and you route work accordingly. Messaging and
-cross-machine presence are how that bet scales to a team, but they are not the
-bet itself. We should be honest about this ordering internally, because it
-determines what we cut when we are late.
+Three bets, in order of conviction:
+
+1. **Persistent character + attribution changes how teams route work**
+   (v0.2's bet — now validated in architecture, pending usage validation).
+2. **Visibility is the wedge for teams.** The first thing a 3-person team
+   wants is not agent chat — it is "what is Bob's agent doing to `auth/`
+   right now?" Overlap radar and activity feeds are cheap given the existing
+   presence plumbing, and are the feature a teammate can _see working_ in the
+   first five minutes.
+3. **Delegation through conversation is the natural UI for hybrid teams.**
+   @mentioning an agent in a channel and getting a reviewable diff back is
+   how people already wish their tools worked.
+
+Messaging exists to route work. Every message primitive references a thread,
+diff, task, or event. Free-floating chat remains a non-goal — Slack already
+exists.
 
 ---
 
-## 2. Goals and non-goals
+## 2. Product pillars
 
-### Goals
-
-| #   | Goal                                                                       | How we know it worked                                                                   |
-| --- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| G1  | Agents persist across sessions with character that changes their output    | Same prompt to two agents produces recognizably different work                          |
-| G2  | The roster (humans + agents) lives in the repo and is reviewable like code | `git log .repokin/` reads like a team history                                           |
-| G3  | Character is mechanically enforced, not just suggested                     | Character sets model, runtime mode, and tool policy — verifiable without reading output |
-| G4  | Work is attributable to a specific agent                                   | Threads, checkpoints, and commits name the agent                                        |
-| G5  | Team members on different machines can discover and reach each other       | Roster from remote; messages delivered when both online, queued when not                |
-| G6  | Offline-first: everything single-machine works with no network             | Airplane mode loses only cross-machine features                                         |
-| G7  | Upstream T3 Code fixes and features keep flowing in                        | Weekly upstream merge lands with bounded conflict cost                                  |
-| G8  | No regression to T3 Code's core experience                                 | Latency, multi-provider support, and remote access unchanged                            |
-
-### Non-goals
-
-Unchanged from v0.1, plus three additions:
-
-- Replacing GitHub/GitLab as the code host.
-- A general-purpose multi-agent framework unrelated to software development.
-- Sub-second presence accuracy from Git alone.
-- Fully decentralized identity with no optional relay.
-- Automatic merging or unsupervised autonomous multi-agent coding.
-- **(new)** Multi-tenant accounts, org management, SSO, or billing. Repository
-  write access is our authorization root. We are not building an identity
-  provider.
-- **(new)** Syncing provider credentials or subscriptions between machines. Each
-  environment authenticates its own providers. This is already a T3 Code
-  non-goal and stays one.
-- **(new)** Storing conversation history in Git. See open question Q5 (§12).
+| #   | Pillar                                                                                                                               | Status                                          |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| P1  | **Persistent agent teammates** — named agents with enforced character, owned by humans, living in the repo                           | Landed (M1)                                     |
+| P2  | **Presence & visibility** — who is online, who is working on what, where work overlaps                                               | Presence landed (M2/M3); work map & digests new |
+| P3  | **Communication** — channels and DMs where humans and agents are peers                                                               | DMs landed (M2/M3); channels new                |
+| P4  | **Delegation & workflows** — @mention-to-task, review requests, handoffs, scheduled duties                                           | Handoff landed (M2); rest new                   |
+| P5  | **Local-first and Git-native** — every laptop is sovereign; Git holds identity and policy; offline loses only cross-machine features | Landed; permanent constraint                    |
 
 ---
 
-## 3. The architectural correction that shapes everything
+## 3. Target users
 
-### 3.1 Three tiers of truth
+**Primary.** Engineering teams of 2–15 already using AI coding agents and
+Git, where more than one person runs agents against the same repository and
+they currently have no idea what anyone else's agents are doing.
 
-v0.1 correctly said "Git for identity, ephemeral channel for presence." The
-sharper framing that should drive design review:
+**Secondary — and the fastest validation path.** One developer running
+several specialized agents on one project. For this user the Team space is a
+_mission control_: their agents' presence, channel, and task list, no second
+human required. Every P2–P4 feature must be valuable at team-size-one.
 
-| Tier                     | Store                       | Holds                                                                | Change rate | Exists today?                                                                                 |
-| ------------------------ | --------------------------- | -------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------- |
-| **T0 — Repository**      | Git, committed, reviewed    | Roster, character, ownership, policy, public keys                    | Days        | Precedent: `t3.json` ([`t3ProjectFile.ts`](../../../packages/contracts/src/t3ProjectFile.ts)) |
-| **T1 — Environment**     | Local SQLite, event-sourced | Agent↔provider bindings, thread ownership, inbox, audit log, secrets | Seconds     | Yes — [`orchestration/`](../../../apps/server/src/orchestration/)                             |
-| **T2 — Relay / tailnet** | Ephemeral, signed           | Presence, live endpoints, message transport                          | Sub-second  | Yes — [`AgentAwarenessRelay.ts`](../../../apps/server/src/relay/AgentAwarenessRelay.ts)       |
-
-**Design rule:** a fact belongs in the lowest-latency tier that can hold it, and
-in Git _only_ if a teammate should be able to review the change in a PR.
-
-Practical consequence: nothing that changes more than once a day is ever written
-to Git. Presence, endpoints, message bodies, and session state are all T1/T2.
-
-### 3.2 There is no shared runtime — this is environment federation
-
-The most important fact about the codebase that v0.1 does not account for:
-
-> **T3 Code has no concept of a second human.** An _environment_ is one T3
-> server on one machine, owned by one operator, reached by paired devices
-> ([`auth/`](../../../apps/server/src/auth/),
-> [`docs/architecture/remote.md`](../../architecture/remote.md)). "Remote" means
-> reaching _your own_ machine from elsewhere — not reaching a teammate's.
-
-So "the team can see each other" does not mean logging into a shared service. It
-means **environment A talks to environment B**, each still owning its own
-providers, filesystem, and credentials. An agent named `Aria` is not a cloud
-entity; it is a configured provider instance running inside exactly one
-environment at a time.
-
-This yields a clean and — importantly — implementable trust model:
-
-- **The repository is the key directory.** Each member profile in
-  `.repokin/` carries the **public key of the environment** that member
-  operates from. T3 Code already generates and persists an environment keypair
-  for relay auth (`getOrCreateEnvironmentKeyPairFromSecretStore` in
-  [`cloud/environmentKeys.ts`](../../../apps/server/src/cloud/environmentKeys.ts)).
-- **Push access to the repo is membership.** If you can commit your profile to
-  the default branch, you are on the team. If you cannot, you are not. We do not
-  invent a second authorization system.
-- **Wire identity is verified against the repo, not asserted.** An inbound
-  message claiming to be from `julius@example.com` is only accepted if it is
-  signed by the key that `.repokin/humans/julius.json` says it should be.
-
-This also means a _stale roster is a security-relevant condition_, not just a UX
-one: revoking a member is a commit that removes their key. We should say so in
-the UI.
-
-### 3.3 Where an agent actually runs
-
-An agent profile in Git describes an agent. It does not run it. Running requires
-provider credentials, which are environment-local and never leave the machine.
-
-Therefore each agent profile declares:
-
-- `owner` — the human member who is accountable for it.
-- `homeEnvironment` — the environment id where it normally runs.
-
-Another environment may run the same agent only in **borrowed mode**, which
-requires explicit local opt-in and is surfaced everywhere as
-`Aria (borrowed, on julius-mbp)`. Two environments running the same agent
-simultaneously is legal but always visible — we do not attempt distributed
-locking over Git.
+**Explicit anti-user for v1.** Large orgs needing compliance, RBAC, SSO, or
+audit export.
 
 ---
 
-## 4. Target users
+## 4. Concepts
 
-**Primary.** Engineering teams of 2–15 already using AI coding agents and Git,
-where more than one person runs agents against the same repository and they
-currently have no idea what anyone else's agents are doing.
+New and changed terms relative to v0.2 (unchanged terms — Project, Team,
+Member, Character, Environment, Home/borrowed, Presence, Inbox — carry
+forward):
 
-**Secondary.** Individual developers running several specialized agents against
-one project — the "I want a reviewer, an implementer, and a docs writer with
-different settings" user. **This user is our fastest validation path and the M1
-release targets them specifically**, because they need zero cross-machine work.
-
-**Explicit anti-user for v1.** Large orgs needing compliance, RBAC, or audit
-export. We will not serve them well and should not pretend to.
+| Term                | Definition                                                                                                                                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Team space**      | The first-class UI area for the team: home, channels, people, activity. Per project.                                                                                                                                      |
+| **Channel**         | A named, durable conversation stream scoped to a project, whose members are humans _and_ agents.                                                                                                                          |
+| **Post**            | A message in a channel or DM. Typed: text, thread card, diff card, task card, event, digest.                                                                                                                              |
+| **Task**            | A unit of work in the project's registry: title, description (doubles as the delegation prompt), labels, comments, optional assignee (human or agent), four board states. Delegation (§6.3) is how an agent executes one. |
+| **Board**           | The kanban view of the task registry: `Todo · In progress · Done · Cancelled`.                                                                                                                                            |
+| **Duty**            | A scheduled recurring task owned by an agent (e.g. nightly test triage), declared in its profile.                                                                                                                         |
+| **Work map**        | The live view of which members are active in which parts of the repo, at directory granularity.                                                                                                                           |
+| **Digest**          | A generated summary of a member's activity over a window, postable to a channel.                                                                                                                                          |
+| **Decision record** | A conversation or thread promoted to a committed Markdown file under `.repokin/decisions/`.                                                                                                                               |
 
 ---
 
-## 5. Concepts
+## 5. Feature brainstorm — triaged
 
-Extends the existing [encyclopedia](../../reference/encyclopedia.md). New terms
-belong there too once implemented.
+The full brainstorm, triaged before the requirements sections so scope
+decisions are explicit. **Core-next** = specified in §6 and scheduled in R1–R3.
+**Later** = specified lightly, scheduled R4+. **Deferred** = named so it stops
+being re-litigated.
 
-| Term                | Definition                                                                                                                    |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Project**         | Unchanged from T3 Code: an environment-local workspace record rooted at a directory. For RepoKin it must be a Git repository. |
-| **Team**            | The set of members declared in `.repokin/` on a project's team remote.                                                        |
-| **Member**          | A human or agent in the roster. Identified by `MemberId`.                                                                     |
-| **Human member**    | A person. Identity anchored on `git config user.email`, enriched with display name, avatar, and environment public keys.      |
-| **Agent member**    | A persistent agent: name, owner, character, provider binding, home environment.                                               |
-| **Character**       | The structured, versioned definition of how an agent behaves — prose _and_ mechanical settings. See §6.3.                     |
-| **Team remote**     | The Git remote whose default branch holds the canonical roster. One per project.                                              |
-| **Environment**     | Unchanged: one T3 server, one machine, one operator's credentials. Now also a _cryptographic identity_ in the team.           |
-| **Home / borrowed** | Whether an agent is running in its declared home environment or somewhere else.                                               |
-| **Presence**        | `online` / `busy` / `away` / `offline`, per member per environment. Never committed to Git.                                   |
-| **Inbox**           | A member's durable queue of inbound messages and requests. Environment-local.                                                 |
-| **Thread**          | Unchanged, extended with an owning agent.                                                                                     |
+| Feature                               | One-liner                                                                                                                                     | Triage                                                        |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Team space (first-class UI)           | Home, channels, people, activity — out of Settings                                                                                            | Core-next                                                     |
+| Channels (humans + agents)            | Slack-like streams with typed, work-anchored posts                                                                                            | Core-next                                                     |
+| @mention-to-delegate                  | Mention an agent with a request → task → streamed progress → diff back                                                                        | Core-next                                                     |
+| Live work map / overlap radar         | "Aria and Bob are both editing `auth/`" before the merge conflict                                                                             | Core-next                                                     |
+| Activity feed                         | Unified timeline of threads, commits, handoffs, trust changes per project                                                                     | Core-next                                                     |
+| Standup digests                       | Auto-generated per-member summaries; agents report on themselves                                                                              | Core-next                                                     |
+| Review requests to agents             | Ask an agent for a review of a diff/thread; result posts back                                                                                 | Core-next                                                     |
+| Unified notification inbox            | One place for mentions, requests, task updates, trust prompts                                                                                 | Core-next                                                     |
+| Agent duties (scheduled chores)       | Nightly triage, dependency bumps, flaky-test hunts — reported to a channel                                                                    | Later                                                         |
+| Decision records                      | Promote a conversation to a committed ADR-style file                                                                                          | Later                                                         |
+| Task registry + kanban board          | Shared backlog of tasks (impl/QA/design/docs), four states, comments; assignable to humans or agents; description doubles as the agent prompt | Core-next                                                     |
+| Repo pulse dashboard                  | Contribution and hot-spot analytics, human vs agent                                                                                           | Later                                                         |
+| Voice/huddle rooms                    | Ephemeral audio for humans                                                                                                                    | Deferred                                                      |
+| Character marketplace / sharing       | Import/export agent characters between repos                                                                                                  | Deferred                                                      |
+| Org management, RBAC, SSO, billing    | Identity-provider territory                                                                                                                   | Deferred (non-goal)                                           |
+| Autonomous agent-to-agent negotiation | Agents delegating to agents without human visibility                                                                                          | Deferred — every agent-to-agent interaction stays inspectable |
+| Cross-repo teams                      | One roster spanning repositories                                                                                                              | Deferred                                                      |
+
+Two triage principles applied above:
+
+- **Prefer features that reuse landed plumbing.** Work map, activity feed,
+  and digests are projections over data that presence, threads, and the event
+  store already hold. Channels reuse the signed relay transport from M3.
+- **Every social feature must be valuable solo.** A single developer with
+  three agents gets a mission control; a team gets a workplace. Features that
+  only work at N≥2 humans (voice rooms) are deferred.
 
 ---
 
 ## 6. Functional requirements
 
-Priorities: **P0** = required for M1 release. **P1** = M2/M3. **P2** = M4+.
+Numbering continues from v0.2 (FR-1 through FR-10 remain in force; landed
+ones are listed in §10.1). Priorities: **P0** = required for the milestone
+that introduces it; **P1** = fast-follow; **P2** = later.
 
-### 6.1 Git foundation (P0)
+### 6.1 Team space (P0, R1)
 
-- **FR-1.1** On project create/open, verify `git` is available. If missing, block
-  team features with actionable instructions; do **not** block T3 Code's
-  existing single-user flow. A non-Git project remains a valid T3 Code project.
-- **FR-1.2** Offer `git init` for a non-repository directory. Never run it
-  silently.
-- **FR-1.3** Derive the local human identity from `git config user.name` and
-  `user.email`. Allow enrichment, never silent invention. If Git identity is
-  unset, prompt — do not guess from the OS user.
-- **FR-1.4** All roster data lives under `.repokin/` at the repository root
-  (§7).
-- **FR-1.5** Roster reads from the team remote's default branch **without
-  touching the working tree** — via `git show <remote>/<branch>:<path>` against a
-  periodically fetched ref. Checking out or merging to read the roster is
-  forbidden; it would stomp on in-progress work.
-- **FR-1.6** Roster writes are ordinary commits on the current branch. Publishing
-  is explicit (see Q2, §12). No background pushes to a shared default branch.
+- **FR-11.1** A project with team features enabled gets a **Team space** in
+  the primary navigation — not under Settings. Entry points: Home, Channels,
+  People, Activity.
+- **FR-11.2** **Home** shows, above the fold: my agents and their live
+  status; teammates and their presence; the most recent activity; anything
+  waiting on me (trust prompts, review requests, queued messages, unpublished
+  roster changes).
+- **FR-11.3** **People** is the roster: humans with their environments and
+  presence; agents with owner, character summary, home environment, and
+  recent work. Each member has a profile page.
+- **FR-11.4** An **agent profile page** shows identity (name, avatar, accent,
+  owner), the expressive character rendered readably, the mechanical
+  character rendered as enforceable facts ("may edit `apps/web/**`",
+  "approval required"), the compiled-instruction preview per provider, recent
+  threads and commits, and the edit affordance when local policy allows.
+- **FR-11.5** Existing Settings → RepoKin content is decomposed into the
+  Team space; Settings retains only environment-local configuration (team
+  remote, trust store, bindings, publish preferences).
+- **FR-11.6** The Team space is reachable on web and desktop at parity;
+  mobile ships Home + People read-only in R1, interaction parity later.
+- **FR-11.7** A project without `.repokin/` shows a single inviting,
+  dismissible entry point to create a team (or an agent) — and otherwise
+  looks exactly like stock T3 Code (FR-10.2 carried forward).
 
-### 6.2 Member profiles (P0)
+### 6.2 Channels (P0, R2)
 
-- **FR-2.1** Human profile: member id, display name, Git email(s), optional
-  avatar and bio, environment public keys, optional pronouns.
-- **FR-2.2** Agent profile: member id, name, owner, character, preferred
-  provider driver + model, home environment, capabilities, avatar/accent.
-- **FR-2.3** **No secrets in profiles, ever.** API keys, tokens, and any
-  `ProviderInstanceEnvironmentVariable` marked `sensitive`
-  ([`providerInstance.ts`](../../../packages/contracts/src/providerInstance.ts))
-  are environment-local and must be structurally impossible to serialize into a
-  profile. Enforced by schema shape and a test, not by convention.
-- **FR-2.4** Unknown fields in a profile round-trip verbatim, so a teammate on a
-  newer build does not lose data when an older build rewrites the file. This
-  mirrors the existing `ProviderInstanceConfig` forward-compatibility rule.
-- **FR-2.5** Roster refresh happens on project open, on window focus, and on a
-  low-frequency interval (default 10 min), with manual refresh available.
-  Fetching is `git fetch <remote> <branch>` only — never `pull`.
+- **FR-12.1** A project has zero or more channels. A **default `#team`
+  channel** is created with the team. Channels are declared in
+  `.repokin/channels/<slug>.json` (name, purpose, membership policy) — the
+  declaration is T0; the messages are T1/T2 and **never in Git**.
+- **FR-12.2** Members are humans and agents, mixed. Default membership: all
+  roster members; per-channel opt-outs are environment-local.
+- **FR-12.3** Posts are **typed**: `text`, `thread-card` (live status of a
+  thread), `diff-card` (checkpoint/turn diff reference), `task-card` (§6.3),
+  `event` (handoff, trust change, publish, duty run), `digest`. Cards render
+  live state, not snapshots-as-text.
+- **FR-12.4** Transport and storage reuse the M3 model: a post is a signed
+  envelope fanned out to roster environments via the relay queue; each
+  environment stores its copy in the local event store. Delivery states and
+  TTL semantics follow FR-7.3/7.5. History convergence is best-effort:
+  a member offline past the relay TTL sees a visible gap marker, not silent
+  loss.
+- **FR-12.5** Ordering is by sender timestamp with arrival tiebreak;
+  causality is preserved per sender. We do not attempt global total order —
+  a gap marker is honest, a reordering lie is not.
+- **FR-12.6** **Anti-noise is a requirement, not a style choice.**
+  - Agents may post to a channel only: in reply to a mention, as the terminal
+    report of a task or duty they own, or as an explicitly subscribed event.
+    Agents never post unprompted commentary.
+  - Agent posts are terse by default; the full detail lives behind the card
+    (in the thread), not in the channel.
+  - Per-channel, per-member mute and event filters are environment-local.
+- **FR-12.7** Mentions: `@member` notifies; `@team` notifies humans only.
+  Mentioning an agent offers the delegation flow (§6.3) inline.
+- **FR-12.8** DMs (landed in M2/M3) render in the same conversation UI as
+  channels and gain typed posts.
 
-### 6.3 Character (P0) — the differentiator
+### 6.3 Delegation (P0, R2)
 
-Character is a versioned structured object with two halves.
+- **FR-13.1** Mentioning an agent with a request creates a **task in the
+  project registry** (§6.7): origin post, requester, assignee, free-text goal
+  (the task description), optional thread/diff/path references. Delegation
+  and the board share one task primitive — there are not two kinds of task.
+- **FR-13.2** Task lifecycle: `proposed → accepted → running → needs-review →
+done | declined | failed | expired`. Every transition is an event in the
+  local store and renders live on the task card.
+- **FR-13.3** Acceptance is governed by the assignee environment's existing
+  inbound policy (`manual` / `trusted-members` / `off`, v0.2 §6.8). `manual`
+  means the agent's owner approves before anything runs. Delegation **never**
+  bypasses runtime mode, tool policy, path scope, or trust state.
+- **FR-13.4** An accepted task runs as a normal thread on the assignee's home
+  environment, attributed to the agent, with the task reference carried on
+  the thread. Progress streams to the task card as coarse states — not a
+  token firehose into the channel.
+- **FR-13.5** The terminal report posts back to the origin channel as a card:
+  outcome, diff reference, and a one-paragraph agent summary. The requester
+  can open the full thread from the card (subject to the thread being on a
+  reachable environment; otherwise the card carries the summary and diff).
+- **FR-13.6** **Review requests** are tasks with a diff/thread reference and
+  a structured verdict (`approve` / `request-changes` + findings) rendered on
+  the card. Humans can be assignees too — a task assigned to a human lands in
+  their notification inbox.
+- **FR-13.7** Cross-environment delegation uses the signed inbox transport
+  (M3). The requester sees queued/delivered/accepted states truthfully;
+  an unreachable assignee shows as queued with TTL, never as a spinner.
 
-**Expressive half** (influences the model, unverifiable):
+### 6.4 Work map and overlap radar (P0, R3)
 
-- `persona` — free prose, the agent's voice and disposition.
-- `expertise` — domains and stacks.
-- `conventions` — coding style and review preferences.
-- `communication` — terseness, formality, how it reports.
+- **FR-14.1** Each environment publishes **coarse work-location signals** for
+  its active members: repo-relative directories (not file contents, not
+  diffs) touched by running threads and by the human's working tree, at
+  directory granularity, throttled, over the presence transport.
+- **FR-14.2** The work map renders the repo as a tree/treemap with member
+  avatars on the areas they are active in, live.
+- **FR-14.3** **Overlap radar:** when two members' active areas intersect, or
+  a teammate's published branch touches directories with local uncommitted
+  changes, surface a passive, dismissible signal on Home and on the affected
+  thread — "Aria and Bob are both working in `apps/server/src/auth/`" —
+  linking to both. Never a modal, never blocking.
+- **FR-14.4** Work-location sharing is per-project, on by default at
+  directory granularity, off-switchable per environment; the setting's scope
+  and current state are always inspectable. No signals leave the roster
+  membership.
+- **FR-14.5** Radar signals are advisory only. No locking, no reservation.
+  Visibility over coordination protocols — same philosophy as
+  borrowed-agent semantics.
 
-**Mechanical half** (enforced by the harness, verifiable):
+### 6.5 Activity, digests, and notifications (P0 feed/inbox in R1; digests R3)
 
-- `provider` — driver + model preference.
-- `runtimeMode` — `approval-required` or `full-access`
-  ([runtime-modes.md](../../architecture/runtime-modes.md)).
-- `interactionMode` — `default` or `plan`.
-- `toolPolicy` — MCP servers and tool families allowed/denied.
-- `pathScope` — repository globs the agent may modify.
+- **FR-15.1** The **activity feed** is a per-project timeline projected from
+  existing events: threads started/completed (with agent attribution),
+  checkpoints, handoffs, task transitions, trust decisions, roster publishes,
+  duty runs. Filterable by member and kind. No new event sources — it is a
+  projection.
+- **FR-15.2** The **notification inbox** unifies everything addressed to me:
+  mentions, delegation/review requests, task updates on things I requested,
+  trust prompts, queued-message expiries. Every item is actionable in place
+  and deep-links to its source. Read state syncs across my paired devices.
+- **FR-15.3** **Digests**: a generated summary of a member's activity over a
+  window (day/week) — threads, commits, tasks, notable events. My own agents'
+  digests are generated locally by my environment (optionally using a bound
+  provider); a digest is shareable to a channel as a `digest` post.
+  **Standup mode**: one action posts my whole environment's digest (me + my
+  agents) to `#team`.
+- **FR-15.4** Digests are pull/explicit-share only in v1. No scheduled
+  auto-posting until duties (§6.6) ship, and then only as a configured duty.
 
-Requirements:
+### 6.6 Agent duties (P1, R4)
 
-- **FR-3.1** Character compiles into a per-driver instruction bundle at the
-  **adapter boundary** — Codex through
-  [`CodexDeveloperInstructions.ts`](../../../apps/server/src/provider/CodexDeveloperInstructions.ts),
-  Claude through the `systemPrompt` path in
-  [`ClaudeAdapter.ts`](../../../apps/server/src/provider/Layers/ClaudeAdapter.ts),
-  and an explicit decision for Cursor, Grok, and OpenCode — including "not
-  supported here," which must then be visible in the UI.
-- **FR-3.2** The mechanical half is applied by the harness at session start
-  regardless of whether the model honors the prose. **This is what keeps
-  character from being cosmetic**, and it is the direct mitigation for the
-  headline risk in §11.
-- **FR-3.3** Character is versioned (`characterVersion`) and evolves additively.
-- **FR-3.4** The user can preview the exact compiled instruction text for an
-  agent on a given provider before running it. Character that cannot be
-  inspected cannot be debugged.
-- **FR-3.5** Character changes take effect on the next session, not mid-turn.
+- **FR-16.1** A duty is a scheduled recurring task declared on an agent's
+  profile (T0, reviewable in PR): schedule, goal, report channel.
+- **FR-16.2** Duties run only on the agent's home environment, only when it
+  is running, under the agent's full mechanical character and trust state.
+  Missed windows are reported as missed, not silently skipped.
+- **FR-16.3** Duty runs report to their channel as terminal cards
+  (FR-12.6 applies — a nightly duty is one post, not a play-by-play).
+- **FR-16.4** Because duties are repo-sourced _scheduled autonomous
+  execution_, they are held to the strictest trust gate: a new or changed
+  duty is inert until the home environment's owner explicitly confirms it.
 
-### 6.4 Attribution (P0)
+### 6.7 Task registry and board (P0, R2)
 
-- **FR-4.1** Every thread records the agent that ran it. Threads already carry
-  `session.providerInstanceId`; the agent binding projects from that.
-- **FR-4.2** Commits produced by an agent carry a trailer identifying it (e.g.
-  `Co-Authored-By: Aria <aria@agents.local>` plus an `X-RepoKin-Agent` id
-  trailer). This works with GitHub today and costs almost nothing.
-- **FR-4.3** Checkpoints and turn diffs are attributable to the agent that
-  produced them.
-- **FR-4.4** The roster view shows each agent's recent work.
+Not a Jira. A shared backlog with exactly enough structure for a hybrid team
+to plan, hand out, and track work — where "hand out" includes handing to an
+agent.
 
-Attribution is deliberately P0 despite being unglamorous: it is the feature that
-makes a multi-agent repository legible, and it is cheap.
+- **FR-18.1** A project has a **task registry**. A task carries: title,
+  description (Markdown; **doubles verbatim as the delegation prompt** when
+  assigned to an agent), labels (freeform strings, seeded with
+  `implementation` / `qa` / `design` / `docs`), optional references
+  (thread, diff, path, channel post), creator, optional assignee (human or
+  agent), and state.
+- **FR-18.2** Board states are exactly four: `todo` → `in-progress` →
+  `done` / `cancelled`. The finer delegation lifecycle (FR-13.2:
+  accepted/running/needs-review/failed…) renders as **execution detail on
+  the card**, never as extra columns. An agent accepting a task moves it to
+  `in-progress` automatically; its terminal report offers the `done` /
+  back-to-`todo` decision to a human — an agent never marks its own work
+  `done`.
+- **FR-18.3** Humans and agents can both create tasks. Agent-created tasks
+  (e.g. follow-ups spun out of a review) are visibly agent-authored, always
+  land in `todo` unassigned, and never self-assign — the same reactive
+  principle as FR-12.6.
+- **FR-18.4** Tasks have **comments**: the same typed-post model as channels
+  (text, diff cards, thread cards). Mentioning an agent in a comment offers
+  to assign or delegate _this_ task. Comment noise rules follow FR-12.6.
+- **FR-18.5** Assignment: to a human → their notification inbox; to an agent
+  → the delegation flow (§6.3) with the description as the goal, gated by
+  the assignee environment's policy as always. Unassigned tasks are the
+  backlog. Reassignment and hand-back preserve the task's history.
+- **FR-18.6** Storage and sync follow the channel model (FR-12.4): tasks
+  live in the environment event stores and fan out as signed envelopes —
+  **never in Git**. Concurrent edits resolve last-writer-wins per field,
+  with every transition an attributed event ("Bob moved to Done") so the
+  task timeline stays honest even when two members race.
+- **FR-18.7** The **board** is a four-column kanban over the registry:
+  drag between columns, filter by label / assignee / human-vs-agent; cards
+  show assignee avatar with accent, labels, live execution state, and
+  comment count. A list view ships with it for free.
+- **FR-18.8** **Anti-Jira guardrails, enforced as scope law:** no custom
+  workflows, no required fields beyond title, no estimates, sprints, epics,
+  or hierarchies in v1. Labels are the only taxonomy. Any of these returns
+  only with R2 usage data behind it.
 
-### 6.5 Trust and safety for repo-sourced character (P0)
+### 6.8 Decision records and pulse (P2, R4+)
 
-- **FR-5.1** When a project's `.repokin/` is first seen, or when any
-  **mechanical** field changes, the change requires explicit local confirmation
-  before it takes effect. Expressive-only changes apply silently.
-- **FR-5.2** The confirmation prompt shows a diff of what changed, in plain
-  language ("Aria may now edit files outside `docs/`" — not a JSON blob).
-- **FR-5.3** Trust decisions are environment-local and per project.
-- **FR-5.4** An unconfirmed agent still runs, but with the _previously trusted_
-  mechanical settings, or with safe defaults if never trusted. It never silently
-  escalates.
+- **FR-17.1** Promote a post, conversation span, thread, or task to a
+  **decision record**: a generated-then-editable Markdown file under
+  `.repokin/decisions/`, committed like any roster change. The record links
+  back to its origin; the origin shows it was promoted.
+- **FR-19.1** **Repo pulse** visualizes contribution and hot spots over time,
+  split human vs agent, from Git history + attribution trailers. Read-only,
+  computed locally.
 
-Rationale: `.repokin/` is pulled from a shared branch. Without this, a merged
-PR can flip an agent to `full-access` on every teammate's machine. This is the
-same class of risk that editors handle with workspace trust; we handle it the
-same way and ship it with M1.
+### 6.9 T3 Code compatibility (P0, permanent)
 
-### 6.6 Presence (P1)
-
-- **FR-6.1** States `online` / `busy` / `away` / `offline`, per member per
-  environment.
-- **FR-6.2** Agent presence derives from existing session state — the phases in
-  [`agentAwareness.ts`](../../../packages/shared/src/agentAwareness.ts) already
-  express `starting`/`running`/`waiting_for_approval`/`waiting_for_input`/
-  `completed`/`failed`/`stale`. **Extend this; do not invent a parallel model.**
-- **FR-6.3** Human presence derives from an app being connected plus recent
-  input.
-- **FR-6.4** Presence is never committed to Git. Ever. Non-negotiable.
-- **FR-6.5** Presence has a visible staleness horizon; a member whose last
-  heartbeat is older than the horizon shows as `offline`, not as their last
-  known state. Lying spinners are a T3 Code cardinal sin.
-
-### 6.7 Messaging (P1)
-
-- **FR-7.1** Humans can message humans and agents; agents can message humans and
-  agents, subject to local policy (§6.8).
-- **FR-7.2** Direct messages in M2; project channels in M4 if earned.
-- **FR-7.3** Messages to an offline or busy target are queued durably and
-  delivered on availability, with a TTL after which they expire visibly.
-- **FR-7.4** Message bodies live in the environment-local event store and are
-  transported by the relay. They are **not** written to Git (Q5, §12).
-- **FR-7.5** Delivery state is visible: queued / delivered / read / expired.
-
-### 6.8 Permissions (P1)
-
-Deliberately minimal. Three per-agent inbound policy levels, environment-local:
-
-- `manual` — every inbound request from another member needs human approval.
-  **Default.**
-- `trusted-members` — auto-accept from members in the roster; still fully logged.
-- `off` — no inbound.
-
-Plus: an agent acts only with its own environment's credentials, never another
-human's. Cross-member actions are _requests_ landing in an inbox, never direct
-execution. No capability system in v1.
-
-### 6.9 Collaboration primitives (P1–P2)
-
-- **FR-9.1** Assign or claim a thread for an agent.
-- **FR-9.2** Hand off a thread between agents, or agent↔human, preserving
-  history and recording the handoff.
-- **FR-9.3** "Request review" — a structured request landing in the target's
-  inbox with a thread/diff reference.
-- **FR-9.4** A team activity view: what every member is working on right now.
-
-### 6.10 T3 Code compatibility (P0)
-
-- **FR-10.1** Every existing capability keeps working: five providers, sessions,
-  checkpoints, remote access, web/desktop/mobile.
-- **FR-10.2** Team features are additive. A user who never creates an agent sees
-  a product that behaves like T3 Code.
-- **FR-10.3** Team features degrade cleanly, not loudly, when the project is not
-  a Git repo, has no remote, or has no `.repokin/`.
-- **FR-10.4** Upstream changes keep merging. See
-  [fork-policy.md](./fork-policy.md).
+FR-10.1 through FR-10.4 carry forward verbatim: every upstream capability
+keeps working; team features are additive and invisible until enabled;
+degrade cleanly without Git/remote/`.repokin/`; upstream merges stay
+affordable per [fork-policy.md](./fork-policy.md).
 
 ---
 
-## 7. Repository data model
+## 7. UI revamp — the design north star
+
+### 7.1 The problem, stated honestly
+
+Every RepoKin feature currently lives in one 1,859-line Settings page:
+roster, agent editor, inbox, handoff, presence, publish, trust — a developer
+tools panel, not a workplace. The plumbing beneath it is good; the surface
+actively hides it. R1 is primarily _this_ fix.
+
+### 7.2 Information architecture
 
 ```text
-.repokin/
-  team.json                 # team-level config: schema version, policy defaults
-  humans/
-    <member-slug>.json
-  agents/
-    <agent-slug>.json
+Sidebar (per project)
+├── Threads            ← existing T3 Code surface, untouched
+├── TEAM                                          ← new, fork-owned
+│   ├── Home           mission control: my agents, teammates, waiting-on-me
+│   ├── Channels       #team, #reviews, …          (R2)
+│   ├── Board          todo / in-progress / done / cancelled   (R2)
+│   ├── People         roster → member profile pages
+│   └── Activity       filterable project timeline
+└── Settings
+    └── RepoKin        env-local config only: remote, trust, bindings
 ```
 
-One file per member — not a single roster file — so that two people adding
-members concurrently do not conflict. This is the main reason to reject a single
-`members.json`.
+- Composer keeps the agent picker; picking an agent shows its accent and
+  mechanical badges inline (model, mode, scope) so "who am I talking to and
+  what may they do" is always one glance away.
+- Presence lives on avatars everywhere a member appears — sidebar, cards,
+  channel rows — as a static dot (`online` / `busy` / `away` / `offline`).
+- Command palette gains team verbs: "message Aria", "assign thread to…",
+  "open #team", "show work map".
 
-Slugs are derived and stable: humans from the Git email local-part plus a
-disambiguator, agents from their name. The `id` field inside the file is
-authoritative; the filename is a convenience.
+### 7.3 Design language — "calm control room"
 
-**Agent profile (illustrative):**
+Contemporary agent-era product feel (the density and finish of Linear, the
+conversational clarity of Slack, the live-status confidence of Vercel), under
+T3 Code's existing performance discipline:
 
-```json
-{
-  "$schema": "https://repokin.dev/schema/agent.json",
-  "schemaVersion": 1,
-  "id": "agent_01J8XQ2K",
-  "name": "Aria",
-  "type": "agent",
-  "owner": "human_julius",
-  "homeEnvironment": "env_9f3a...",
-  "avatar": { "accentColor": "#7C5CFF" },
-  "character": {
-    "characterVersion": 1,
-    "persona": "Direct, allergic to speculative abstraction...",
-    "expertise": ["typescript", "effect", "accessibility"],
-    "conventions": ["prefers inferred types", "tests alongside source"],
-    "communication": { "verbosity": "terse", "reportsWith": "diff-first" },
-    "provider": { "driver": "claudeAgent", "model": "..." },
-    "runtimeMode": "approval-required",
-    "interactionMode": "default",
-    "toolPolicy": { "allow": ["fs.read", "fs.write", "git.read"], "deny": ["net.*"] },
-    "pathScope": ["apps/web/**", "packages/client-runtime/**"]
-  },
-  "createdAt": "2026-07-30T...",
-  "updatedAt": "2026-07-30T..."
-}
-```
+- **Agents are people-shaped, visibly non-human.** Every member has an avatar;
+  agents get a generated geometric identicon on their accent color plus a
+  small AI glyph. Owner attribution ("Aria · runs on julius-mbp") appears
+  wherever an agent acts. Never pretend an agent is a human.
+- **Accent color as identity thread.** An agent's accent runs through its
+  avatar, thread chips, diff cards, and work-map presence — you learn to see
+  "purple = Aria" the way you learn a teammate's handle.
+- **Live without lying, calm without staleness.** Static presence dots and
+  state-transition micro-animations only — **no continuously repainting
+  indicators** (T3 Code cardinal sin, carried forward). Staleness is always
+  visible: stale presence shows as offline; queued shows as queued with TTL;
+  gaps show as gaps.
+- **Cards over transcripts.** Threads, diffs, tasks, and digests render as
+  compact live-state cards with deep links. The channel is a control surface;
+  detail lives one click deeper.
+- **Dark-first, both themed.** Inherit the existing token system; the Team
+  space may extend tokens, never fork them.
+- **Keyboard-first and dense.** Every team action reachable from the palette;
+  information density tuned for developers, not marketing pages.
 
-**Human profile (illustrative):**
+### 7.4 Reconciling the revamp with fork policy
 
-```json
-{
-  "schemaVersion": 1,
-  "id": "human_julius",
-  "type": "human",
-  "displayName": "Julius",
-  "gitEmails": ["julius@example.com"],
-  "environments": [{ "environmentId": "env_9f3a...", "label": "julius-mbp", "publicKey": "..." }]
-}
-```
+Q6 (v0.2) said "near-total visual continuity." That stays true **for
+inherited surfaces** — no restyling of upstream screens, no token sweeps, no
+package renames. The Team space, however, is built entirely in fork-owned
+files (new routes, new components, additive tokens), where divergence has
+zero merge cost. The rule:
 
-Note what is absent: no ports, no URLs, no presence, no tokens, no message
-history. Live endpoints are resolved through the relay; the profile carries only
-the public key needed to verify what the relay delivers.
+> **Diverge freely in files upstream will never touch; diverge never in
+> files it will.**
 
-**Schema publication.** Both files ship a JSON Schema at a stable URL, following
-the `t3.json` precedent — annotations on the encoded side so they survive into
-the published schema. This makes profiles editable in any editor with schema
-support, which matters because power users will hand-edit them.
+### 7.5 R1 screen inventory
+
+| Screen             | Replaces                         | Core content                                                            |
+| ------------------ | -------------------------------- | ----------------------------------------------------------------------- |
+| Team Home          | — (new)                          | My agents w/ live status · teammates · waiting-on-me · recent activity  |
+| People             | Settings roster list             | Humans + agents, presence, borrowed badges                              |
+| Member profile     | Settings agent editor (embedded) | Identity · character (readable) · compiled preview · recent work · edit |
+| Activity           | Settings activity list           | Filterable timeline w/ attribution chips                                |
+| Notification inbox | Settings inbox control           | Actionable, deep-linking, cross-device read state                       |
+| Publish tray       | Settings publish affordance      | Pending roster commits · explicit push (Q2 unchanged: never auto-push)  |
 
 ---
 
 ## 8. Non-functional requirements
 
-### 8.1 Performance
+v0.2 §8 carries forward in full (performance, offline-first, security,
+auditability, Git hygiene). Additions:
 
-- No regression to thread-open, turn-start, or scroll performance. The roster is
-  read from a cached ref and never blocks the UI.
-- `git fetch` for roster refresh runs off the interaction path, is coalesced, and
-  is skipped entirely when the project is not visible.
-- Presence rides the existing relay publish path and adds no new steady-state
-  WebSocket traffic per member beyond a bounded heartbeat.
-- T3 Code's stated performance discipline applies: no continuously repainting
-  presence indicators, no per-member polling.
-
-### 8.2 Offline-first
-
-Creating agents, editing character, running them, attribution, and local
-handoff all work with no network. Losing the network loses exactly: remote
-roster freshness, cross-machine presence, and cross-machine delivery — each
-degrading to a visible stale/queued state.
-
-### 8.3 Security
-
-- Repository write access is the authorization root (§3.2).
-- Wire identity is verified against roster public keys; unsigned or
-  unverifiable messages are dropped, not shown as "unknown sender."
-- Mechanical character changes require local trust confirmation (§6.5).
-- Secrets never enter the repository (FR-2.3).
-- Agents never act with another human's credentials.
-- Endpoint exposure remains controlled by existing T3 Code remote-access
-  settings; the team layer adds no new listening surface.
-
-### 8.4 Auditability
-
-Every inter-member message, handoff, accepted request, and trust decision is an
-event in the local event store — the system is already event-sourced, so this is
-close to free. Export is P2.
-
-### 8.5 Git hygiene
-
-- Roster commits are meaningful and infrequent; presence and messages never
-  touch Git.
-- A team-layer commit touches only `.repokin/`, never mixes with code
-  changes.
-- Commit messages are readable in `git log` without tooling
-  (`chore(team): add agent Aria`).
+- **NFR-1 Channel scale.** Channel history render and scroll stay smooth at
+  10k+ posts per channel (virtualized, same discipline as thread views).
+  Relay fan-out is bounded per post by roster size; no per-member polling.
+- **NFR-2 Work-map cost.** Work-location signals are throttled and coalesced;
+  the map repaints on state change only. Zero steady-state GPU cost.
+- **NFR-3 Delegation safety.** No path by which a channel post causes code
+  execution without the assignee environment's policy gate. Prompt-injection
+  containment: a task's free text is model input for the _assignee agent
+  under its own mechanical character_, never harness instructions.
+- **NFR-4 Privacy boundary.** Work signals, presence, digests, and posts
+  never leave roster membership; all cross-environment payloads remain
+  signed and verified against roster keys (M3 model).
+- **NFR-5 Truthful delivery.** Every social surface shows real delivery/
+  freshness state. A gap, a queue, and an expiry are all rendered as what
+  they are.
 
 ---
 
-## 9. Architecture direction
+## 9. Architecture direction (delta)
 
-Build strictly additively on T3 Code's existing shape. The team layer is a new
-domain that follows the same command → decider → event → projection pattern the
-orchestration domain already uses, and reuses the existing relay rather than
-inventing transport.
+The landed M0–M3 architecture carries the new features without new
+subsystems:
 
 ```text
-┌──────────────────────────────────────────────────────────┐
-│ Clients (web / desktop / mobile)                         │
-│   Roster · Agent editor · Presence · Inbox               │
-└───────────────┬──────────────────────────────────────────┘
-                │ typed WS (packages/contracts/src/team.ts)
-┌───────────────▼──────────────────────────────────────────┐
-│ Server — new Team domain (apps/server/src/team/)         │
-│                                                           │
-│  TeamFileStore ──── reads/writes .repokin/  (T0, Git) │
-│  LocalIdentityResolver ── git config user.*              │
-│  RosterSync ──────── git fetch + git show (no checkout)  │
-│  CharacterCompiler ─ character → per-driver bundle       │
-│  TeamEngine ──────── commands/events/projection (T1)     │
-│  InboxReactor ────── durable queue, delivery, TTL        │
-│  TeamPresence ────── extends AgentAwareness (T2)         │
-└───────────────┬──────────────────────────────────────────┘
-                │ existing seams, unchanged
-┌───────────────▼──────────────────────────────────────────┐
-│ ProviderService · adapters · GitManager · Relay          │
-└──────────────────────────────────────────────────────────┘
+Team space UI (fork-owned routes/components)
+      │ typed WS (packages/contracts/src/team.ts — additive)
+      ▼
+Team domain (apps/server/src/team/) — existing engine
+  ├─ Channels   = new command/event family + projection; transport = M3 relay queue
+  ├─ Tasks      = new event family (registry + board + delegation share it);
+  │               execution = existing thread + attribution; sync = channel model
+  ├─ Work map   = projection over presence + thread cwd signals (T2, ephemeral)
+  ├─ Feed/inbox = projections over existing events (no new sources)
+  └─ Digests    = local generation over T1 read models
 ```
 
-Three existing seams carry most of the weight, which is why this is tractable:
-
-1. **`ProviderInstanceId`** is already a user-defined routing key supporting
-   multiple independently-configured instances of one driver, with
-   `displayName`, `accentColor`, and an opaque `config` payload preserved
-   verbatim across versions. An agent's runtime _is_ a provider instance. We are
-   adding identity and character on top of a multi-instance system that already
-   exists.
-2. **`AgentAwarenessRelay`** already publishes per-thread activity state to the
-   relay with signed proofs and an aggregate view. Presence is an extension of
-   a working mechanism, not a new subsystem.
-3. **`t3.json` + `T3ProjectFileLoader`** already establish the pattern for a
-   checked-in, schema-published, repo-committed project file. `.repokin/`
-   follows it.
-
-The corresponding constraint: **complexity belongs at the adapter boundary.**
-Character compilation is per-driver and lives there. The team domain stays pure
-and the UI stays dumb.
+Three rules from v0.2 remain binding: complexity at the adapter boundary;
+contracts are schema-only and additive; migrations in the `1xx` range. One
+addition: **social features are projections first** — before adding an event
+source, prove the feature cannot be projected from events we already emit.
 
 ---
 
 ## 10. Roadmap
 
-Each milestone is independently shippable and independently _valuable_. If we
-stop after any of them, we have a coherent product.
+### 10.1 Landed (M0–M3, per implementation-plan.md)
 
-### M0 — Fork foundation (~1 week)
+Fork foundation and upstream sync; Git-backed roster and character with
+per-provider compilation and preview; agent↔provider binding; trust prompts;
+attribution on threads/checkpoints/commits; local presence, inbox, handoff;
+roster sync from the team remote; signed cross-environment messaging with
+durable relay queue and receipts; cross-machine presence; borrowed-agent
+visibility. Remaining M1–M3 exit gates (blind A/B, two-machine acceptance,
+perf checks) stay open and should be closed during R1.
 
-Branch model, upstream sync automation, branding indirection, fork policy
-documented and enforced in review. Detail in
-[fork-policy.md](./fork-policy.md).
+### 10.2 Next milestones
 
-**Ships:** nothing user-visible. **Earns:** the ability to build without
-drifting away from upstream.
+Each is independently shippable; each earns the next.
 
-### M1 — Persistent agents with character (the MVP, ~4–6 weeks)
+**R1 — The Team space (UI revamp).** §6.1, §6.5 feed + inbox, §7 in full.
+No new distributed features — R1 makes the landed plumbing _visible and
+lovable_, closes the open M1–M3 exit gates, and establishes the design
+system for everything after.
+_Gate: a new user can create an agent, see it on Home, watch it work in the
+activity feed, and never open Settings._
 
-Git-backed roster, human identity from Git config, agent creation with
-character, character compiled into prompts and enforced mechanically, trust
-prompt, attribution on threads and commits, roster UI on web + desktop, roster
-read-only on mobile. **Single environment. No presence. No messaging.**
+**R2 — Channels, delegation, and the board.** §6.2, §6.3, §6.7. `#team` by
+default, typed posts, @mention-to-task, review requests, task registry with
+the four-state kanban board.
+_Gate: a two-environment team completes backlog task → assign to agent →
+accept → run → diff-card → human review → Done entirely inside RepoKin._
 
-**Ships:** the product's actual thesis, for the secondary (solo power user)
-persona.
-**Validates:** does distinct character visibly change output, and do people
-create more than one agent and keep them?
+**R3 — Visibility.** §6.4 work map + radar, §6.5 digests + standup mode.
+_Gate: overlap between two members surfaces within the presence staleness
+horizon; a standup digest posts to #team in one action._
 
-If M1 does not validate, **stop and reconsider** — the team layer's value is
-downstream of character being real.
-
-### M2 — Local presence and inbox (~3–4 weeks)
-
-Team domain event store, presence for local members, durable inbox, direct
-messages between the human and local agents, thread assignment and handoff.
-
-**Ships:** coordination for one person running several agents.
-
-### M3 — Cross-environment (~5–7 weeks)
-
-Roster sync from the team remote, environment-to-environment signed messaging
-over the relay, cross-machine presence, offline queue with TTL, borrowed-agent
-semantics.
-
-**Ships:** the actual team product. Also the milestone with the most unknowns
-(NAT, relay capacity, key rotation) — plan for it to slip.
-
-### M4 — Inter-agent workflows (open-ended)
-
-Review requests, richer agent-to-agent protocols, permission refinement, audit
-export, channels, mobile parity.
+**R4 — Workplace maturity.** §6.6 duties, §6.8 decision records and pulse —
+sequenced by R2/R3 usage data, not preplanned in detail.
 
 ---
 
 ## 11. Risks
 
-| Risk                                                             | Severity | Mitigation                                                                                                                                                        |
-| ---------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Character is cosmetic** — prose in a prompt that models ignore | High     | The mechanical half (model, runtime mode, tool policy, path scope) is harness-enforced and verifiable (FR-3.2). Character has teeth even if the prose is ignored. |
-| **Repo-sourced character as an attack vector**                   | High     | Trust confirmation on mechanical changes, shipped in M1 (§6.5).                                                                                                   |
-| **Upstream drift makes merges unaffordable**                     | High     | Additive-only file discipline, no broad rebrand, weekly automated merge. [fork-policy.md](./fork-policy.md).                                                      |
-| **Scope explosion**                                              | High     | Milestones gated on validation; M1 explicitly excludes presence and messaging.                                                                                    |
-| **Git noise and conflicts**                                      | Medium   | Per-member files, no presence in Git, explicit publish, `.repokin/`-only commits.                                                                                 |
-| **Cross-machine connectivity**                                   | Medium   | Reuse existing relay/Tailscale/tunnel work rather than inventing P2P. Deferred to M3 so it does not block value.                                                  |
-| **Two environments running one agent**                           | Medium   | Home/borrowed semantics with visible labeling; no distributed locking attempted.                                                                                  |
-| **Agents messaging each other produces noise, not work**         | Medium   | Agent-to-agent is M4, gated on M2/M3 usage data. Default inbound policy is `manual`.                                                                              |
-| **Team features confuse the 100k existing single-user base**     | Medium   | Additive and invisible until a project has `.repokin/` (FR-10.2).                                                                                                 |
-| **We are building a chat app instead of a coding tool**          | Medium   | Messaging exists to route work; every message primitive must reference a thread, diff, or task. No free-floating chat in v1.                                      |
+v0.2's risk table carries forward (character cosmetic; repo-sourced
+character as attack vector; upstream drift; scope explosion; Git noise;
+connectivity; borrowed agents; single-user confusion). New or elevated:
+
+| Risk                                                     | Severity | Mitigation                                                                                                                 |
+| -------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **We build a worse Slack instead of a better workplace** | High     | Typed work-anchored posts only; agents cannot post unprompted (FR-12.6); every message references work; no free chat.      |
+| **Agent noise makes channels unreadable**                | High     | FR-12.6 posting rules; terse-by-default cards; per-member filters; duty = one terminal post.                               |
+| **Delegation becomes remote code execution**             | High     | Assignee-side policy gate always decides (FR-13.3); mechanical character + trust unchanged by any inbound request (NFR-3). |
+| **Channel history divergence confuses users**            | Medium   | Honest gap markers (FR-12.4/12.5); no fake total order; TTL surfaced.                                                      |
+| **Work-map privacy discomfort**                          | Medium   | Directory granularity only; per-environment kill switch; inspectable scope (FR-14.4).                                      |
+| **The task registry grows into a Jira**                  | Medium   | FR-18.8 scope law: four states, labels-only taxonomy, no workflows/estimates/epics until usage data demands otherwise.     |
+| **New UI surface drifts from upstream design system**    | Medium   | Shared tokens, additive extensions only; divergence confined to fork-owned files (§7.4).                                   |
+| **R1 becomes a redesign of T3 Code**                     | Medium   | Inherited surfaces are explicitly out of scope; §7.4 rule enforced in review.                                              |
 
 ---
 
 ## 12. Open questions — with default recommendations
 
-These are **decisions, not options**. Each is the recommended default; overriding
-one is fine but should be a deliberate call, not a drift.
+Q1–Q6 from v0.2 stand as decided (Q6 amended by §7.4). New:
 
-### Q1 — Character schema and versioning
+### Q7 — Channel history: convergence model
 
-**Recommendation.** A single integer `characterVersion`, additive-only evolution,
-unknown fields preserved verbatim on rewrite — exactly the forward-compatibility
-contract `ProviderInstanceConfig` already documents for forks. Store as **JSON,
-not Markdown**: it must be machine-validated, diffable per field, and safely
-partially-updatable. Render prose fields as Markdown in the UI. Cap `persona` at
-~2000 characters — a character that needs an essay is a `CLAUDE.md`, not a
-character.
+**Recommendation.** Signed fan-out via the existing relay queue; per-sender
+causal order with arrival tiebreak; best-effort backfill within the relay
+TTL; visible gap markers beyond it. No CRDT, no designated host, no
+peer-to-peer backfill protocol in v1.
 
-**Why:** a migration framework for character is premature; additive evolution
-plus verbatim preservation handles years of change and lets teammates on
-different builds coexist, which is the actual failure mode.
+**Why:** channels here are coordination streams, not systems of record. The
+system of record for work is the repo and the thread stores. A CRDT layer is
+weeks of work to eliminate gap markers that honest UI renders acceptably.
 
-### Q2 — How aggressively should lifecycle events auto-push?
+### Q8 — Work-location sharing: default on or off?
 
-**Recommendation.** **Never auto-push.** Commit locally, batched, on explicit
-save. Surface a persistent "3 team changes to publish" affordance that runs the
-push when clicked. Offer an opt-in "auto-publish" setting for solo users, off by
-default, and never available for the default branch of a repo with more than one
-member.
+**Recommendation.** On by default at directory granularity for roster
+members, with a prominent per-environment off switch and a per-project
+override. Never file contents, never diffs, never outside the roster.
 
-**Why:** a roster change is a permission change (§6.5). Silently pushing
-permission changes to a shared default branch is hostile in a team and will get
-the product banned from real repos. It also makes the fork's Git behavior
-predictable, which matters enormously for trust. Teams that want review get it
-for free — the change rides their normal PR flow.
+**Why:** the radar is the wedge feature and defaults decide whether it
+exists. Directory granularity is the same information a teammate gets from
+`git fetch && git diff --stat origin/anyone`s branch — we are moving it
+earlier, not revealing something new.
 
-### Q3 — Permission model for agent-to-agent and agent-to-repo
+### Q9 — Do agents get channel autonomy levels?
 
-**Recommendation.** Repository write access is the authorization root. Beyond
-that, exactly three per-agent inbound policy levels (`manual` / `trusted-members`
-/ `off`), defaulting to `manual`, evaluated **locally by the receiving
-environment**. Cross-member actions are requests into an inbox — never remote
-execution. Agent-to-repo authority is bounded by `pathScope` and `runtimeMode`
-from character, enforced by the harness.
+**Recommendation.** No. Agents post only reactively (FR-12.6) in v1. An
+"agent may start conversations" capability waits for R4 duty data.
 
-**Why:** a capability/ACL system is the single easiest way to burn six weeks and
-ship nothing. Three levels covers the real cases, and "the receiving environment
-always decides" means a compromised or malicious peer cannot escalate.
+**Why:** one chatty agent poisons the channel for a whole team during the
+exact window in which trust in the product is forming.
 
-### Q4 — Multiple remotes and fork workflows
+### Q10 — Digest generation: which model runs it?
 
-**Recommendation.** Exactly one **team remote** per project, stored as an
-explicit project setting. Default it by the same preference order
-`RepositoryIdentityResolver` already uses (`upstream`, then `origin`), but
-**always show it and let the user change it** — never silently infer. Fork
-workflows then work without special casing: read the roster from the team
-remote's default branch, write to your own fork, open a PR. That falls directly
-out of Q2.
+**Recommendation.** The member's own environment generates its digests,
+using a locally bound provider instance when available and a deterministic
+template fallback when not. Never a teammate's credentials, never a hosted
+service.
 
-**Why:** inferring the team remote is exactly the kind of magic that breaks
-confusingly for triangular workflows, which is precisely the population most
-likely to try this product.
-
-### Q5 — How much messaging history lives in Git?
-
-**Recommendation.** **None.** Messages live in the environment-local
-event-sourced store; the relay is transport only. Git holds identity, character,
-and policy.
-
-**Why:** messages in Git means a merge conflict per conversation, unbounded repo
-growth, DMs cloned onto every laptop forever, and no way to delete anything. The
-one legitimate case — "this conversation produced a decision worth keeping" — is
-served better by an explicit _promote to decision record_ action that writes a
-normal file, which is a P2 nicety, not the storage model.
-
-### Q6 — Branding: continuity or divergence?
-
-**Recommendation.** **Keep near-total visual and UX continuity. Diverge only on
-name and mark.** Change the display name through the existing
-[`branding.ts`](../../../apps/web/src/branding.ts) indirection
-(`APP_BASE_NAME` already reads from injected desktop branding) plus desktop
-packaging config. **Do not rename packages** (`@t3tools/*` stays), do not
-rename directories, do not sweep strings.
-
-**Why:** two reasons, both decisive. Product: continuity is an asset — T3 Code's
-UI is a differentiator we are inheriting, and a large existing user base already
-knows it. Engineering: a broad rebrand is the single most expensive thing we
-could do to merge cost, because it touches files upstream also touches, forever,
-for zero user value. If the team layer succeeds, a visual identity of our own is
-an M4+ investment made deliberately — not an M0 reflex.
-
-**Current direction:** the product name is **RepoKin**, and the repository is
-being renamed to [`bukanajay/RepoKin`](https://github.com/bukanajay/RepoKin).
-2026-07-30. GitHub redirects the previous `agent-fordge` URL, so existing clones
-and links keep working; local clones should still update their remote.
+**Why:** follows the credential sovereignty rule; the fallback keeps
+digests working offline and provider-free.
 
 ---
 
 ## 13. Success metrics
 
-Replacing v0.1's qualitative list with measurable ones.
+M1–M3 metrics from v0.2 remain open and owed. For the new work:
 
-**M1 — is character real?**
+**R1 — is the workplace visible?**
 
-- ≥60% of active projects have ≥2 agents at day 30.
-- ≥50% of turns run under a non-default character.
-- ≥40% of agents created are still in use 14 days later (persistence, not
-  novelty).
-- Blind A/B: reviewers correctly identify which of two agents produced a diff
-  ≥70% of the time. _This is the honest test of the entire thesis._
-- Zero P0 regressions; p95 thread-open latency within 5% of upstream.
+- ≥70% of team-feature interactions happen in the Team space rather than
+  Settings within 2 weeks of R1.
+- Time from fresh project to "agent created and visible on Home" < 3 min.
+- Zero p95 regressions on thread open and project switch.
 
-**M2 — does coordination help?**
+**R2 — does delegation work?**
 
-- ≥30% of multi-agent projects use handoff or assignment weekly.
-- Median inbox items acted on, not dismissed, >50%.
+- ≥50% of delegations reach a terminal state (not expired/declined).
+- Median mention → accepted < 5 min when assignee environment online.
+- ≥30% of multi-agent projects use review requests weekly.
+- ≥50% of active projects have a non-empty board in week 2; ≥40% of tasks
+  that reach `done` were executed by an agent (the board is a hybrid
+  planning surface, not a human-only todo list).
 
-**M3 — does the team layer hold?**
+**R3 — does visibility matter?**
 
-- Roster staleness p50 < 5 minutes, p95 < 15 minutes.
-- Cross-machine delivery success >99% when both sides online within TTL.
-- ≥2 humans active in ≥25% of team-enabled projects (otherwise we built a
-  single-player feature with extra steps).
+- Radar precedes ≥1 real overlap per active team per week (measured by
+  overlapping paths later appearing in both members' commits).
+- ≥40% of weekly-active teams post ≥1 digest per week.
 
-**Continuous — fork health**
-
-- Upstream merged at least weekly.
-- Merge conflict resolution < 2 hours per sync in steady state.
-- Zero upstream features lost to divergence.
+**Continuous — fork health (unchanged):** weekly upstream merges, <2h
+conflict cost, zero upstream features lost.
 
 ---
 
 ## 14. What we are explicitly deferring
 
-Stated plainly so it does not get re-litigated every planning cycle:
-
-- Channels and group chat (M4, gated on DM usage).
-- Agent-to-agent autonomous protocols (M4, gated on M3).
-- Audit export, compliance, RBAC (unscheduled).
-- Web-hosted team service or accounts (non-goal).
-- Automatic conflict resolution between agents' work (non-goal for v1).
-- Character marketplace or sharing (interesting, unscheduled — note that
-  `.repokin/` being plain JSON in a repo makes this nearly free later, which
-  is a good reason not to build it now).
+- Voice/huddle rooms; free-floating chat.
+- Autonomous agent-to-agent negotiation and agent-initiated conversations.
+- Character marketplace (still nearly-free later; still not now).
+- Cross-repo teams; audit export; compliance; RBAC; hosted anything.
+- Automatic conflict resolution — the radar warns; humans and their agents
+  resolve.

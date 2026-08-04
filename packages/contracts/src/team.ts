@@ -803,6 +803,12 @@ export const TeamActivityKind = Schema.Literals([
   "message.expired",
   "request.created",
   "request.responded",
+  "channel.declared",
+  "channel.posted",
+  "task.created",
+  "task.moved",
+  "task.updated",
+  "task.assigned",
 ]).annotate({
   description: "Timeline-visible activity emitted by the local team domain.",
 });
@@ -913,6 +919,267 @@ export const TeamRequestRespondCommand = Schema.Struct({
 });
 export type TeamRequestRespondCommand = typeof TeamRequestRespondCommand.Type;
 
+// ===========================================================================
+// R2 — Channels, delegation, and the board (schema only; additive)
+//
+// These shapes are the contract review target for R2 (implementation-plan
+// §3.1). They mirror the R1.7 fixture types (apps/web/src/components/team/
+// fixtures/) so the client renders the real shapes before the domain lands.
+//
+// R2.2 folds the commands/events into the master TeamCommand / TeamEvent
+// unions and wires the decider/projector/engine; these shapes are that target.
+// ===========================================================================
+
+/** Subdirectory of channel declarations under {@link REPOKIN_DIR_NAME} (T0, git-resident). */
+export const TEAM_CHANNELS_DIR_NAME = "channels";
+export const CHANNEL_DECLARATION_SCHEMA_URL = "https://repokin.dev/schema/channel.json";
+
+// ---------------------------------------------------------------------------
+// R2 identifiers
+// ---------------------------------------------------------------------------
+
+/** Channel slug — the file stem under .repokin/channels/<slug>.json. */
+export const ChannelId = memberSlugSchema.pipe(Schema.brand("ChannelId"));
+export type ChannelId = typeof ChannelId.Type;
+
+/** Opaque per-post id. Posts fan out as signed envelopes on the relay (R2.2). */
+export const PostId = TrimmedNonEmptyString.pipe(Schema.brand("PostId"));
+export type PostId = typeof PostId.Type;
+
+/** Opaque task id. */
+export const TaskId = TrimmedNonEmptyString.pipe(Schema.brand("TaskId"));
+export type TaskId = typeof TaskId.Type;
+
+const isChannelIdValue = Schema.is(ChannelId);
+export const isChannelId = (value: unknown): value is ChannelId => isChannelIdValue(value);
+
+// ---------------------------------------------------------------------------
+// Channel declaration — .repokin/channels/<slug>.json (T0, committed)
+// ---------------------------------------------------------------------------
+
+export const ChannelDeclaration = preserveUnknownFields(
+  Schema.Struct({
+    $schema: Schema.optionalKey(
+      Schema.String.annotate({
+        description: `URL of the JSON Schema for this file, typically "${CHANNEL_DECLARATION_SCHEMA_URL}".`,
+      }),
+    ),
+    schemaVersion: Schema.Literal(1).annotate({
+      description: "Channel schema version. Evolve additively only.",
+    }),
+    id: ChannelId.annotate({
+      description: "Stable channel slug. Authoritative over the filename.",
+    }),
+    name: trimmedNonEmpty({
+      description: 'Display name shown in the channel list (e.g. "#team").',
+    }),
+    description: Schema.optionalKey(
+      trimmedNonEmpty({ description: "One-line purpose of the channel." }),
+    ),
+    /**
+     * Explicit member allowlist. Omitted means the whole roster — channels are
+     * roster-scoped, never public (PRD §6.2).
+     */
+    members: Schema.optionalKey(
+      Schema.Array(MemberId).annotate({
+        description: "Members with access. Omit for the whole roster.",
+      }),
+    ),
+    createdAt: Schema.optionalKey(IsoDateTime),
+    updatedAt: Schema.optionalKey(IsoDateTime),
+  }).annotate({
+    title: "Channel declaration",
+    description: "Checked-in channel declaration under .repokin/channels/. No message bodies.",
+  }),
+);
+export type ChannelDeclaration = typeof ChannelDeclaration.Type;
+
+// ---------------------------------------------------------------------------
+// Typed post union — text / thread-card / diff-card / task-card / event / digest
+// ---------------------------------------------------------------------------
+
+export const TeamPostKind = Schema.Literals([
+  "text",
+  "thread-card",
+  "diff-card",
+  "task-card",
+  "event",
+  "digest",
+]).annotate({
+  description: "Discriminator for the typed-post union (PRD §6.2). No kinds beyond this set.",
+});
+export type TeamPostKind = typeof TeamPostKind.Type;
+
+export const TeamTextPost = Schema.Struct({
+  kind: Schema.Literal("text"),
+  body: trimmedNonEmpty({ description: "Plain post body." }, 20_000),
+}).annotate({ description: "A plain text post." });
+export type TeamTextPost = typeof TeamTextPost.Type;
+
+export const TeamThreadCardPost = Schema.Struct({
+  kind: Schema.Literal("thread-card"),
+  threadId: ThreadId,
+  title: TrimmedNonEmptyString,
+  status: Schema.NullOr(Schema.String),
+}).annotate({ description: "A card linking a running or settled thread." });
+export type TeamThreadCardPost = typeof TeamThreadCardPost.Type;
+
+export const TeamDiffCardPost = Schema.Struct({
+  kind: Schema.Literal("diff-card"),
+  title: TrimmedNonEmptyString,
+  additions: NonNegativeInt,
+  deletions: NonNegativeInt,
+  changedFiles: NonNegativeInt,
+  branch: Schema.NullOr(Schema.String),
+}).annotate({ description: "A card summarizing a diff on a RepoKin-owned branch." });
+export type TeamDiffCardPost = typeof TeamDiffCardPost.Type;
+
+export const TeamTaskCardPost = Schema.Struct({
+  kind: Schema.Literal("task-card"),
+  taskId: TaskId,
+  title: TrimmedNonEmptyString,
+  taskState: Schema.String,
+}).annotate({ description: "A card mirroring a board task's coarse state." });
+export type TeamTaskCardPost = typeof TeamTaskCardPost.Type;
+
+export const TeamEventPost = Schema.Struct({
+  kind: Schema.Literal("event"),
+  summary: trimmedNonEmpty({ description: "Past-tense summary of a coordination event." }),
+}).annotate({ description: "A low-weight event line (assignment, move, publish)." });
+export type TeamEventPost = typeof TeamEventPost.Type;
+
+export const TeamDigestPost = Schema.Struct({
+  kind: Schema.Literal("digest"),
+  title: TrimmedNonEmptyString,
+  bullets: Schema.Array(TrimmedNonEmptyString),
+}).annotate({ description: "A generated standup/digest post (R3)." });
+export type TeamDigestPost = typeof TeamDigestPost.Type;
+
+export const TeamPostContent = Schema.Union([
+  TeamTextPost,
+  TeamThreadCardPost,
+  TeamDiffCardPost,
+  TeamTaskCardPost,
+  TeamEventPost,
+  TeamDigestPost,
+]).annotate({
+  description: "The typed content of one channel post, discriminated by `kind`.",
+});
+export type TeamPostContent = typeof TeamPostContent.Type;
+
+// ---------------------------------------------------------------------------
+// Task shapes — board domain
+// ---------------------------------------------------------------------------
+
+export const TeamTaskState = Schema.Literals([
+  "backlog",
+  "in-progress",
+  "in-review",
+  "done",
+]).annotate({
+  description: "The four board columns. No workflow states beyond these (FR-18.8).",
+});
+export type TeamTaskState = typeof TeamTaskState.Type;
+
+/** Structured references a task carries: origin channel, thread, diff branch. */
+export const TeamTaskRefs = preserveUnknownFields(
+  Schema.Struct({
+    channelId: Schema.optionalKey(ChannelId),
+    threadId: Schema.optionalKey(ThreadId),
+    /** RepoKin-owned branch holding the task's diff, when a report exists. */
+    branch: Schema.optionalKey(trimmedNonEmpty({ description: "Diff branch ref." })),
+  }).annotate({ description: "Structured references attached to a task." }),
+);
+export type TeamTaskRefs = typeof TeamTaskRefs.Type;
+
+// ---------------------------------------------------------------------------
+// R2 commands
+// ---------------------------------------------------------------------------
+
+export const TeamChannelDeclareCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.channel.declare"),
+  declaration: ChannelDeclaration,
+}).annotate({
+  description: "Create or update a channel declaration in the local .repokin/ tree.",
+});
+export type TeamChannelDeclareCommand = typeof TeamChannelDeclareCommand.Type;
+
+export const TeamChannelPostCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.channel.post"),
+  postId: PostId,
+  channelId: ChannelId,
+  authorId: MemberId,
+  content: TeamPostContent,
+}).annotate({
+  description:
+    "Post to a channel. Agents may only post when prompted (FR-12.6, enforced server-side).",
+});
+export type TeamChannelPostCommand = typeof TeamChannelPostCommand.Type;
+
+export const TeamTaskCreateCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.task.create"),
+  taskId: TaskId,
+  title: trimmedNonEmpty({ description: "Task title." }),
+  description: Schema.optionalKey(
+    trimmedNonEmpty({ description: "Task description, used as the delegation prompt." }, 20_000),
+  ),
+  labels: Schema.optionalKey(trimmedStringList({ description: "Freeform labels." })),
+  refs: Schema.optionalKey(TeamTaskRefs),
+  createdById: MemberId,
+  assigneeId: Schema.optionalKey(MemberId),
+}).annotate({ description: "Create a board task in the backlog." });
+export type TeamTaskCreateCommand = typeof TeamTaskCreateCommand.Type;
+
+export const TeamTaskMoveCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.task.move"),
+  taskId: TaskId,
+  toState: TeamTaskState,
+  movedById: MemberId,
+}).annotate({
+  description: "Move a task between columns. An agent never marks its own task done (FR-18.3).",
+});
+export type TeamTaskMoveCommand = typeof TeamTaskMoveCommand.Type;
+
+export const TeamTaskUpdateCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.task.update"),
+  taskId: TaskId,
+  updatedById: MemberId,
+  // Per-field last-writer-wins on concurrent edits (FR-18.6). Absent fields
+  // are left untouched; null clears an optional field.
+  title: Schema.optionalKey(trimmedNonEmpty({ description: "New title." })),
+  description: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  labels: Schema.optionalKey(Schema.Array(TrimmedNonEmptyString)),
+  refs: Schema.optionalKey(TeamTaskRefs),
+}).annotate({ description: "Edit task fields (last-writer-wins per field)." });
+export type TeamTaskUpdateCommand = typeof TeamTaskUpdateCommand.Type;
+
+export const TeamTaskAssignCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.task.assign"),
+  taskId: TaskId,
+  assigneeId: Schema.NullOr(MemberId),
+  assignedById: MemberId,
+}).annotate({
+  description: "Assign or unassign a task. An agent never self-assigns (FR-18.2).",
+});
+export type TeamTaskAssignCommand = typeof TeamTaskAssignCommand.Type;
+
+export const TeamChannelCommand = Schema.Union([TeamChannelDeclareCommand, TeamChannelPostCommand]);
+export type TeamChannelCommand = typeof TeamChannelCommand.Type;
+
+export const TeamTaskCommand = Schema.Union([
+  TeamTaskCreateCommand,
+  TeamTaskMoveCommand,
+  TeamTaskUpdateCommand,
+  TeamTaskAssignCommand,
+]);
+export type TeamTaskCommand = typeof TeamTaskCommand.Type;
+
 export const TeamCommand = Schema.Union([
   TeamMemberUpsertCommand,
   TeamAgentAssignCommand,
@@ -921,6 +1188,12 @@ export const TeamCommand = Schema.Union([
   TeamMessageMarkReadCommand,
   TeamMessageExpireCommand,
   TeamRequestRespondCommand,
+  TeamChannelDeclareCommand,
+  TeamChannelPostCommand,
+  TeamTaskCreateCommand,
+  TeamTaskMoveCommand,
+  TeamTaskUpdateCommand,
+  TeamTaskAssignCommand,
 ]);
 export type TeamCommand = typeof TeamCommand.Type;
 
@@ -943,6 +1216,12 @@ export const TeamEventType = Schema.Literals([
   "team.message.expired",
   "team.request.created",
   "team.request.responded",
+  "team.channel.declared",
+  "team.channel.posted",
+  "team.task.created",
+  "team.task.moved",
+  "team.task.updated",
+  "team.task.assigned",
 ]).annotate({
   description: "Persisted local team-domain event type.",
 });
@@ -1104,6 +1383,97 @@ export const TeamRequestRespondedEvent = Schema.Struct({
 });
 export type TeamRequestRespondedEvent = typeof TeamRequestRespondedEvent.Type;
 
+// ---------------------------------------------------------------------------
+// R2 events
+// ---------------------------------------------------------------------------
+
+const R2EventBase = {
+  sequence: NonNegativeInt,
+  eventId: EventId,
+  aggregateKind: Schema.Literal("project"),
+  aggregateId: ProjectId,
+  commandId: CommandId,
+  causationEventId: Schema.NullOr(EventId),
+  correlationId: Schema.NullOr(CommandId),
+  at: IsoDateTime,
+  metadata: TeamEventMetadata,
+} as const;
+
+export const TeamChannelDeclaredEvent = Schema.Struct({
+  ...R2EventBase,
+  type: Schema.Literal("team.channel.declared"),
+  channelId: ChannelId,
+  declaration: ChannelDeclaration,
+}).annotate({ description: "A channel declaration was written under .repokin/." });
+export type TeamChannelDeclaredEvent = typeof TeamChannelDeclaredEvent.Type;
+
+export const TeamChannelPostedEvent = Schema.Struct({
+  ...R2EventBase,
+  type: Schema.Literal("team.channel.posted"),
+  postId: PostId,
+  channelId: ChannelId,
+  authorId: MemberId,
+  authorEnvironmentId: Schema.NullOr(EnvironmentId),
+  content: TeamPostContent,
+  postedAt: IsoDateTime,
+}).annotate({ description: "A post landed in a channel." });
+export type TeamChannelPostedEvent = typeof TeamChannelPostedEvent.Type;
+
+export const TeamTaskCreatedEvent = Schema.Struct({
+  ...R2EventBase,
+  type: Schema.Literal("team.task.created"),
+  taskId: TaskId,
+  title: TrimmedNonEmptyString,
+  description: Schema.NullOr(Schema.String),
+  labels: Schema.Array(TrimmedNonEmptyString),
+  refs: Schema.NullOr(TeamTaskRefs),
+  createdById: MemberId,
+  assigneeId: Schema.NullOr(MemberId),
+}).annotate({ description: "A board task was created." });
+export type TeamTaskCreatedEvent = typeof TeamTaskCreatedEvent.Type;
+
+export const TeamTaskMovedEvent = Schema.Struct({
+  ...R2EventBase,
+  type: Schema.Literal("team.task.moved"),
+  taskId: TaskId,
+  fromState: TeamTaskState,
+  toState: TeamTaskState,
+  movedById: MemberId,
+}).annotate({ description: "A task moved between columns." });
+export type TeamTaskMovedEvent = typeof TeamTaskMovedEvent.Type;
+
+export const TeamTaskUpdatedEvent = Schema.Struct({
+  ...R2EventBase,
+  type: Schema.Literal("team.task.updated"),
+  taskId: TaskId,
+  updatedById: MemberId,
+  title: Schema.NullOr(TrimmedNonEmptyString),
+  description: Schema.NullOr(Schema.String),
+  labels: Schema.NullOr(Schema.Array(TrimmedNonEmptyString)),
+  refs: Schema.NullOr(TeamTaskRefs),
+}).annotate({ description: "Task fields were edited (last-writer-wins per field)." });
+export type TeamTaskUpdatedEvent = typeof TeamTaskUpdatedEvent.Type;
+
+export const TeamTaskAssignedEvent = Schema.Struct({
+  ...R2EventBase,
+  type: Schema.Literal("team.task.assigned"),
+  taskId: TaskId,
+  assigneeId: Schema.NullOr(MemberId),
+  assignedById: MemberId,
+}).annotate({ description: "A task was assigned or unassigned." });
+export type TeamTaskAssignedEvent = typeof TeamTaskAssignedEvent.Type;
+
+export const TeamChannelEvent = Schema.Union([TeamChannelDeclaredEvent, TeamChannelPostedEvent]);
+export type TeamChannelEvent = typeof TeamChannelEvent.Type;
+
+export const TeamTaskEvent = Schema.Union([
+  TeamTaskCreatedEvent,
+  TeamTaskMovedEvent,
+  TeamTaskUpdatedEvent,
+  TeamTaskAssignedEvent,
+]);
+export type TeamTaskEvent = typeof TeamTaskEvent.Type;
+
 export const TeamEvent = Schema.Union([
   TeamMemberUpsertedEvent,
   TeamAgentAssignedEvent,
@@ -1113,6 +1483,12 @@ export const TeamEvent = Schema.Union([
   TeamMessageExpiredEvent,
   TeamRequestCreatedEvent,
   TeamRequestRespondedEvent,
+  TeamChannelDeclaredEvent,
+  TeamChannelPostedEvent,
+  TeamTaskCreatedEvent,
+  TeamTaskMovedEvent,
+  TeamTaskUpdatedEvent,
+  TeamTaskAssignedEvent,
 ]);
 export type TeamEvent = typeof TeamEvent.Type;
 export type PlannedTeamEvent = TeamEvent extends infer Event
@@ -1185,6 +1561,70 @@ export const TeamActivity = Schema.Struct({
 });
 export type TeamActivity = typeof TeamActivity.Type;
 
+// ---------------------------------------------------------------------------
+// R2 read models (fixtures mirror these; flipped live in R2.4 / R3.2)
+// ---------------------------------------------------------------------------
+
+export const TeamChannelReadModel = Schema.Struct({
+  channelId: ChannelId,
+  name: TrimmedNonEmptyString,
+  description: Schema.NullOr(Schema.String),
+  memberIds: Schema.Array(MemberId),
+  postCount: NonNegativeInt,
+  lastPostAt: Schema.NullOr(IsoDateTime),
+}).annotate({ description: "Channel-list projection." });
+export type TeamChannelReadModel = typeof TeamChannelReadModel.Type;
+
+export const TeamPostReadModel = Schema.Struct({
+  postId: PostId,
+  channelId: ChannelId,
+  authorId: MemberId,
+  authorEnvironmentId: Schema.NullOr(EnvironmentId),
+  content: TeamPostContent,
+  postedAt: IsoDateTime,
+}).annotate({ description: "A single channel post." });
+export type TeamPostReadModel = typeof TeamPostReadModel.Type;
+
+/**
+ * Gap marker for a member who was offline past the relay TTL: rather than
+ * silently losing posts, the channel shows a gap (PRD Q7).
+ */
+export const TeamChannelGapMarker = Schema.Struct({
+  channelId: ChannelId,
+  afterPostId: Schema.NullOr(PostId),
+  beforePostId: Schema.NullOr(PostId),
+  missedCount: Schema.NullOr(NonNegativeInt),
+}).annotate({ description: "A visible gap where posts were dropped past TTL." });
+export type TeamChannelGapMarker = typeof TeamChannelGapMarker.Type;
+
+export const TeamChannelViewReadModel = Schema.Struct({
+  channel: TeamChannelReadModel,
+  posts: Schema.Array(TeamPostReadModel),
+  gaps: Schema.Array(TeamChannelGapMarker),
+}).annotate({ description: "One channel's posts plus any gap markers." });
+export type TeamChannelViewReadModel = typeof TeamChannelViewReadModel.Type;
+
+export const TeamTaskReadModel = Schema.Struct({
+  taskId: TaskId,
+  title: TrimmedNonEmptyString,
+  description: Schema.NullOr(Schema.String),
+  labels: Schema.Array(TrimmedNonEmptyString),
+  refs: Schema.NullOr(TeamTaskRefs),
+  state: TeamTaskState,
+  assigneeId: Schema.NullOr(MemberId),
+  createdById: MemberId,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+}).annotate({ description: "A single board task." });
+export type TeamTaskReadModel = typeof TeamTaskReadModel.Type;
+
+export const TeamBoardReadModel = Schema.Struct({
+  projectId: ProjectId,
+  tasks: Schema.Array(TeamTaskReadModel),
+  updatedAt: IsoDateTime,
+}).annotate({ description: "All board tasks for a project; columns are derived client-side." });
+export type TeamBoardReadModel = typeof TeamBoardReadModel.Type;
+
 export const TeamProjectReadModel = Schema.Struct({
   projectId: ProjectId,
   members: Schema.Array(TeamMemberReadModel),
@@ -1192,6 +1632,22 @@ export const TeamProjectReadModel = Schema.Struct({
   inbox: Schema.Array(TeamInboxMessage),
   requests: Schema.Array(TeamRequestReadModel),
   activities: Schema.Array(TeamActivity),
+  // R2 (channels + board). Decoding defaults keep older snapshots decodable.
+  channels: Schema.Array(ChannelDeclaration).pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed([] as ChannelDeclaration[] as readonly ChannelDeclaration[]),
+    ),
+  ),
+  posts: Schema.Array(TeamPostReadModel).pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed([] as TeamPostReadModel[] as readonly TeamPostReadModel[]),
+    ),
+  ),
+  tasks: Schema.Array(TeamTaskReadModel).pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed([] as TeamTaskReadModel[] as readonly TeamTaskReadModel[]),
+    ),
+  ),
   updatedAt: IsoDateTime,
 });
 export type TeamProjectReadModel = typeof TeamProjectReadModel.Type;

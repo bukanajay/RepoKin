@@ -10,10 +10,16 @@ import {
   AgentId,
   AgentProfile,
   Character,
+  ChannelDeclaration,
+  ChannelId,
   CompiledCharacter,
   HumanId,
   HumanProfile,
   MemberId,
+  TeamBoardReadModel,
+  TeamChannelCommand,
+  TeamChannelEvent,
+  TeamChannelViewReadModel,
   TeamCommand,
   TeamDomainReadModel,
   TeamEvent,
@@ -21,10 +27,14 @@ import {
   TeamInstructionPreviewResult,
   TeamFile,
   TeamFileUpdateInput,
+  TeamPostContent,
   TeamRosterSyncResult,
   TeamRosterReadModel,
   TeamSignedMessageEnvelope,
   TeamSignedMessageProofPayload,
+  TeamTaskCommand,
+  TeamTaskEvent,
+  isChannelId,
   isAgentId,
   isHumanId,
   isMemberId,
@@ -563,5 +573,264 @@ describe("secret exclusion invariant", () => {
 describe("ProviderInstanceId brand reuse in team bindings", () => {
   it("accepts the same slug rules as provider instances", () => {
     expect(ProviderInstanceId.make("codex_work")).toBe("codex_work");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R2 — channels + tasks contract families
+// ---------------------------------------------------------------------------
+
+const decodeChannelDeclaration = Schema.decodeUnknownSync(ChannelDeclaration);
+const encodeChannelDeclaration = Schema.encodeUnknownSync(ChannelDeclaration);
+const decodePostContent = Schema.decodeUnknownSync(TeamPostContent);
+const decodeChannelCommand = Schema.decodeUnknownSync(TeamChannelCommand);
+const decodeTaskCommand = Schema.decodeUnknownSync(TeamTaskCommand);
+const decodeChannelEvent = Schema.decodeUnknownSync(TeamChannelEvent);
+const decodeTaskEvent = Schema.decodeUnknownSync(TeamTaskEvent);
+const decodeChannelView = Schema.decodeUnknownSync(TeamChannelViewReadModel);
+const decodeBoard = Schema.decodeUnknownSync(TeamBoardReadModel);
+
+describe("R2 channel declaration", () => {
+  it("round-trips a git-resident channel file", () => {
+    const declaration = decodeChannelDeclaration({
+      schemaVersion: 1,
+      id: "team",
+      name: "#team",
+      description: "Everything the whole team should see.",
+      members: ["human_ajay", "agent_aria"],
+    });
+    expect(declaration.id).toBe("team");
+    expect(encodeChannelDeclaration(declaration).members).toEqual(["human_ajay", "agent_aria"]);
+  });
+
+  it("treats a channel without members as whole-roster (field omitted)", () => {
+    const declaration = decodeChannelDeclaration({ schemaVersion: 1, id: "team", name: "#team" });
+    expect(Object.keys(encodeChannelDeclaration(declaration))).not.toContain("members");
+  });
+
+  it("rejects a channel id that is not a slug", () => {
+    expect(() =>
+      decodeChannelDeclaration({ schemaVersion: 1, id: "#team", name: "#team" }),
+    ).toThrow();
+  });
+
+  it("preserves unknown fields written by newer builds", () => {
+    const declaration = decodeChannelDeclaration({
+      schemaVersion: 1,
+      id: "team",
+      name: "#team",
+      pinnedPostId: "post_future",
+    });
+    expect(encodeChannelDeclaration(declaration)).toHaveProperty("pinnedPostId", "post_future");
+  });
+
+  it("guards ChannelId at runtime", () => {
+    expect(isChannelId(ChannelId.make("frontend"))).toBe(true);
+    expect(isChannelId("#frontend")).toBe(false);
+  });
+});
+
+describe("R2 typed-post union", () => {
+  it("decodes every post kind", () => {
+    expect(decodePostContent({ kind: "text", body: "hi" }).kind).toBe("text");
+    expect(
+      decodePostContent({ kind: "thread-card", threadId: "t1", title: "T", status: "Running" })
+        .kind,
+    ).toBe("thread-card");
+    expect(
+      decodePostContent({
+        kind: "diff-card",
+        title: "feat",
+        additions: 10,
+        deletions: 2,
+        changedFiles: 3,
+        branch: "forge/x",
+      }).kind,
+    ).toBe("diff-card");
+    expect(
+      decodePostContent({
+        kind: "task-card",
+        taskId: "task_1",
+        title: "T",
+        taskState: "in-progress",
+      }).kind,
+    ).toBe("task-card");
+    expect(decodePostContent({ kind: "event", summary: "moved a card" }).kind).toBe("event");
+    expect(decodePostContent({ kind: "digest", title: "Daily", bullets: ["a", "b"] }).kind).toBe(
+      "digest",
+    );
+  });
+
+  it("rejects an unknown post kind", () => {
+    expect(() => decodePostContent({ kind: "poll", options: [] })).toThrow();
+  });
+
+  it("rejects negative diff counts", () => {
+    expect(() =>
+      decodePostContent({
+        kind: "diff-card",
+        title: "feat",
+        additions: -1,
+        deletions: 0,
+        changedFiles: 0,
+        branch: null,
+      }),
+    ).toThrow();
+  });
+});
+
+describe("R2 commands", () => {
+  const base = { commandId: "cmd_1", projectId: "proj_1" };
+
+  it("decodes a channel post command", () => {
+    const command = decodeChannelCommand({
+      ...base,
+      type: "team.channel.post",
+      postId: "post_1",
+      channelId: "team",
+      authorId: "agent_aria",
+      content: { kind: "text", body: "shipping the board" },
+    });
+    expect(command.type).toBe("team.channel.post");
+  });
+
+  it("decodes the four task commands", () => {
+    expect(
+      decodeTaskCommand({
+        ...base,
+        type: "team.task.create",
+        taskId: "task_1",
+        title: "Wire the inbox",
+        createdById: "human_ajay",
+      }).type,
+    ).toBe("team.task.create");
+    expect(
+      decodeTaskCommand({
+        ...base,
+        type: "team.task.move",
+        taskId: "task_1",
+        toState: "in-review",
+        movedById: "human_ajay",
+      }).type,
+    ).toBe("team.task.move");
+    expect(
+      decodeTaskCommand({
+        ...base,
+        type: "team.task.update",
+        taskId: "task_1",
+        updatedById: "human_ajay",
+        title: "Wire the inbox read-state",
+      }).type,
+    ).toBe("team.task.update");
+    expect(
+      decodeTaskCommand({
+        ...base,
+        type: "team.task.assign",
+        taskId: "task_1",
+        assigneeId: "agent_aria",
+        assignedById: "human_ajay",
+      }).type,
+    ).toBe("team.task.assign");
+  });
+
+  it("rejects a task state outside the four columns", () => {
+    expect(() =>
+      decodeTaskCommand({
+        ...base,
+        type: "team.task.move",
+        taskId: "task_1",
+        toState: "archived",
+        movedById: "human_ajay",
+      }),
+    ).toThrow();
+  });
+});
+
+describe("R2 events and read models", () => {
+  const eventBase = {
+    sequence: 4,
+    eventId: "evt_1",
+    aggregateKind: "project",
+    aggregateId: "proj_1",
+    commandId: "cmd_1",
+    causationEventId: null,
+    correlationId: null,
+    at: "2026-08-04T10:00:00.000Z",
+    metadata: {},
+  };
+
+  it("decodes a channel posted event", () => {
+    const event = decodeChannelEvent({
+      ...eventBase,
+      type: "team.channel.posted",
+      postId: "post_1",
+      channelId: "team",
+      authorId: "agent_bolt",
+      authorEnvironmentId: null,
+      content: { kind: "event", summary: "opened a review" },
+      postedAt: "2026-08-04T10:00:00.000Z",
+    });
+    expect(event.type).toBe("team.channel.posted");
+  });
+
+  it("decodes a task moved event", () => {
+    const event = decodeTaskEvent({
+      ...eventBase,
+      type: "team.task.moved",
+      taskId: "task_1",
+      fromState: "in-progress",
+      toState: "in-review",
+      movedById: "human_ajay",
+    });
+    expect(event.type).toBe("team.task.moved");
+  });
+
+  it("decodes a channel view with gap markers", () => {
+    const view = decodeChannelView({
+      channel: {
+        channelId: "team",
+        name: "#team",
+        description: null,
+        memberIds: ["human_ajay"],
+        postCount: 2,
+        lastPostAt: "2026-08-04T10:00:00.000Z",
+      },
+      posts: [
+        {
+          postId: "post_1",
+          channelId: "team",
+          authorId: "human_ajay",
+          authorEnvironmentId: null,
+          content: { kind: "text", body: "hello" },
+          postedAt: "2026-08-04T09:00:00.000Z",
+        },
+      ],
+      gaps: [{ channelId: "team", afterPostId: "post_1", beforePostId: null, missedCount: 3 }],
+    });
+    expect(view.posts).toHaveLength(1);
+    expect(view.gaps[0]?.missedCount).toBe(3);
+  });
+
+  it("decodes a board read model; columns are derived client-side", () => {
+    const board = decodeBoard({
+      projectId: "proj_1",
+      updatedAt: "2026-08-04T10:00:00.000Z",
+      tasks: [
+        {
+          taskId: "task_1",
+          title: "Ship the board",
+          description: null,
+          labels: ["frontend"],
+          refs: { channelId: "team" },
+          state: "in-progress",
+          assigneeId: "agent_aria",
+          createdById: "human_ajay",
+          createdAt: "2026-08-04T08:00:00.000Z",
+          updatedAt: "2026-08-04T09:00:00.000Z",
+        },
+      ],
+    });
+    expect(board.tasks[0]?.state).toBe("in-progress");
+    expect(board.tasks[0]?.refs?.channelId).toBe("team");
   });
 });

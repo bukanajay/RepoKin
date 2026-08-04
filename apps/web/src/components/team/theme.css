@@ -1,0 +1,37 @@
+/*
+ * RepoKin Team space tokens — additive only. Extends the app token set and
+ * never redefines an upstream variable. Dark values are first-class, not an
+ * afterthought. Imported once from index.css (bounded edit).
+ *
+ * Accent palette mirrors TEAM_ACCENT_PALETTE in memberIdentity.ts; keep the
+ * two lists in sync.
+ */
+
+:root {
+  --team-accent-0: #7c5cff;
+  --team-accent-1: #3b82f6;
+  --team-accent-2: #06b6d4;
+  --team-accent-3: #14b8a6;
+  --team-accent-4: #22c55e;
+  --team-accent-5: #f59e0b;
+  --team-accent-6: #f43f5e;
+  --team-accent-7: #d946ef;
+
+  /* Presence — static colors; state changes transition, nothing animates
+     continuously (cardinal sin). */
+  --team-presence-online: var(--color-emerald-500);
+  --team-presence-busy: var(--color-amber-500);
+  --team-presence-away: var(--color-sky-500);
+  --team-presence-offline: color-mix(in srgb, var(--muted-foreground) 45%, transparent);
+
+  /* Cards */
+  --team-card-accent-width: 3px;
+
+  /* Identicon foreground on the accent field. */
+  --team-identicon-foreground: rgb(255 255 255 / 92%);
+}
+
+.dark {
+  --team-presence-offline: color-mix(in srgb, var(--muted-foreground) 55%, transparent);
+  --team-identicon-foreground: rgb(255 255 255 / 88%);
+}

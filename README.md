@@ -160,10 +160,3 @@ open, performant, remote-ready foundation that we can extend for RepoKin.
 
 - Original project: [T3 Code](https://github.com/pingdotgg/t3code)
 - RepoKin: [github.com/bukanajay/RepoKin](https://github.com/bukanajay/RepoKin)
-
-## Compatibility note
-
-The legacy `.repokin/` project directory, `repokin` configuration
-namespace, and related protocol identifiers remain unchanged for compatibility
-with existing repositories and settings. These are internal storage and
-wire-format names only; the product brand is RepoKin.

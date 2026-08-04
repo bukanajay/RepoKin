@@ -34,6 +34,9 @@ function emptyProject(projectId: ProjectId, updatedAt: string): TeamProjectReadM
     inbox: [],
     requests: [],
     activities: [],
+    channels: [],
+    posts: [],
+    tasks: [],
     updatedAt,
   };
 }
@@ -101,6 +104,13 @@ function eventOccurredAt(event: TeamEvent): string {
       return event.createdAt;
     case "team.request.responded":
       return event.respondedAt;
+    case "team.channel.declared":
+    case "team.channel.posted":
+    case "team.task.created":
+    case "team.task.moved":
+    case "team.task.updated":
+    case "team.task.assigned":
+      return event.at;
   }
 }
 
@@ -413,6 +423,211 @@ export function projectTeamEvent(
               ),
             }),
           ),
+        },
+        event.type,
+      );
+
+    case "team.channel.declared":
+      return decodeReadModel(
+        {
+          ...nextBase,
+          projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
+            channels: [
+              ...project.channels.filter((channel) => channel.id !== event.channelId),
+              event.declaration,
+            ],
+            activities: appendActivity(
+              project.activities,
+              activity({
+                eventId: event.eventId,
+                kind: "channel.declared",
+                occurredAt: event.at,
+                actorMemberId: event.metadata.actorMemberId ?? null,
+                subjectMemberId: null,
+                threadId: null,
+                messageId: null,
+                requestId: null,
+                summary: `#${event.channelId} declared`,
+              }),
+            ),
+          })),
+        },
+        event.type,
+      );
+
+    case "team.channel.posted":
+      return decodeReadModel(
+        {
+          ...nextBase,
+          projects: upsertProject(
+            nextBase.projects,
+            event.aggregateId,
+            event.postedAt,
+            (project) => ({
+              posts: [
+                ...project.posts.filter((post) => post.postId !== event.postId),
+                {
+                  postId: event.postId,
+                  channelId: event.channelId,
+                  authorId: event.authorId,
+                  authorEnvironmentId: event.authorEnvironmentId,
+                  content: event.content,
+                  postedAt: event.postedAt,
+                },
+              ],
+              activities: appendActivity(
+                project.activities,
+                activity({
+                  eventId: event.eventId,
+                  kind: "channel.posted",
+                  occurredAt: event.postedAt,
+                  actorMemberId: event.authorId,
+                  subjectMemberId: null,
+                  threadId: null,
+                  messageId: null,
+                  requestId: null,
+                  summary: `${event.authorId} posted in #${event.channelId}`,
+                }),
+              ),
+            }),
+          ),
+        },
+        event.type,
+      );
+
+    case "team.task.created":
+      return decodeReadModel(
+        {
+          ...nextBase,
+          projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
+            tasks: [
+              ...project.tasks.filter((task) => task.taskId !== event.taskId),
+              {
+                taskId: event.taskId,
+                title: event.title,
+                description: event.description,
+                labels: event.labels,
+                refs: event.refs,
+                state: "backlog",
+                assigneeId: event.assigneeId,
+                createdById: event.createdById,
+                createdAt: event.at,
+                updatedAt: event.at,
+              },
+            ],
+            activities: appendActivity(
+              project.activities,
+              activity({
+                eventId: event.eventId,
+                kind: "task.created",
+                occurredAt: event.at,
+                actorMemberId: event.createdById,
+                subjectMemberId: event.assigneeId,
+                threadId: null,
+                messageId: null,
+                requestId: null,
+                summary: `${event.createdById} created task ${event.taskId}`,
+              }),
+            ),
+          })),
+        },
+        event.type,
+      );
+
+    case "team.task.moved":
+      return decodeReadModel(
+        {
+          ...nextBase,
+          projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
+            tasks: project.tasks.map((task) =>
+              task.taskId === event.taskId
+                ? { ...task, state: event.toState, updatedAt: event.at }
+                : task,
+            ),
+            activities: appendActivity(
+              project.activities,
+              activity({
+                eventId: event.eventId,
+                kind: "task.moved",
+                occurredAt: event.at,
+                actorMemberId: event.movedById,
+                subjectMemberId: null,
+                threadId: null,
+                messageId: null,
+                requestId: null,
+                summary: `${event.movedById} moved ${event.taskId} to ${event.toState}`,
+              }),
+            ),
+          })),
+        },
+        event.type,
+      );
+
+    case "team.task.updated":
+      return decodeReadModel(
+        {
+          ...nextBase,
+          projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
+            // Per-field last-writer-wins (FR-18.6): apply only non-null fields.
+            tasks: project.tasks.map((task) =>
+              task.taskId === event.taskId
+                ? {
+                    ...task,
+                    title: event.title ?? task.title,
+                    description: event.description ?? task.description,
+                    labels: event.labels ?? task.labels,
+                    refs: event.refs ?? task.refs,
+                    updatedAt: event.at,
+                  }
+                : task,
+            ),
+            activities: appendActivity(
+              project.activities,
+              activity({
+                eventId: event.eventId,
+                kind: "task.updated",
+                occurredAt: event.at,
+                actorMemberId: event.updatedById,
+                subjectMemberId: null,
+                threadId: null,
+                messageId: null,
+                requestId: null,
+                summary: `${event.updatedById} updated ${event.taskId}`,
+              }),
+            ),
+          })),
+        },
+        event.type,
+      );
+
+    case "team.task.assigned":
+      return decodeReadModel(
+        {
+          ...nextBase,
+          projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
+            tasks: project.tasks.map((task) =>
+              task.taskId === event.taskId
+                ? { ...task, assigneeId: event.assigneeId, updatedAt: event.at }
+                : task,
+            ),
+            activities: appendActivity(
+              project.activities,
+              activity({
+                eventId: event.eventId,
+                kind: "task.assigned",
+                occurredAt: event.at,
+                actorMemberId: event.assignedById,
+                subjectMemberId: event.assigneeId,
+                threadId: null,
+                messageId: null,
+                requestId: null,
+                summary:
+                  event.assigneeId === null
+                    ? `${event.assignedById} unassigned ${event.taskId}`
+                    : `${event.assignedById} assigned ${event.taskId} to ${event.assigneeId}`,
+              }),
+            ),
+          })),
         },
         event.type,
       );
