@@ -4,11 +4,15 @@ import { HashIcon } from "lucide-react";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { Spinner } from "../ui/spinner";
 import { MemberAvatar } from "./MemberAvatar";
+import { NewChannelDialog } from "./NewChannelDialog";
 import { TeamScreenShell } from "./TeamScreenShell";
 import { useChannelsData } from "./useChannelsData";
 
 export function TeamChannelsScreen() {
   const data = useChannelsData();
+  const newChannelAction = data.canDeclare ? (
+    <NewChannelDialog existingSlugs={data.existingSlugs} onDeclare={data.declareChannel} />
+  ) : undefined;
 
   if (data.status !== "ready") {
     return (
@@ -31,16 +35,17 @@ export function TeamChannelsScreen() {
 
   if (data.channels.length === 0) {
     return (
-      <TeamScreenShell title="Channels">
+      <TeamScreenShell title="Channels" actions={newChannelAction}>
         <p className="text-sm text-muted-foreground">
-          No channels yet. Declare one under <code>.repokin/channels/</code>.
+          No channels yet.{" "}
+          {data.canDeclare ? "Create one to get started." : "Declare one under .repokin/channels/."}
         </p>
       </TeamScreenShell>
     );
   }
 
   return (
-    <TeamScreenShell title="Channels">
+    <TeamScreenShell title="Channels" actions={newChannelAction}>
       <div className="flex flex-col divide-y rounded-2xl border">
         {data.channels.map((channel) => (
           <Link

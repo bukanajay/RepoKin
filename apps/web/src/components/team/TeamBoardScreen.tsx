@@ -4,6 +4,7 @@ import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { Spinner } from "../ui/spinner";
 import { MemberAvatar } from "./MemberAvatar";
+import { NewTaskDialog } from "./NewTaskDialog";
 import { TeamCard } from "./TeamCard";
 import { TeamScreenShell } from "./TeamScreenShell";
 import { deriveMemberAccentColor } from "./memberIdentity";
@@ -124,7 +125,15 @@ export function TeamBoardScreen() {
   }
 
   return (
-    <TeamScreenShell title="Board" className="max-w-none">
+    <TeamScreenShell
+      title="Board"
+      className="max-w-none"
+      actions={
+        data.canCreate ? (
+          <NewTaskDialog assignableMembers={data.assignableMembers} onCreate={data.createTask} />
+        ) : undefined
+      }
+    >
       <DndContext onDragEnd={onDragEnd}>
         <div className="flex gap-3 overflow-x-auto pb-2">
           {BOARD_COLUMNS.map((column) => (
