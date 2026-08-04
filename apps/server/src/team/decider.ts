@@ -165,6 +165,38 @@ export const decideTeamCommand = Effect.fn("decideTeamCommand")(function* ({
       };
     }
 
+    case "team.request.create": {
+      yield* requireMember({ readModel, command, memberId: command.fromMemberId });
+      yield* requireMember({ readModel, command, memberId: command.toMemberId });
+      if (command.taskId !== undefined) {
+        yield* requireTask({ readModel, command, taskId: command.taskId });
+      }
+      // FR-18.2 spirit: an agent cannot delegate work to itself and thereby
+      // self-approve a run. The accept gate must be a different member.
+      if (
+        command.fromMemberId === command.toMemberId &&
+        isAgentMember(readModel, command.projectId, command.fromMemberId)
+      ) {
+        return yield* new TeamCommandInvariantError({
+          commandType: command.type,
+          detail: `Agent '${command.fromMemberId}' cannot delegate request '${command.requestId}' to itself (FR-18.2).`,
+        });
+      }
+      return {
+        ...base,
+        type: "team.request.created",
+        requestId: command.requestId,
+        kind: command.kind,
+        fromMemberId: command.fromMemberId,
+        toMemberId: command.toMemberId,
+        threadId: command.threadId ?? null,
+        taskId: command.taskId ?? null,
+        message: command.message ?? null,
+        createdAt: occurredAt,
+        expiresAt: command.expiresAt ?? null,
+      };
+    }
+
     case "team.request.respond": {
       const request = yield* requireOpenRequest({
         readModel,

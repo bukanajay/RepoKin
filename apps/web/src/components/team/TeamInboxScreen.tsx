@@ -40,6 +40,18 @@ function ThreadLink({ threadId }: { threadId: string }) {
   );
 }
 
+function TaskLink() {
+  return (
+    <Link
+      to="/team/board"
+      className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      Open board
+      <ArrowRightIcon className="size-3" />
+    </Link>
+  );
+}
+
 function stateBadge(item: TeamInboxItem) {
   const state = item.kind === "message" ? item.message.state : item.request.state;
   const variant =
@@ -120,7 +132,11 @@ function InboxItemRow({
         <p className="text-xs text-muted-foreground">Response: {request.responseMessage}</p>
       ) : null}
       <div className="flex items-center gap-2">
-        <ThreadLink threadId={request.threadId} />
+        {request.threadId !== null ? (
+          <ThreadLink threadId={request.threadId} />
+        ) : request.taskId !== null ? (
+          <TaskLink />
+        ) : null}
         {actionable ? (
           <>
             <Button size="xs" onClick={() => void data.respondToRequest(request, "accepted")}>

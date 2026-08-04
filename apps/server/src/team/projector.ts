@@ -353,6 +353,7 @@ export function projectTeamEvent(
                 fromMemberId: event.fromMemberId,
                 toMemberId: event.toMemberId,
                 threadId: event.threadId,
+                taskId: event.taskId,
                 message: event.message,
                 state: "open",
                 createdAt: event.createdAt,

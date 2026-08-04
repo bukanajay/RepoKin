@@ -193,6 +193,7 @@ it.layer(NodeServices.layer)("team decider/projector", (it) => {
         fromMemberId: humanId,
         toMemberId: agentId,
         threadId: ThreadId.make("thread-1"),
+        taskId: null,
         message: "Please take over.",
         createdAt: "2026-07-30T12:00:00.000Z",
         expiresAt: null,

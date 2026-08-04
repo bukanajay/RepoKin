@@ -341,3 +341,104 @@ it.layer(NodeServices.layer)("team R2 decider/projector — board", (it) => {
     }),
   );
 });
+
+it.layer(NodeServices.layer)("team R2 decider/projector — delegation (R2.3)", (it) => {
+  /** Seed the roster plus a backlog task the delegation request will link to. */
+  function seedTask() {
+    return Effect.gen(function* () {
+      const seeded = yield* seedRoster();
+      const created = yield* apply(
+        seeded.readModel,
+        {
+          commandId: "cmd-deleg-task",
+          projectId,
+          type: "team.task.create",
+          taskId: "task-deleg",
+          title: "Implement the thing",
+          createdById: humanId,
+          assigneeId: agentId,
+        },
+        seeded.seq + 1,
+      );
+      return { readModel: created.readModel, seq: seeded.seq + 1 };
+    });
+  }
+
+  it.effect("creates a handoff request that links a task and has no thread yet", () =>
+    Effect.gen(function* () {
+      const seeded = yield* seedTask();
+      const requested = yield* apply(
+        seeded.readModel,
+        {
+          commandId: "cmd-deleg-request",
+          projectId,
+          type: "team.request.create",
+          requestId: "req-1",
+          kind: "handoff",
+          fromMemberId: humanId,
+          toMemberId: agentId,
+          taskId: "task-deleg",
+          message: "Can you take this?",
+          metadata: { actorMemberId: humanId },
+        },
+        seeded.seq + 1,
+      );
+      expect(requested.event).toMatchObject({
+        type: "team.request.created",
+        taskId: "task-deleg",
+        threadId: null,
+        toMemberId: "agent_aria",
+      });
+      expect(requested.readModel.projects[0]?.requests[0]).toMatchObject({
+        requestId: "req-1",
+        taskId: "task-deleg",
+        threadId: null,
+        state: "open",
+      });
+    }),
+  );
+
+  it.effect("rejects a delegation request for a task that does not exist", () =>
+    Effect.gen(function* () {
+      const seeded = yield* seedRoster();
+      const failure = yield* Effect.flip(
+        decideTeamCommand({
+          readModel: seeded.readModel,
+          command: decodeCommand({
+            commandId: "cmd-deleg-ghost",
+            projectId,
+            type: "team.request.create",
+            requestId: "req-ghost",
+            kind: "handoff",
+            fromMemberId: humanId,
+            toMemberId: agentId,
+            taskId: "task-missing",
+          }),
+        }),
+      );
+      expect(failure).toBeInstanceOf(TeamCommandInvariantError);
+    }),
+  );
+
+  it.effect("forbids an agent delegating a request to itself (FR-18.2)", () =>
+    Effect.gen(function* () {
+      const seeded = yield* seedTask();
+      const failure = yield* Effect.flip(
+        decideTeamCommand({
+          readModel: seeded.readModel,
+          command: decodeCommand({
+            commandId: "cmd-deleg-self",
+            projectId,
+            type: "team.request.create",
+            requestId: "req-self",
+            kind: "handoff",
+            fromMemberId: agentId,
+            toMemberId: agentId,
+            taskId: "task-deleg",
+          }),
+        }),
+      );
+      expect(failure.message).toContain("itself");
+    }),
+  );
+});

@@ -1165,6 +1165,28 @@ export const TeamTaskAssignCommand = Schema.Struct({
 });
 export type TeamTaskAssignCommand = typeof TeamTaskAssignCommand.Type;
 
+// R2.3 delegation: a request is the accept/decline gate for handing work to a
+// member. A task delegation links `taskId` (no thread exists until accept); a
+// thread handoff links `threadId`.
+export const TeamRequestCreateCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.request.create"),
+  requestId: MessageId,
+  kind: TeamRequestKind,
+  fromMemberId: MemberId,
+  toMemberId: MemberId,
+  taskId: Schema.optionalKey(TaskId),
+  threadId: Schema.optionalKey(ThreadId),
+  message: Schema.optionalKey(
+    trimmedNonEmpty({ description: "Optional note shown with the request in the inbox." }),
+  ),
+  expiresAt: Schema.optionalKey(IsoDateTime),
+}).annotate({
+  description:
+    "Raise a structured handoff or review request in a member's inbox. The assignee's response is the delegation accept gate (R2.3).",
+});
+export type TeamRequestCreateCommand = typeof TeamRequestCreateCommand.Type;
+
 export const TeamChannelCommand = Schema.Union([TeamChannelDeclareCommand, TeamChannelPostCommand]);
 export type TeamChannelCommand = typeof TeamChannelCommand.Type;
 
@@ -1183,6 +1205,7 @@ export const TeamCommand = Schema.Union([
   TeamMessageDeliverCommand,
   TeamMessageMarkReadCommand,
   TeamMessageExpireCommand,
+  TeamRequestCreateCommand,
   TeamRequestRespondCommand,
   TeamChannelDeclareCommand,
   TeamChannelPostCommand,
@@ -1349,7 +1372,9 @@ export const TeamRequestCreatedEvent = Schema.Struct({
   kind: TeamRequestKind,
   fromMemberId: MemberId,
   toMemberId: MemberId,
-  threadId: ThreadId,
+  // Nullable since R2.3: a task delegation has no thread until it is accepted.
+  threadId: Schema.NullOr(ThreadId),
+  taskId: Schema.NullOr(TaskId),
   message: Schema.NullOr(Schema.String),
   createdAt: IsoDateTime,
   expiresAt: Schema.NullOr(IsoDateTime),
@@ -1597,7 +1622,8 @@ export const TeamRequestReadModel = Schema.Struct({
   kind: TeamRequestKind,
   fromMemberId: MemberId,
   toMemberId: MemberId,
-  threadId: ThreadId,
+  threadId: Schema.NullOr(ThreadId),
+  taskId: Schema.NullOr(TaskId),
   message: Schema.NullOr(Schema.String),
   state: TeamRequestState,
   createdAt: IsoDateTime,
