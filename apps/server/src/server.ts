@@ -104,6 +104,8 @@ import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import { TeamLayerLive } from "./team/runtimeLayer.ts";
 import { TeamDelegationReactorLive } from "./team/Layers/TeamDelegationReactor.ts";
+import { TeamDelegationReportReactorLive } from "./team/Layers/TeamDelegationReportReactor.ts";
+import { TeamDelegationRunReactorLive } from "./team/Layers/TeamDelegationRunReactor.ts";
 import { TeamMentionDelegationReactorLive } from "./team/Layers/TeamMentionDelegationReactor.ts";
 import { TeamInboxDeliveryReactorLive } from "./team/Layers/TeamInboxDeliveryReactor.ts";
 import { TeamRelayMessagingLive } from "./team/Layers/TeamRelayMessaging.ts";
@@ -226,6 +228,8 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(ThreadDeletionReactorLive),
   Layer.provideMerge(TeamInboxDeliveryReactorLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
   Layer.provideMerge(TeamDelegationReactorLive),
+  Layer.provideMerge(TeamDelegationRunReactorLive),
+  Layer.provideMerge(TeamDelegationReportReactorLive),
   Layer.provideMerge(TeamMentionDelegationReactorLive),
   Layer.provideMerge(TeamRelayMessagingLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
