@@ -1,9 +1,12 @@
-import type { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
+import type { ProviderInteractionMode, RuntimeMode, ServerProviderModel } from "@t3tools/contracts";
+import { isProviderAvailable, ProviderDriverKind } from "@t3tools/contracts";
 import type { AgentProfile } from "@t3tools/contracts/team";
 import { SaveIcon } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
+import { primaryServerProvidersAtom } from "../../state/server";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -32,6 +35,8 @@ const INTERACTION_MODE_OPTIONS: ReadonlyArray<{ value: ProviderInteractionMode; 
 ];
 
 const DEFAULT_OWNER_ID = "human_local";
+/** Sentinel for the "no model preference" option (empty Select values misbehave). */
+const MODEL_DEFAULT = "__model_default__";
 
 function formatList(values: readonly string[] | undefined): string {
   return values?.join("\n") ?? "";
@@ -52,7 +57,7 @@ function Field({
   children,
 }: {
   label: string;
-  hint?: string;
+  hint?: string | undefined;
   className?: string;
   children: ReactNode;
 }) {
@@ -89,7 +94,31 @@ export function AgentEditorDialog({ open, onOpenChange, agent, onSaved }: AgentE
   const [conventions, setConventions] = useState("");
   const [runtimeMode, setRuntimeMode] = useState<RuntimeMode>("approval-required");
   const [interactionMode, setInteractionMode] = useState<ProviderInteractionMode>("default");
+  const [driver, setDriver] = useState("");
+  const [model, setModel] = useState("");
   const [status, setStatus] = useState<string | null>(null);
+
+  const serverProviders = useAtomValue(primaryServerProvidersAtom);
+  // One option per configured, available provider driver (codex, claude, grok …).
+  const providerOptions = useMemo(() => {
+    const byDriver = new Map<
+      string,
+      { driver: string; label: string; models: readonly ServerProviderModel[] }
+    >();
+    for (const provider of serverProviders) {
+      if (!isProviderAvailable(provider) || byDriver.has(provider.driver)) continue;
+      byDriver.set(provider.driver, {
+        driver: provider.driver,
+        label: provider.displayName ?? provider.driver,
+        models: provider.models,
+      });
+    }
+    return [...byDriver.values()];
+  }, [serverProviders]);
+  const modelOptions = useMemo(
+    () => providerOptions.find((option) => option.driver === driver)?.models ?? [],
+    [providerOptions, driver],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -102,6 +131,8 @@ export function AgentEditorDialog({ open, onOpenChange, agent, onSaved }: AgentE
       setConventions("");
       setRuntimeMode("approval-required");
       setInteractionMode("default");
+      setDriver("");
+      setModel("");
     } else {
       setAgentId(agent.id);
       setName(agent.name);
@@ -111,6 +142,8 @@ export function AgentEditorDialog({ open, onOpenChange, agent, onSaved }: AgentE
       setConventions(formatList(agent.character.conventions));
       setRuntimeMode(agent.character.runtimeMode ?? "approval-required");
       setInteractionMode(agent.character.interactionMode ?? "default");
+      setDriver(agent.character.provider?.driver ?? "");
+      setModel(agent.character.provider?.model ?? "");
     }
     setStatus(null);
   }, [agent, open]);
@@ -137,6 +170,14 @@ export function AgentEditorDialog({ open, onOpenChange, agent, onSaved }: AgentE
         ...(conventionValues === undefined ? {} : { conventions: conventionValues }),
         runtimeMode,
         interactionMode,
+        ...(driver.trim().length === 0
+          ? {}
+          : {
+              provider: {
+                driver: ProviderDriverKind.make(driver),
+                ...(model.trim().length === 0 ? {} : { model: model.trim() }),
+              },
+            }),
       },
     });
     if (ok) {
@@ -192,6 +233,67 @@ export function AgentEditorDialog({ open, onOpenChange, agent, onSaved }: AgentE
               onChange={(event) => setOwnerId(event.currentTarget.value)}
               placeholder="human_local"
             />
+          </Field>
+
+          <Field
+            label="Provider"
+            hint={
+              providerOptions.length === 0
+                ? "No providers configured. Set one up in Settings."
+                : "Which agent runs this member's delegated work."
+            }
+          >
+            <Select
+              value={driver === "" ? null : driver}
+              onValueChange={(value) => {
+                setDriver(value ?? "");
+                setModel("");
+              }}
+            >
+              <SelectTrigger
+                className="w-full"
+                aria-label="Provider"
+                disabled={providerOptions.length === 0}
+              >
+                <SelectValue>
+                  {providerOptions.find((option) => option.driver === driver)?.label ?? "Select…"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="start">
+                {providerOptions.map((option) => (
+                  <SelectItem hideIndicator key={option.driver} value={option.driver}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </Field>
+
+          <Field label="Model" hint={driver === "" ? "Pick a provider first." : undefined}>
+            <Select
+              value={model === "" ? MODEL_DEFAULT : model}
+              onValueChange={(value) => setModel(value === MODEL_DEFAULT ? "" : (value ?? ""))}
+            >
+              <SelectTrigger
+                className="w-full"
+                aria-label="Model"
+                disabled={modelOptions.length === 0}
+              >
+                <SelectValue>
+                  {modelOptions.find((option) => option.slug === model)?.name ?? "Provider default"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="start">
+                <SelectItem hideIndicator value={MODEL_DEFAULT}>
+                  Provider default
+                </SelectItem>
+                {modelOptions.map((option) => (
+                  <SelectItem hideIndicator key={option.slug} value={option.slug}>
+                    {option.name}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           </Field>
 
           <Field label="Runtime">
