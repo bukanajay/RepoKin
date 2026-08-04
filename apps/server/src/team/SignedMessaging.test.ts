@@ -1,15 +1,27 @@
 import * as NodeCrypto from "node:crypto";
 
 import { expect, it } from "@effect/vitest";
-import { EnvironmentId, MessageId, ProjectId, ThreadId } from "@t3tools/contracts";
+import {
+  CommandId,
+  EnvironmentId,
+  EventId,
+  MessageId,
+  ProjectId,
+  ThreadId,
+} from "@t3tools/contracts";
 import {
   AgentId,
   type AgentProfile,
+  ChannelId,
   HumanId,
   type HumanProfile,
   MemberId,
+  PostId,
+  TaskId,
+  type ReplicatedTeamEvent,
   type TeamRosterReadModel,
   type TeamSignedDeliveryReceiptPayload,
+  type TeamSignedEventPayload,
   type TeamSignedMessagePayload,
 } from "@t3tools/contracts/team";
 import * as DateTime from "effect/DateTime";
@@ -19,8 +31,10 @@ import * as Schema from "effect/Schema";
 import {
   resolveRosterPublicKeyForMember,
   signTeamDeliveryReceiptEnvelope,
+  signTeamEventEnvelope,
   signTeamMessageEnvelope,
   verifyTeamDeliveryReceiptEnvelope,
+  verifyTeamEventEnvelope,
   verifyTeamMessageEnvelope,
 } from "./SignedMessaging.ts";
 
@@ -365,5 +379,162 @@ it.effect("drops a delivery receipt whose visible payload was tampered with", ()
     });
 
     expect(result).toMatchObject({ _tag: "dropped", reason: "payload-mismatch" });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// R2 — replicated domain-event fan-out.
+// ---------------------------------------------------------------------------
+
+const channelPostedEvent: ReplicatedTeamEvent = {
+  sequence: 5,
+  eventId: EventId.make("event-post-1"),
+  aggregateKind: "project",
+  aggregateId: ProjectId.make("project-1"),
+  commandId: CommandId.make("cmd-post-1"),
+  causationEventId: null,
+  correlationId: null,
+  at: "2026-07-30T00:00:00.000Z",
+  metadata: { actorMemberId: decodeMemberId(julius.id) },
+  type: "team.channel.posted",
+  postId: PostId.make("post-1"),
+  channelId: ChannelId.make("team"),
+  authorId: decodeMemberId(julius.id),
+  authorEnvironmentId: EnvironmentId.make("env_sender"),
+  content: { kind: "text", body: "shipped it" },
+  postedAt: "2026-07-30T00:00:00.000Z",
+};
+
+const eventPayload: TeamSignedEventPayload = {
+  projectId: ProjectId.make("project-1"),
+  senderId: decodeMemberId(julius.id),
+  senderEnvironmentId: EnvironmentId.make("env_sender"),
+  recipientEnvironmentId: EnvironmentId.make("env_recipient"),
+  event: channelPostedEvent,
+  sentAt: "2026-07-30T00:00:00.000Z",
+};
+
+it.effect("accepts a replicated channel post and maps it to a post command", () =>
+  Effect.gen(function* () {
+    const envelope = yield* signTeamEventEnvelope({
+      privateKey: senderKeys.privateKey,
+      relayIssuer,
+      payload: eventPayload,
+      jti: "event-jti-1",
+      now,
+    });
+
+    const result = yield* verifyTeamEventEnvelope({
+      envelope,
+      roster,
+      relayIssuer,
+      nowEpochSeconds,
+    });
+
+    expect(result._tag).toBe("accepted");
+    if (result._tag === "accepted") {
+      // Deterministic command id from the origin event id makes redelivery idempotent.
+      expect(result.command.commandId).toBe("team:remote-event:event-post-1");
+      expect(result.command).toMatchObject({
+        type: "team.channel.post",
+        projectId: "project-1",
+        postId: "post-1",
+        channelId: "team",
+        authorId: "human_julius",
+        content: { kind: "text", body: "shipped it" },
+        metadata: { actorMemberId: "human_julius", environmentId: "env_sender" },
+      });
+    }
+  }),
+);
+
+it.effect("maps a replicated task.created event to a create command, omitting null fields", () =>
+  Effect.gen(function* () {
+    const taskCreatedEvent: ReplicatedTeamEvent = {
+      sequence: 6,
+      eventId: EventId.make("event-task-1"),
+      aggregateKind: "project",
+      aggregateId: ProjectId.make("project-1"),
+      commandId: CommandId.make("cmd-task-1"),
+      causationEventId: null,
+      correlationId: null,
+      at: "2026-07-30T00:00:00.000Z",
+      metadata: { actorMemberId: decodeMemberId(julius.id) },
+      type: "team.task.created",
+      taskId: TaskId.make("task-1"),
+      title: "Fix the login redirect",
+      description: null,
+      labels: [],
+      refs: null,
+      createdById: decodeMemberId(julius.id),
+      assigneeId: decodeMemberId(aria.id),
+    };
+    const envelope = yield* signTeamEventEnvelope({
+      privateKey: senderKeys.privateKey,
+      relayIssuer,
+      payload: { ...eventPayload, event: taskCreatedEvent },
+      jti: "event-jti-2",
+      now,
+    });
+
+    const result = yield* verifyTeamEventEnvelope({
+      envelope,
+      roster,
+      relayIssuer,
+      nowEpochSeconds,
+    });
+
+    expect(result._tag).toBe("accepted");
+    if (result._tag === "accepted") {
+      expect(result.command).toMatchObject({
+        type: "team.task.create",
+        taskId: "task-1",
+        title: "Fix the login redirect",
+        createdById: "human_julius",
+        assigneeId: "agent_aria",
+      });
+      // Null description/refs and an empty label list are omitted, not sent.
+      expect(result.command).not.toHaveProperty("description");
+      expect(result.command).not.toHaveProperty("refs");
+      expect(result.command).not.toHaveProperty("labels");
+    }
+  }),
+);
+
+it.effect("drops a replicated event when the roster key does not verify the proof", () =>
+  Effect.gen(function* () {
+    const envelope = yield* signTeamEventEnvelope({
+      privateKey: senderKeys.privateKey,
+      relayIssuer,
+      payload: eventPayload,
+      jti: "event-jti-3",
+      now,
+    });
+
+    const wrongRoster: TeamRosterReadModel = {
+      ...roster,
+      humans: [
+        {
+          ...julius,
+          environments: [
+            {
+              environmentId: EnvironmentId.make("env_sender"),
+              label: "julius-mbp",
+              publicKey: otherKeys.publicKey,
+            },
+          ],
+        },
+        maya,
+      ],
+    };
+
+    const result = yield* verifyTeamEventEnvelope({
+      envelope,
+      roster: wrongRoster,
+      relayIssuer,
+      nowEpochSeconds,
+    });
+
+    expect(result).toMatchObject({ _tag: "dropped", reason: "proof-invalid" });
   }),
 );

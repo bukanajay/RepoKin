@@ -13,6 +13,7 @@ import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import {
   TeamRelayEnvelope,
   TeamSignedDeliveryReceiptEnvelope,
+  TeamSignedEventEnvelope,
   TeamSignedMessageEnvelope,
 } from "./team.ts";
 
@@ -867,10 +868,10 @@ export const RelayPublishResponse = Schema.Struct({
 export type RelayPublishResponse = typeof RelayPublishResponse.Type;
 
 export const RelayTeamMessageDeliveryRequest = Schema.Struct({
-  envelope: TeamSignedMessageEnvelope,
+  envelope: Schema.Union([TeamSignedMessageEnvelope, TeamSignedEventEnvelope]),
 }).annotate({
   description:
-    "Opaque signed team message envelope. The relay transports it; receiving environments verify it against the roster.",
+    "Opaque signed team envelope — a direct message or a replicated domain event. Both expose `payload.recipientEnvironmentId`, so the relay transports either unchanged; receiving environments verify against the roster.",
 });
 export type RelayTeamMessageDeliveryRequest = typeof RelayTeamMessageDeliveryRequest.Type;
 

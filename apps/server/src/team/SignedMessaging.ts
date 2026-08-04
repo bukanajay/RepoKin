@@ -9,11 +9,16 @@
 import { CommandId } from "@t3tools/contracts";
 import {
   type HumanProfile,
+  type ReplicatedTeamEvent,
+  type TeamCommand,
   type TeamMessageDeliverCommand,
   type TeamMessageSendCommand,
   TeamSignedDeliveryReceiptPayload,
   type TeamSignedDeliveryReceiptEnvelope,
   TeamSignedDeliveryReceiptProofPayload,
+  TeamSignedEventPayload,
+  type TeamSignedEventEnvelope,
+  TeamSignedEventProofPayload,
   TeamSignedMessagePayload,
   type TeamSignedMessageEnvelope,
   TeamSignedMessageProofPayload,
@@ -21,6 +26,7 @@ import {
 } from "@t3tools/contracts/team";
 import {
   RELAY_TEAM_DELIVERY_RECEIPT_TYP,
+  RELAY_TEAM_EVENT_TYP,
   RELAY_TEAM_MESSAGE_TYP,
   normalizeRelayIssuer,
   signRelayJwt,
@@ -40,6 +46,8 @@ const decodeSignedDeliveryReceiptPayload = Schema.decodeUnknownEffect(
 const decodeSignedDeliveryReceiptProofPayload = Schema.decodeUnknownEffect(
   TeamSignedDeliveryReceiptProofPayload,
 );
+const decodeSignedEventPayload = Schema.decodeUnknownEffect(TeamSignedEventPayload);
+const decodeSignedEventProofPayload = Schema.decodeUnknownEffect(TeamSignedEventProofPayload);
 const TEAM_RELAY_ENVELOPE_LIFETIME = { hours: 24 } as const;
 
 export type TeamSignedMessageDropReason =
@@ -76,6 +84,15 @@ export interface TeamSignedDeliveryReceiptAccepted {
 export type TeamSignedDeliveryReceiptVerificationResult =
   | TeamSignedDeliveryReceiptAccepted
   | TeamSignedMessageDropped;
+
+export interface TeamSignedEventAccepted {
+  readonly _tag: "accepted";
+  readonly command: TeamCommand;
+  readonly proof: TeamSignedEventProofPayload;
+  readonly senderPublicKey: string;
+}
+
+export type TeamSignedEventVerificationResult = TeamSignedEventAccepted | TeamSignedMessageDropped;
 
 const dropped = (
   reason: TeamSignedMessageDropReason,
@@ -152,6 +169,81 @@ export function signedMessagePayloadToCommand(
       environmentId: payload.senderEnvironmentId,
     },
   };
+}
+
+/**
+ * Map a replicated domain event back to the command that reproduces it on the
+ * receiving environment. Re-dispatching as a command (rather than projecting the
+ * event directly) keeps every environment's decider authoritative — inbound
+ * safety invariants (FR-12.6/FR-18) re-run against the local roster. The
+ * command id is derived from the origin `eventId` so redelivery is idempotent.
+ */
+export function signedEventPayloadToCommand(payload: TeamSignedEventPayload): TeamCommand {
+  const event: ReplicatedTeamEvent = payload.event;
+  const commandId = CommandId.make(`team:remote-event:${event.eventId}`);
+  const environmentId = payload.senderEnvironmentId;
+  switch (event.type) {
+    case "team.channel.posted":
+      return {
+        commandId,
+        projectId: payload.projectId,
+        type: "team.channel.post",
+        postId: event.postId,
+        channelId: event.channelId,
+        authorId: event.authorId,
+        content: event.content,
+        metadata: { actorMemberId: event.authorId, environmentId },
+      };
+    case "team.task.created":
+      return {
+        commandId,
+        projectId: payload.projectId,
+        type: "team.task.create",
+        taskId: event.taskId,
+        title: event.title,
+        ...(event.description !== null ? { description: event.description } : {}),
+        ...(event.labels.length > 0 ? { labels: event.labels } : {}),
+        ...(event.refs !== null ? { refs: event.refs } : {}),
+        createdById: event.createdById,
+        ...(event.assigneeId !== null ? { assigneeId: event.assigneeId } : {}),
+        metadata: { actorMemberId: event.createdById, environmentId },
+      };
+    case "team.task.moved":
+      return {
+        commandId,
+        projectId: payload.projectId,
+        type: "team.task.move",
+        taskId: event.taskId,
+        toState: event.toState,
+        movedById: event.movedById,
+        metadata: { actorMemberId: event.movedById, environmentId },
+      };
+    case "team.task.updated":
+      return {
+        commandId,
+        projectId: payload.projectId,
+        type: "team.task.update",
+        taskId: event.taskId,
+        updatedById: event.updatedById,
+        // Null on a replicated update means "field untouched" — the decider maps
+        // an absent command field to null, so we omit rather than clear.
+        ...(event.title !== null ? { title: event.title } : {}),
+        ...(event.description !== null ? { description: event.description } : {}),
+        ...(event.labels !== null ? { labels: event.labels } : {}),
+        ...(event.refs !== null ? { refs: event.refs } : {}),
+        metadata: { actorMemberId: event.updatedById, environmentId },
+      };
+    case "team.task.assigned":
+      return {
+        commandId,
+        projectId: payload.projectId,
+        type: "team.task.assign",
+        taskId: event.taskId,
+        assigneeId: event.assigneeId,
+        assignedById: event.assignedById,
+        metadata: { actorMemberId: event.assignedById, environmentId },
+      };
+  }
 }
 
 export function signedDeliveryReceiptPayloadToCommand(
@@ -340,3 +432,88 @@ export const verifyTeamDeliveryReceiptEnvelope = Effect.fn(
     signerPublicKey: publicKeyResult.publicKey,
   } satisfies TeamSignedDeliveryReceiptAccepted;
 });
+
+export const signTeamEventEnvelope = Effect.fn("TeamSignedMessaging.signEventEnvelope")(
+  function* (input: {
+    readonly privateKey: string;
+    readonly relayIssuer: string;
+    readonly payload: TeamSignedEventPayload;
+    readonly jti: string;
+    readonly now?: DateTime.Utc;
+  }) {
+    const now = input.now ?? (yield* DateTime.now);
+    const expiresAt = DateTime.add(now, TEAM_RELAY_ENVELOPE_LIFETIME);
+    const proofPayload = {
+      iss: `t3-env:${input.payload.senderEnvironmentId}`,
+      aud: normalizeRelayIssuer(input.relayIssuer),
+      sub: input.payload.senderEnvironmentId,
+      jti: input.jti,
+      iat: Math.floor(now.epochMilliseconds / 1_000),
+      exp: Math.floor(expiresAt.epochMilliseconds / 1_000),
+      senderEnvironmentId: input.payload.senderEnvironmentId,
+      recipientEnvironmentId: input.payload.recipientEnvironmentId,
+      event: input.payload,
+    } satisfies TeamSignedEventProofPayload;
+    const proof = yield* signRelayJwt({
+      privateKey: input.privateKey,
+      typ: RELAY_TEAM_EVENT_TYP,
+      payload: proofPayload,
+    });
+    return { payload: input.payload, proof };
+  },
+);
+
+export const verifyTeamEventEnvelope = Effect.fn("TeamSignedMessaging.verifyEventEnvelope")(
+  function* (input: {
+    readonly envelope: TeamSignedEventEnvelope;
+    readonly roster: TeamRosterReadModel;
+    readonly relayIssuer: string;
+    readonly nowEpochSeconds: number;
+  }) {
+    const payloadOption = yield* decodeSignedEventPayload(input.envelope.payload).pipe(
+      Effect.option,
+    );
+    if (Option.isNone(payloadOption)) {
+      return dropped("payload-decode-failed", "The signed team event payload is malformed.");
+    }
+
+    const payload = payloadOption.value;
+    const publicKeyResult = resolveRosterPublicKeyForMember({
+      roster: input.roster,
+      memberId: payload.senderId,
+      environmentId: payload.senderEnvironmentId,
+    });
+    if ("_tag" in publicKeyResult) {
+      return publicKeyResult;
+    }
+
+    const proofOption = yield* verifyRelayJwt({
+      publicKey: publicKeyResult.publicKey,
+      token: input.envelope.proof,
+      typ: RELAY_TEAM_EVENT_TYP,
+      issuer: `t3-env:${payload.senderEnvironmentId}`,
+      audience: normalizeRelayIssuer(input.relayIssuer),
+      nowEpochSeconds: input.nowEpochSeconds,
+      maxTokenAge: "24 hours",
+    }).pipe(Effect.flatMap(decodeSignedEventProofPayload), Effect.option);
+    if (Option.isNone(proofOption)) {
+      return dropped("proof-invalid", "The signed team event proof did not verify.");
+    }
+
+    const proof = proofOption.value;
+    if (
+      proof.senderEnvironmentId !== payload.senderEnvironmentId ||
+      proof.recipientEnvironmentId !== payload.recipientEnvironmentId ||
+      !Equal.equals(proof.event, payload)
+    ) {
+      return dropped("payload-mismatch", "The signed proof does not cover the event payload.");
+    }
+
+    return {
+      _tag: "accepted",
+      command: signedEventPayloadToCommand(payload),
+      proof,
+      senderPublicKey: publicKeyResult.publicKey,
+    } satisfies TeamSignedEventAccepted;
+  },
+);

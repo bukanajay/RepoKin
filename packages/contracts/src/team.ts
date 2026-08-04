@@ -746,13 +746,9 @@ export const TeamSignedDeliveryReceiptEnvelope = Schema.Struct({
 });
 export type TeamSignedDeliveryReceiptEnvelope = typeof TeamSignedDeliveryReceiptEnvelope.Type;
 
-export const TeamRelayEnvelope = Schema.Union([
-  TeamSignedMessageEnvelope,
-  TeamSignedDeliveryReceiptEnvelope,
-]).annotate({
-  description: "Signed RepoKin message or delivery receipt transported through the relay.",
-});
-export type TeamRelayEnvelope = typeof TeamRelayEnvelope.Type;
+// The relay-envelope union (`TeamRelayEnvelope`) is declared after the R2 event
+// families below, since the cross-environment event envelope carries a
+// `ReplicatedTeamEvent` and the union must include it.
 
 // ---------------------------------------------------------------------------
 // M2 local team domain — event-sourced, environment-local coordination.
@@ -1496,6 +1492,70 @@ export type PlannedTeamEvent = TeamEvent extends infer Event
     ? Omit<Event, "sequence">
     : never
   : never;
+
+// ---------------------------------------------------------------------------
+// R2 — cross-environment fan-out of channel posts and task events.
+//
+// Channel *declarations* ride git (`.repokin/channels/`, T0, committed); only
+// posts and task events fan out over the relay. Each fan-out is a signed
+// envelope addressed to one remote roster environment (bounded per-post
+// fan-out), verified against the author's roster key exactly like a direct
+// message, then re-dispatched as the corresponding command so every
+// environment's event log stays authoritative.
+// ---------------------------------------------------------------------------
+
+export const ReplicatedTeamEvent = Schema.Union([
+  TeamChannelPostedEvent,
+  TeamTaskCreatedEvent,
+  TeamTaskMovedEvent,
+  TeamTaskUpdatedEvent,
+  TeamTaskAssignedEvent,
+]).annotate({
+  description: "Team domain events replicated to other roster environments over the relay.",
+});
+export type ReplicatedTeamEvent = typeof ReplicatedTeamEvent.Type;
+
+export const TeamSignedEventPayload = Schema.Struct({
+  projectId: ProjectId,
+  senderId: MemberId,
+  senderEnvironmentId: EnvironmentId,
+  recipientEnvironmentId: EnvironmentId,
+  event: ReplicatedTeamEvent,
+  sentAt: IsoDateTime,
+  expiresAt: Schema.optionalKey(IsoDateTime),
+}).annotate({
+  description:
+    "A replicated team domain event covered by the author environment's signature. Field layout mirrors TeamSignedMessagePayload so the relay routes it by `recipientEnvironmentId` unchanged.",
+});
+export type TeamSignedEventPayload = typeof TeamSignedEventPayload.Type;
+
+export const TeamSignedEventProofPayload = Schema.Struct({
+  ...TeamSignedJwtRegisteredClaims,
+  senderEnvironmentId: EnvironmentId,
+  recipientEnvironmentId: EnvironmentId,
+  event: TeamSignedEventPayload,
+}).annotate({
+  description: "JWT payload signed by the author environment for a replicated team event.",
+});
+export type TeamSignedEventProofPayload = typeof TeamSignedEventProofPayload.Type;
+
+export const TeamSignedEventEnvelope = Schema.Struct({
+  payload: TeamSignedEventPayload,
+  proof: TrimmedNonEmptyString,
+}).annotate({
+  description: "Relay-transported signed team domain-event envelope.",
+});
+export type TeamSignedEventEnvelope = typeof TeamSignedEventEnvelope.Type;
+
+export const TeamRelayEnvelope = Schema.Union([
+  TeamSignedMessageEnvelope,
+  TeamSignedDeliveryReceiptEnvelope,
+  TeamSignedEventEnvelope,
+]).annotate({
+  description:
+    "Signed RepoKin message, delivery receipt, or replicated domain event transported through the relay.",
+});
+export type TeamRelayEnvelope = typeof TeamRelayEnvelope.Type;
 
 export const TeamMemberReadModel = Schema.Struct({
   memberId: MemberId,

@@ -1,10 +1,13 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import type {
   MemberId,
+  ReplicatedTeamEvent,
+  TeamEvent,
   TeamInboxMessage,
   TeamRelayEnvelope,
   TeamRosterReadModel,
   TeamSignedDeliveryReceiptPayload,
+  TeamSignedEventEnvelope,
   TeamSignedMessageEnvelope,
   TeamSignedMessagePayload,
 } from "@t3tools/contracts/team";
@@ -22,8 +25,10 @@ import { ProjectionSnapshotQuery } from "../../orchestration/Services/Projection
 import { makeTeamRelayClient, readTeamRelayConfig } from "../relayClient.ts";
 import {
   signTeamDeliveryReceiptEnvelope,
+  signTeamEventEnvelope,
   signTeamMessageEnvelope,
   verifyTeamDeliveryReceiptEnvelope,
+  verifyTeamEventEnvelope,
   verifyTeamMessageEnvelope,
 } from "../SignedMessaging.ts";
 import { TeamEngineService } from "../Services/TeamEngine.ts";
@@ -36,10 +41,65 @@ import {
 
 const TEAM_RELAY_POLL_INTERVAL = "10 seconds";
 
+/** The domain events replicated across environments (channel posts + task events). */
+const REPLICATED_EVENT_TYPES = new Set<TeamEvent["type"]>([
+  "team.channel.posted",
+  "team.task.created",
+  "team.task.moved",
+  "team.task.updated",
+  "team.task.assigned",
+]);
+
+function isReplicatedTeamEvent(event: TeamEvent): event is ReplicatedTeamEvent {
+  return REPLICATED_EVENT_TYPES.has(event.type);
+}
+
+/** The member whose roster key signs a replicated event (its actor). */
+function replicatedEventActorId(event: ReplicatedTeamEvent): MemberId {
+  switch (event.type) {
+    case "team.channel.posted":
+      return event.authorId;
+    case "team.task.created":
+      return event.createdById;
+    case "team.task.moved":
+      return event.movedById;
+    case "team.task.updated":
+      return event.updatedById;
+    case "team.task.assigned":
+      return event.assignedById;
+  }
+}
+
+/** Distinct roster environments other than the local one — the fan-out targets. */
+export function collectRemoteEnvironments(input: {
+  readonly roster: TeamRosterReadModel;
+  readonly localEnvironmentId: EnvironmentId;
+}): ReadonlyArray<EnvironmentId> {
+  const seen = new Set<string>();
+  const result: EnvironmentId[] = [];
+  const add = (environmentId: EnvironmentId | undefined) => {
+    if (environmentId === undefined || String(environmentId) === String(input.localEnvironmentId)) {
+      return;
+    }
+    if (seen.has(String(environmentId))) return;
+    seen.add(String(environmentId));
+    result.push(environmentId);
+  };
+  for (const agent of input.roster.agents) add(agent.homeEnvironment);
+  for (const human of input.roster.humans) {
+    for (const environment of human.environments ?? []) add(environment.environmentId);
+  }
+  return result;
+}
+
+function isSignedEventEnvelope(envelope: TeamRelayEnvelope): envelope is TeamSignedEventEnvelope {
+  return "payload" in envelope && "event" in envelope.payload;
+}
+
 function isSignedMessageEnvelope(
   envelope: TeamRelayEnvelope,
 ): envelope is TeamSignedMessageEnvelope {
-  return "payload" in envelope;
+  return "payload" in envelope && "body" in envelope.payload;
 }
 
 export function matchesQueuedMessageForReceipt(input: {
@@ -108,6 +168,7 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
   const makeRelayClient = makeTeamRelayClient;
   const forwardedMessageIdsRef = yield* Ref.make(new Set<string>());
   const sentReceiptMessageIdsRef = yield* Ref.make(new Set<string>());
+  const fannedOutEventKeysRef = yield* Ref.make(new Set<string>());
 
   const resolveProjectCwd = (projectId: string) =>
     projectionSnapshotQuery
@@ -213,6 +274,87 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
       Effect.ignoreCause({ log: true }),
     );
 
+  const fanOutTeamEvent = (event: ReplicatedTeamEvent) =>
+    Effect.gen(function* () {
+      const relayConfig = yield* readRelayConfig.pipe(Effect.orElseSucceed(() => null));
+      if (relayConfig === null) {
+        return;
+      }
+      const projectId = event.aggregateId;
+      const cwd = yield* resolveProjectCwd(projectId);
+      if (cwd === null) {
+        return;
+      }
+      const roster = yield* teamFileStore.readRoster(cwd);
+      const localEnvironmentId = yield* serverEnvironment.getEnvironmentId;
+
+      // Echo guard: a replicated event carries the *origin* environment in its
+      // metadata (the re-dispatched command stamps it). Only fan out events
+      // authored locally, so an inbound event is never re-broadcast.
+      const originEnvironmentId = event.metadata.environmentId;
+      if (
+        originEnvironmentId !== undefined &&
+        String(originEnvironmentId) !== String(localEnvironmentId)
+      ) {
+        return;
+      }
+
+      const remoteEnvironments = collectRemoteEnvironments({ roster, localEnvironmentId });
+      if (remoteEnvironments.length === 0) {
+        return;
+      }
+      const senderId = replicatedEventActorId(event);
+      const relayClient = yield* makeRelayClient(relayConfig);
+
+      // Bounded per-post fan-out: one signed envelope per remote roster
+      // environment (channel member filtering is a visibility refinement — the
+      // roster is the trust boundary). Each envelope is verified against the
+      // author's roster key on arrival, exactly like a direct message.
+      yield* Effect.forEach(
+        remoteEnvironments,
+        (recipientEnvironmentId) =>
+          Effect.gen(function* () {
+            const key = `${event.eventId}:${recipientEnvironmentId}`;
+            if ((yield* Ref.get(fannedOutEventKeysRef)).has(key)) {
+              return;
+            }
+            const now = yield* DateTime.now;
+            const jti = yield* crypto.randomUUIDv4;
+            const payload = {
+              projectId,
+              senderId,
+              senderEnvironmentId: localEnvironmentId,
+              recipientEnvironmentId,
+              event,
+              sentAt: event.at,
+            };
+            const envelope = yield* signTeamEventEnvelope({
+              privateKey: keyPair.privateKey,
+              relayIssuer: relayConfig.issuer,
+              payload,
+              jti,
+              now,
+            });
+            yield* relayClient.server.deliverTeamMessage({ payload: { envelope } });
+            yield* Ref.update(fannedOutEventKeysRef, (current) => {
+              const next = new Set(current);
+              next.add(key);
+              return next;
+            });
+          }),
+        { discard: true, concurrency: "unbounded" },
+      );
+    }).pipe(
+      Effect.ignoreCause({ log: true }),
+      Effect.catch((error) =>
+        Effect.logWarning("failed to fan out team event through relay", {
+          eventType: event.type,
+          eventId: event.eventId,
+          error,
+        }),
+      ),
+    );
+
   const queueDeliveryReceipt = (input: {
     readonly projectId: TeamSignedDeliveryReceiptPayload["projectId"];
     readonly messageId: TeamSignedDeliveryReceiptPayload["messageId"];
@@ -277,9 +419,8 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
         response.envelopes,
         (envelope) =>
           Effect.gen(function* () {
-            const envelopeProjectId = isSignedMessageEnvelope(envelope)
-              ? envelope.payload.projectId
-              : envelope.receipt.projectId;
+            const envelopeProjectId =
+              "payload" in envelope ? envelope.payload.projectId : envelope.receipt.projectId;
             const project = snapshot.projects.find(
               (candidate) => candidate.id === envelopeProjectId,
             );
@@ -290,6 +431,33 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
               return;
             }
             const roster = yield* teamFileStore.readRoster(project.workspaceRoot);
+            if (isSignedEventEnvelope(envelope)) {
+              const result = yield* verifyTeamEventEnvelope({
+                envelope,
+                roster,
+                relayIssuer: relayConfig.issuer,
+                nowEpochSeconds,
+              });
+              if (result._tag === "dropped") {
+                yield* Effect.logWarning("dropped inbound team event", {
+                  reason: result.reason,
+                  detail: result.detail,
+                });
+                return;
+              }
+              // Re-dispatch as a command so the local decider re-validates
+              // invariants and this environment's event log stays authoritative.
+              // No delivery receipt: replicated events are broadcasts, not acks.
+              yield* teamEngine.dispatch(result.command).pipe(
+                Effect.catch((error) =>
+                  Effect.logWarning("failed to dispatch inbound team event", {
+                    commandType: result.command.type,
+                    error,
+                  }),
+                ),
+              );
+              return;
+            }
             if (isSignedMessageEnvelope(envelope)) {
               const result = yield* verifyTeamMessageEnvelope({
                 envelope,
@@ -421,11 +589,15 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
     }).pipe(Effect.catch((error) => Effect.logWarning("team message poll failed", { error })));
 
   yield* teamEngine.streamDomainEvents.pipe(
-    Stream.runForEach((event) =>
-      event.type === "team.message.queued"
-        ? forwardQueuedMessage({ projectId: event.aggregateId, messageId: event.messageId })
-        : Effect.void,
-    ),
+    Stream.runForEach((event) => {
+      if (event.type === "team.message.queued") {
+        return forwardQueuedMessage({ projectId: event.aggregateId, messageId: event.messageId });
+      }
+      if (isReplicatedTeamEvent(event)) {
+        return fanOutTeamEvent(event);
+      }
+      return Effect.void;
+    }),
     Effect.forkScoped,
   );
 
