@@ -155,3 +155,73 @@ function formatOverlapNote(path: string, memberIds: readonly string[]): string {
   }
   return `${memberIds.length} members are working in \`${path}\`.`;
 }
+
+/**
+ * Parse `git diff --name-only` / `--stat` style path lines into coarsened
+ * directories. Ignores summary lines ("N files changed") and binary markers.
+ */
+export function directoriesFromDiffPaths(
+  raw: string,
+  maxDepth: number = WORK_SIGNAL_MAX_DEPTH,
+): string[] {
+  const paths: string[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) continue;
+    if (/^\d+ files? changed/.test(trimmed)) continue;
+    // `git diff --stat` lines: " path/to/file | 12 +++---"
+    const statMatch = /^(.+?)\s+\|\s+/.exec(trimmed);
+    const path = (statMatch?.[1] ?? trimmed).trim();
+    if (path.includes("|") || path.startsWith("warning:")) continue;
+    paths.push(path);
+  }
+  return directoriesFromPaths(paths, maxDepth);
+}
+
+export interface PublishedBranchTouch {
+  readonly branch: string;
+  readonly directories: readonly string[];
+  /** Optional member attribution when the branch name encodes an agent/human. */
+  readonly memberId?: string;
+}
+
+/**
+ * Overlaps between the local working tree and published-branch touch sets
+ * (FR-14.3 — `git diff --stat` against RepoKin/remote refs, never checkout).
+ */
+export function detectPublishedBranchOverlaps(input: {
+  readonly localDirectories: ReadonlyArray<string>;
+  readonly branches: ReadonlyArray<PublishedBranchTouch>;
+  /** Synthetic member id used when a branch has no attributed owner. */
+  readonly localMemberId?: string;
+}): WorkMapOverlap[] {
+  const local = new Set(
+    input.localDirectories
+      .map((directory) => coarsenToDirectory(directory) ?? directory)
+      .filter((directory) => directory.length > 0),
+  );
+  if (local.size === 0) return [];
+
+  const overlaps: WorkMapOverlap[] = [];
+  for (const branch of input.branches) {
+    for (const directory of branch.directories) {
+      const path = coarsenToDirectory(directory) ?? directory;
+      if (path.length === 0 || !local.has(path)) continue;
+      const memberIds = [
+        ...(input.localMemberId !== undefined ? [input.localMemberId] : []),
+        ...(branch.memberId !== undefined ? [branch.memberId] : []),
+      ];
+      // Dedup by path+branch so one branch doesn't flood the radar.
+      const existing = overlaps.find(
+        (overlap) => overlap.path === path && overlap.note.includes(branch.branch),
+      );
+      if (existing !== undefined) continue;
+      overlaps.push({
+        path,
+        memberIds: memberIds.length > 0 ? memberIds : ["local", branch.branch],
+        note: `Published branch \`${branch.branch}\` touches \`${path}\` where you have uncommitted work.`,
+      });
+    }
+  }
+  return overlaps.sort((left, right) => left.path.localeCompare(right.path));
+}

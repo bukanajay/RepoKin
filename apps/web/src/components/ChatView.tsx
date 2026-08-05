@@ -238,6 +238,7 @@ import {
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import { resolveThreadPr } from "./ThreadStatusIndicators";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
+import { useThreadRadarBanners } from "./team/useThreadRadarBanners";
 import { ThreadSyncStatusPill } from "./chat/ThreadSyncStatusPill";
 import {
   DRAFT_HERO_TRANSITION_ANIMATION_ID,
@@ -1898,6 +1899,13 @@ function ChatViewContent(props: ChatViewProps) {
   const serverUpdateState = useAtomValue(
     serverEnvironment.updateStateAtom(serverUpdateEnvironmentId),
   );
+  const threadRadarBanners = useThreadRadarBanners({
+    environmentId: activeThread?.environmentId ?? null,
+    projectId: activeThread?.projectId ?? null,
+    workspaceRoot: activeProject?.workspaceRoot ?? null,
+    repokinAgentId: activeThread?.repokinAgentId,
+  });
+
   const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
     const updateRunning = serverUpdateState.status === "running";
@@ -2027,6 +2035,10 @@ function ChatViewContent(props: ChatViewProps) {
             }),
       });
     }
+    // FR-14.3: passive work-overlap notices on the affected thread (never a modal).
+    for (const banner of threadRadarBanners) {
+      items.push(banner);
+    }
     return items;
   }, [
     activeEnvironmentUnavailableState,
@@ -2040,6 +2052,7 @@ function ChatViewContent(props: ChatViewProps) {
     serverUpdateEnvironmentId,
     versionMismatchSelfUpdate,
     versionMismatchServerLabel,
+    threadRadarBanners,
   ]);
   const providerStatuses = serverConfig?.providers ?? EMPTY_PROVIDERS;
   const unlockedSelectedProvider = resolveSelectableProvider(

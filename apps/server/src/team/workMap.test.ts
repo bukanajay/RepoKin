@@ -3,6 +3,8 @@ import { assert, describe, it } from "@effect/vitest";
 import {
   coarsenToDirectory,
   detectOverlaps,
+  detectPublishedBranchOverlaps,
+  directoriesFromDiffPaths,
   directoriesFromPaths,
   projectWorkMapNodes,
 } from "./workMap.ts";
@@ -56,6 +58,40 @@ describe("projectWorkMapNodes", () => {
     );
     // Aria's boosted weight makes apps/web/src heaviest.
     assert.ok((nodes[0]?.weight ?? 0) > (nodes[1]?.weight ?? 0));
+  });
+});
+
+describe("directoriesFromDiffPaths", () => {
+  it("parses name-only and --stat lines into coarsened directories", () => {
+    assert.deepEqual(
+      directoriesFromDiffPaths(
+        ["apps/web/src/a.ts", "apps/server/src/team/decider.ts", " 3 files changed"].join("\n"),
+      ),
+      ["apps/server/src/team", "apps/web/src"],
+    );
+    assert.deepEqual(
+      directoriesFromDiffPaths(" packages/contracts/src/team.ts | 12 +++++-----\n"),
+      ["packages/contracts/src"],
+    );
+  });
+});
+
+describe("detectPublishedBranchOverlaps", () => {
+  it("flags directories where a published branch meets local dirty tree", () => {
+    const overlaps = detectPublishedBranchOverlaps({
+      localDirectories: ["apps/web/src", "docs"],
+      localMemberId: "human_ajay",
+      branches: [
+        {
+          branch: "origin/feature/team-ui",
+          directories: ["apps/web/src", "apps/server/src"],
+          memberId: "agent_aria",
+        },
+      ],
+    });
+    assert.equal(overlaps.length, 1);
+    assert.equal(overlaps[0]?.path, "apps/web/src");
+    assert.ok(overlaps[0]?.note.includes("origin/feature/team-ui"));
   });
 });
 

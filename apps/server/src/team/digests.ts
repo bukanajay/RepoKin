@@ -110,3 +110,38 @@ export function buildEnvironmentDigest(input: {
 
   return { title, bullets: bullets.slice(0, 12) };
 }
+
+/**
+ * Turn a model-produced title/body (e.g. from `generatePrContent`) into a
+ * digest, falling back to the template when the body is empty.
+ */
+export function refineDigestFromModelText(input: {
+  readonly template: EnvironmentDigest;
+  readonly title: string;
+  readonly body: string;
+}): EnvironmentDigest {
+  const title = input.title.trim() || input.template.title;
+  const bodyLines = input.body
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^[-*•]\s+/, "").trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 12);
+  return {
+    title: title.length > 80 ? `${title.slice(0, 77).trimEnd()}…` : title,
+    bullets: bodyLines.length > 0 ? bodyLines : input.template.bullets,
+  };
+}
+
+/** Prompt payload for an optional provider polish step (Q10). */
+export function buildDigestPolishSummary(template: EnvironmentDigest): string {
+  return [
+    "Rewrite this environment standup digest for a team channel.",
+    "Keep it terse, factual, and free of speculation.",
+    "Title should start with 'Standup'.",
+    "Body should be 3–8 short bullet lines (no markdown fences).",
+    "",
+    `Current title: ${template.title}`,
+    "Current bullets:",
+    ...template.bullets.map((bullet) => `- ${bullet}`),
+  ].join("\n");
+}

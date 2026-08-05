@@ -16,7 +16,15 @@ import * as Effect from "effect/Effect";
 
 import { ServerEnvironment } from "../environment/ServerEnvironment.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
-import { buildEnvironmentDigest, type DigestMember } from "./digests.ts";
+import * as ServerSettings from "../serverSettings.ts";
+import * as TextGeneration from "../textGeneration/TextGeneration.ts";
+import {
+  buildDigestPolishSummary,
+  buildEnvironmentDigest,
+  refineDigestFromModelText,
+  type DigestMember,
+  type EnvironmentDigest,
+} from "./digests.ts";
 import { TeamEngineService } from "./Services/TeamEngine.ts";
 import { TeamFileStore } from "./Services/TeamFileStore.ts";
 
@@ -112,7 +120,7 @@ export const postStandupDigest = Effect.fn("TeamStandup.post")(function* (input:
   }
 
   const now = yield* DateTime.now;
-  const digest = buildEnvironmentDigest({
+  const template = buildEnvironmentDigest({
     environmentLabel: String(environmentId).slice(0, 12),
     localMemberIds,
     membersById,
@@ -131,6 +139,12 @@ export const postStandupDigest = Effect.fn("TeamStandup.post")(function* (input:
     })),
     nowMs: now.epochMilliseconds,
   });
+
+  // Q10: bound provider polish when available; deterministic template otherwise.
+  const digest = yield* polishDigestWithProvider({
+    template,
+    cwd: project.workspaceRoot,
+  }).pipe(Effect.orElseSucceed(() => template));
 
   const postId = PostId.make(`standup-${yield* crypto.randomUUIDv4}`);
   const commandId = CommandId.make(`client:team-standup:${postId}`);
@@ -169,4 +183,35 @@ export const postStandupDigest = Effect.fn("TeamStandup.post")(function* (input:
     title: digest.title,
     bullets: digest.bullets,
   } satisfies TeamStandupDigestResult;
+});
+
+/**
+ * Optional provider polish (Q10). Reuses `generatePrContent` as a structured
+ * freeform writer so we don't need a new method on every driver. Any failure
+ * falls through to the deterministic template.
+ */
+const polishDigestWithProvider = Effect.fn("TeamStandup.polishWithProvider")(function* (input: {
+  readonly template: EnvironmentDigest;
+  readonly cwd: string;
+}) {
+  const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const textGeneration = yield* TextGeneration.TextGeneration;
+  const settings = yield* serverSettings.getSettings;
+  const modelSelection = settings.textGenerationModelSelection;
+
+  const polished = yield* textGeneration.generatePrContent({
+    cwd: input.cwd,
+    baseBranch: "standup",
+    headBranch: "standup",
+    commitSummary: buildDigestPolishSummary(input.template),
+    diffSummary: "Environment standup digest for the team channel.",
+    diffPatch: "(no code diff — rewrite the standup digest only)",
+    modelSelection,
+  });
+
+  return refineDigestFromModelText({
+    template: input.template,
+    title: polished.title,
+    body: polished.body,
+  });
 });

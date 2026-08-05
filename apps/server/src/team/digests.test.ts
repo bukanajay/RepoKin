@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 
-import { buildEnvironmentDigest } from "./digests.ts";
+import { buildEnvironmentDigest, refineDigestFromModelText } from "./digests.ts";
 
 const members = new Map([
   ["human_ajay", { memberId: "human_ajay", displayName: "Ajay", memberType: "human" as const }],
@@ -69,5 +69,29 @@ describe("buildEnvironmentDigest", () => {
     });
     assert.equal(digest.bullets.length, 1);
     assert.ok(digest.bullets[0]!.includes("No attributed activity"));
+  });
+});
+
+describe("refineDigestFromModelText", () => {
+  it("prefers model bullets when present and falls back otherwise", () => {
+    const template = {
+      title: "Standup — env",
+      bullets: ["template bullet"],
+    };
+    const polished = refineDigestFromModelText({
+      template,
+      title: "Standup — laptop",
+      body: "- Shipped work map\n- Fixed gap markers\n",
+    });
+    assert.equal(polished.title, "Standup — laptop");
+    assert.deepEqual(polished.bullets, ["Shipped work map", "Fixed gap markers"]);
+
+    const fallback = refineDigestFromModelText({
+      template,
+      title: "  ",
+      body: "\n",
+    });
+    assert.equal(fallback.title, template.title);
+    assert.deepEqual(fallback.bullets, template.bullets);
   });
 });

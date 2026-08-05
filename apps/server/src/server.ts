@@ -233,7 +233,12 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(TeamDelegationReportReactorLive),
   Layer.provideMerge(TeamMentionDelegationReactorLive),
   // Work signals before relay messaging: inbound poll ingests into TeamWorkSignals.
-  Layer.provideMerge(TeamWorkSignalsLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
+  Layer.provideMerge(
+    TeamWorkSignalsLive.pipe(
+      Layer.provide(TeamFileStoreLayer.layer),
+      Layer.provide(ProcessRunner.layer),
+    ),
+  ),
   Layer.provideMerge(TeamRelayMessagingLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
   Layer.provideMerge(RuntimeReceiptBusLive),

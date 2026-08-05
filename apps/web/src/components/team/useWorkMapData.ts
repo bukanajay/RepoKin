@@ -1,3 +1,4 @@
+import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { useMemo } from "react";
 
 import { teamEnvironment } from "../../state/team";
@@ -35,28 +36,45 @@ export type WorkMapData = {
   sharingEnabled: boolean;
 };
 
-export function useWorkMapData(): WorkMapData {
-  const { environmentId, project } = useTeamScope();
+export type WorkMapScopeOverride = {
+  readonly environmentId: string;
+  readonly projectId: string;
+  readonly workspaceRoot: string;
+};
+
+/**
+ * @param scopeOverride — when set (e.g. the active chat thread's project),
+ *   read that project instead of the Team-space project selector. Used by
+ *   FR-14.3 thread radar so the banner matches the open thread.
+ */
+export function useWorkMapData(scopeOverride?: WorkMapScopeOverride | null): WorkMapData {
+  const teamScope = useTeamScope();
+  const environmentId = scopeOverride?.environmentId ?? teamScope.environmentId;
+  const projectId = scopeOverride?.projectId ?? teamScope.project?.id ?? null;
+  const workspaceRoot = scopeOverride?.workspaceRoot ?? teamScope.project?.workspaceRoot ?? null;
+
+  const envId = environmentId === null ? null : EnvironmentId.make(environmentId);
+  const projId = projectId === null ? null : ProjectId.make(projectId);
 
   const rosterAtom =
-    environmentId === null || project === null
+    envId === null || workspaceRoot === null
       ? null
-      : teamEnvironment.roster({ environmentId, input: { cwd: project.workspaceRoot } });
+      : teamEnvironment.roster({ environmentId: envId, input: { cwd: workspaceRoot } });
   const roster = useEnvironmentQuery(rosterAtom);
 
   const workMapAtom =
-    environmentId === null || project === null
+    envId === null || projId === null
       ? null
       : teamEnvironment.workMap({
-          environmentId,
-          input: { projectId: project.id },
+          environmentId: envId,
+          input: { projectId: projId },
         });
   const workMap = useEnvironmentQuery(workMapAtom);
 
   const localStateAtom =
-    environmentId === null || project === null
+    envId === null || projId === null
       ? null
-      : teamEnvironment.localState({ environmentId, input: { projectId: project.id } });
+      : teamEnvironment.localState({ environmentId: envId, input: { projectId: projId } });
   const localState = useEnvironmentQuery(localStateAtom);
 
   return useMemo<WorkMapData>(() => {
@@ -68,7 +86,7 @@ export function useWorkMapData(): WorkMapData {
       sharingEnabled: true,
     };
     if (environmentId === null) return { status: "no-environment", ...base };
-    if (project === null) return { status: "no-project", ...base };
+    if (projectId === null || workspaceRoot === null) return { status: "no-project", ...base };
     if (roster.data === null || workMap.data === null) {
       return { status: "loading", ...base };
     }
@@ -80,15 +98,15 @@ export function useWorkMapData(): WorkMapData {
         path: node.path,
         label: node.label,
         weight: node.weight,
-        memberIds: node.memberIds as string[],
+        memberIds: node.memberIds.map(String),
       })),
       overlaps: workMap.data.overlaps.map((overlap) => ({
         path: overlap.path,
-        memberIds: overlap.memberIds as string[],
+        memberIds: overlap.memberIds.map(String),
         note: overlap.note,
       })),
       memberById: buildMemberSummaryMap(roster.data, localState.data?.project?.members ?? []),
       sharingEnabled: workMap.data.sharingEnabled,
     };
-  }, [environmentId, localState.data, project, roster.data, workMap.data]);
+  }, [environmentId, localState.data, projectId, roster.data, workMap.data, workspaceRoot]);
 }

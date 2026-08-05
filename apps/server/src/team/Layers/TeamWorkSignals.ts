@@ -30,18 +30,28 @@ import { getOrCreateEnvironmentKeyPairFromSecretStore } from "../../cloud/enviro
 import { ServerEnvironment } from "../../environment/ServerEnvironment.ts";
 import { GitManager } from "../../git/GitManager.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ProcessRunner from "../../processRunner.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import { makeTeamRelayClient, readTeamRelayConfig } from "../relayClient.ts";
 import { signTeamWorkSignalEnvelope } from "../SignedMessaging.ts";
 import { TeamFileStore } from "../Services/TeamFileStore.ts";
 import { TeamWorkSignals, type TeamWorkSignalsShape } from "../Services/TeamWorkSignals.ts";
-import { detectOverlaps, directoriesFromPaths, projectWorkMapNodes } from "../workMap.ts";
+import {
+  detectOverlaps,
+  detectPublishedBranchOverlaps,
+  directoriesFromDiffPaths,
+  directoriesFromPaths,
+  projectWorkMapNodes,
+  type PublishedBranchTouch,
+} from "../workMap.ts";
 import { collectRemoteEnvironments } from "../remoteEnvironments.ts";
 
 /** How long a remote signal stays on the map without a refresh. */
 const REMOTE_SIGNAL_STALENESS_MS = 60_000;
 /** Publish cadence — matches presence poll; no new steady-state traffic class. */
 const WORK_SIGNAL_PUBLISH_INTERVAL = "15 seconds";
+/** Cap published-branch scans so a huge remote ref list never pegs the work map. */
+const MAX_PUBLISHED_BRANCH_REFS = 24;
 
 function isThreadActivelyWorking(thread: {
   readonly latestTurn: { readonly state: string } | null;
@@ -77,6 +87,7 @@ function fingerprintSignals(signals: ReadonlyArray<TeamWorkSignal>): string {
 
 const makeTeamWorkSignals = Effect.gen(function* () {
   const gitManager = yield* GitManager;
+  const processRunner = yield* ProcessRunner.ProcessRunner;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const teamFileStore = yield* TeamFileStore;
   const serverEnvironment = yield* ServerEnvironment;
@@ -102,6 +113,68 @@ const makeTeamWorkSignals = Effect.gen(function* () {
       ),
       Effect.orElseSucceed(() => [] as string[]),
     );
+
+  /**
+   * FR-14.3 published-branch touch sets: list remote-tracking refs (no checkout),
+   * then `git diff --name-only` against HEAD to see which directories they change.
+   * Best-effort; failures yield an empty list so the work map still loads.
+   */
+  const collectPublishedBranchTouches = (cwd: string) =>
+    Effect.gen(function* () {
+      const refsResult = yield* processRunner
+        .run({
+          command: "git",
+          args: [
+            "-C",
+            cwd,
+            "for-each-ref",
+            "--sort=-committerdate",
+            "--format=%(refname:short)",
+            "--count",
+            String(MAX_PUBLISHED_BRANCH_REFS),
+            "refs/remotes",
+          ],
+          timeoutBehavior: "timedOutResult",
+        })
+        .pipe(Effect.option);
+      if (refsResult._tag === "None" || refsResult.value.code !== 0) {
+        return [] as PublishedBranchTouch[];
+      }
+      const branches = refsResult.value.stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(
+          (line) =>
+            line.length > 0 &&
+            !line.endsWith("/HEAD") &&
+            !line.endsWith("/main") &&
+            !line.endsWith("/master"),
+        )
+        .slice(0, MAX_PUBLISHED_BRANCH_REFS);
+
+      const touches: PublishedBranchTouch[] = [];
+      for (const branch of branches) {
+        const diffResult = yield* processRunner
+          .run({
+            command: "git",
+            args: ["-C", cwd, "diff", "--name-only", `HEAD...${branch}`],
+            timeoutBehavior: "timedOutResult",
+          })
+          .pipe(Effect.option);
+        if (diffResult._tag === "None" || diffResult.value.code !== 0) continue;
+        const directories = directoriesFromDiffPaths(diffResult.value.stdout);
+        if (directories.length === 0) continue;
+        // Best-effort member attribution from branch slug (agent_*/human_*).
+        const slug = branch.split("/").at(-1) ?? branch;
+        const memberId = /^(agent_|human_)/.test(slug) ? slug : undefined;
+        touches.push({
+          branch,
+          directories,
+          ...(memberId !== undefined ? { memberId } : {}),
+        });
+      }
+      return touches;
+    }).pipe(Effect.orElseSucceed(() => [] as PublishedBranchTouch[]));
 
   const collectLocalSignals = (projectId: ProjectId) =>
     Effect.gen(function* () {
@@ -318,11 +391,62 @@ const makeTeamWorkSignals = Effect.gen(function* () {
         weight: node.weight,
         memberIds: node.memberIds.map((id) => MemberId.make(id)),
       }));
-      const overlaps = detectOverlaps(projectionInput).map((overlap) => ({
-        path: overlap.path,
-        memberIds: overlap.memberIds.map((id) => MemberId.make(id)),
-        note: overlap.note,
-      }));
+      const memberOverlaps = detectOverlaps(projectionInput);
+
+      // Local working-tree dirs for published-branch intersection (FR-14.3).
+      const localHumanSignal = local.find((signal) => signal.memberType === "human");
+      const localDirectories =
+        localHumanSignal?.directories ?? local.flatMap((signal) => signal.directories);
+      const snapshot = yield* projectionSnapshotQuery
+        .getShellSnapshot()
+        .pipe(
+          Effect.orElseSucceed(() => ({
+            projects: [] as Array<{ id: string; workspaceRoot: string }>,
+          })),
+        );
+      const project = snapshot.projects.find((candidate) => candidate.id === projectId);
+      const branchTouches =
+        project === undefined ? [] : yield* collectPublishedBranchTouches(project.workspaceRoot);
+      const branchOverlaps = detectPublishedBranchOverlaps({
+        localDirectories: [...localDirectories],
+        branches: branchTouches,
+        ...(localHumanSignal !== undefined
+          ? { localMemberId: String(localHumanSignal.memberId) }
+          : {}),
+      });
+
+      // Merge member-signal and published-branch overlaps; prefer richer notes.
+      const overlapByPath = new Map<string, { path: string; memberIds: string[]; note: string }>();
+      for (const overlap of [...memberOverlaps, ...branchOverlaps]) {
+        const existing = overlapByPath.get(overlap.path);
+        if (existing === undefined) {
+          overlapByPath.set(overlap.path, {
+            path: overlap.path,
+            memberIds: [...overlap.memberIds],
+            note: overlap.note,
+          });
+        } else {
+          const members = new Set([...existing.memberIds, ...overlap.memberIds]);
+          existing.memberIds = [...members];
+          // Keep the more specific note (branch notes mention "Published branch").
+          if (
+            overlap.note.includes("Published branch") ||
+            existing.note.length < overlap.note.length
+          ) {
+            existing.note = overlap.note;
+          }
+        }
+      }
+
+      const overlaps = [...overlapByPath.values()]
+        .sort((left, right) => left.path.localeCompare(right.path))
+        .map((overlap) => ({
+          path: overlap.path,
+          memberIds: overlap.memberIds
+            .filter((id) => id !== "local" && !id.includes("/"))
+            .map((id) => MemberId.make(id)),
+          note: overlap.note,
+        }));
 
       const result: TeamWorkMapReadResult = {
         projectId,
