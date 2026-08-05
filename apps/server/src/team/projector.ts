@@ -78,13 +78,29 @@ function activity(input: {
 
 const decodeTeamDomainReadModel = Schema.decodeUnknownEffect(TeamDomainReadModelSchema);
 
-function decodeReadModel(
+/** Validate a fully-constructed read model against the contract schema. */
+function validateReadModel(
   value: TeamDomainReadModel,
   eventType: TeamEvent["type"],
 ): Effect.Effect<TeamDomainReadModel, TeamProjectorDecodeError> {
   return decodeTeamDomainReadModel(value).pipe(
     Effect.mapError(toTeamProjectorDecodeError(eventType)),
   );
+}
+
+/**
+ * Pure per-event transition helper used inside the switch below. It only
+ * constructs the next read model; validation is deferred to the exported
+ * `projectTeamEvent` / `projectTeamEvents` so a bulk replay validates once
+ * instead of re-decoding the whole (growing) model on every event — which is
+ * O(n²) and makes engine boot pathological for large histories. `eventType`
+ * is accepted so the call sites read naturally but is intentionally unused.
+ */
+function buildReadModel(
+  value: TeamDomainReadModel,
+  _eventType: TeamEvent["type"],
+): TeamDomainReadModel {
+  return value;
 }
 
 function eventOccurredAt(event: TeamEvent): string {
@@ -114,10 +130,12 @@ function eventOccurredAt(event: TeamEvent): string {
   }
 }
 
-export function projectTeamEvent(
-  model: TeamDomainReadModel,
-  event: TeamEvent,
-): Effect.Effect<TeamDomainReadModel, TeamProjectorDecodeError> {
+/**
+ * Pure fold: construct the next read model for one event without validating.
+ * Used directly by bulk replay (`projectTeamEvents`); single-event callers go
+ * through `projectTeamEvent`, which validates the result.
+ */
+export function applyTeamEvent(model: TeamDomainReadModel, event: TeamEvent): TeamDomainReadModel {
   const nextBase: TeamDomainReadModel = {
     ...model,
     snapshotSequence: event.sequence,
@@ -126,7 +144,7 @@ export function projectTeamEvent(
 
   switch (event.type) {
     case "team.member.upserted":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
@@ -159,7 +177,7 @@ export function projectTeamEvent(
       );
 
     case "team.agent.assigned":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
@@ -193,7 +211,7 @@ export function projectTeamEvent(
       );
 
     case "team.message.queued":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(nextBase.projects, event.aggregateId, event.sentAt, (project) => {
@@ -237,7 +255,7 @@ export function projectTeamEvent(
       );
 
     case "team.message.delivered":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(
@@ -271,7 +289,7 @@ export function projectTeamEvent(
       );
 
     case "team.message.read":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(
@@ -305,7 +323,7 @@ export function projectTeamEvent(
       );
 
     case "team.message.expired":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(
@@ -339,7 +357,7 @@ export function projectTeamEvent(
       );
 
     case "team.request.created":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(
@@ -389,7 +407,7 @@ export function projectTeamEvent(
       );
 
     case "team.request.responded":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(
@@ -429,7 +447,7 @@ export function projectTeamEvent(
       );
 
     case "team.channel.declared":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
@@ -457,7 +475,7 @@ export function projectTeamEvent(
       );
 
     case "team.channel.posted":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(
@@ -497,7 +515,7 @@ export function projectTeamEvent(
       );
 
     case "team.task.created":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
@@ -536,7 +554,7 @@ export function projectTeamEvent(
       );
 
     case "team.task.moved":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
@@ -565,7 +583,7 @@ export function projectTeamEvent(
       );
 
     case "team.task.updated":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
@@ -602,7 +620,7 @@ export function projectTeamEvent(
       );
 
     case "team.task.assigned":
-      return decodeReadModel(
+      return buildReadModel(
         {
           ...nextBase,
           projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
@@ -633,4 +651,34 @@ export function projectTeamEvent(
         event.type,
       );
   }
+}
+
+/**
+ * Project one event and validate the resulting read model against the schema.
+ * Use this on the single-event path (command dispatch), where per-event
+ * validation catches an invalid transition immediately.
+ */
+export function projectTeamEvent(
+  model: TeamDomainReadModel,
+  event: TeamEvent,
+): Effect.Effect<TeamDomainReadModel, TeamProjectorDecodeError> {
+  return validateReadModel(applyTeamEvent(model, event), event.type);
+}
+
+/**
+ * Fold many events and validate once at the end. Boot replay uses this: it is
+ * O(n) in the number of events plus a single decode, instead of re-decoding
+ * the whole (growing) model per event. Persisted events were already validated
+ * on append, so the intermediate models need no re-validation.
+ */
+export function projectTeamEvents(
+  model: TeamDomainReadModel,
+  events: ReadonlyArray<TeamEvent>,
+): Effect.Effect<TeamDomainReadModel, TeamProjectorDecodeError> {
+  if (events.length === 0) return Effect.succeed(model);
+  let next = model;
+  for (const event of events) {
+    next = applyTeamEvent(next, event);
+  }
+  return validateReadModel(next, events[events.length - 1]!.type);
 }

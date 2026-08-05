@@ -1,5 +1,5 @@
 import { CommandId, EventId, MessageId, ProjectId, ThreadId } from "@t3tools/contracts";
-import { MemberId } from "@t3tools/contracts/team";
+import { ChannelId, MemberId, PostId } from "@t3tools/contracts/team";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -56,6 +56,57 @@ layer("TeamEventStore", (it) => {
       assert.equal(replayed[0]?.sequence, 1);
       assert.equal(replayed[0]?.type, "team.message.queued");
       assert.equal(replayed[0]?.metadata.actorMemberId, "human_julius");
+    }),
+  );
+
+  it.effect("readAll replays the full history past the bounded read limit", () =>
+    Effect.gen(function* () {
+      const eventStore = yield* TeamEventStore;
+      const aggregateId = ProjectId.make("project-scale");
+      const author = decodeMemberId("agent_aria");
+      // More than DEFAULT_READ_FROM_SEQUENCE_LIMIT (1000), spanning several
+      // READ_PAGE_SIZE pages, so a capped readAll would silently drop the tail.
+      const total = 1050;
+      // Replay order is by sequence, not timestamp, so a constant time is fine.
+      const postedAt = "2026-08-05T09:00:00.000Z";
+
+      yield* Effect.forEach(
+        Array.from({ length: total }, (_, index) => index),
+        (index) =>
+          eventStore.append({
+            eventId: EventId.make(`evt-post-${index}`),
+            aggregateKind: "project",
+            aggregateId,
+            type: "team.channel.posted",
+            commandId: CommandId.make(`cmd-post-${index}`),
+            causationEventId: null,
+            correlationId: null,
+            postId: PostId.make(`post-${index}`),
+            channelId: ChannelId.make("team"),
+            authorId: author,
+            authorEnvironmentId: null,
+            content: { kind: "text", body: `Message #${index}` },
+            postedAt,
+            at: postedAt,
+            metadata: { actorMemberId: author },
+          }),
+        { discard: true },
+      );
+
+      const all = yield* Stream.runCollect(eventStore.readAll()).pipe(
+        Effect.map((chunk) => Array.from(chunk)),
+      );
+      // The in-memory store is shared across cases, so scope to this aggregate.
+      const mine = all.filter((event) => event.aggregateId === aggregateId);
+      assert.equal(mine.length, total);
+      // Nothing beyond event 1000 is lost: last event present, order preserved.
+      assert.equal(mine[mine.length - 1]?.eventId, `evt-post-${total - 1}`);
+
+      // Bounded consumers (readEvents RPC) still honor an explicit limit.
+      const bounded = yield* Stream.runCollect(eventStore.readFromSequence(0, 500)).pipe(
+        Effect.map((chunk) => Array.from(chunk)),
+      );
+      assert.equal(bounded.length, 500);
     }),
   );
 });

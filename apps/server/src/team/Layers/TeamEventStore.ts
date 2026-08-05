@@ -44,6 +44,13 @@ const ReadFromSequenceRequestSchema = Schema.Struct({
 
 const DEFAULT_READ_FROM_SEQUENCE_LIMIT = 1_000;
 const READ_PAGE_SIZE = 500;
+/**
+ * Sentinel `limit` for `readAll`: replay every event. `readFromSequence` still
+ * pages in `READ_PAGE_SIZE` chunks, so this streams rather than issuing one
+ * unbounded query. Bounded streaming consumers (readEvents RPC) pass an
+ * explicit limit and are unaffected.
+ */
+const READ_ALL_LIMIT = Number.POSITIVE_INFINITY;
 
 function eventOccurredAt(event: PlannedTeamEvent): string {
   switch (event.type) {
@@ -223,7 +230,7 @@ const makeTeamEventStore = Effect.gen(function* () {
   return {
     append,
     readFromSequence,
-    readAll: () => readFromSequence(0),
+    readAll: () => readFromSequence(0, READ_ALL_LIMIT),
   } satisfies TeamEventStoreShape;
 });
 

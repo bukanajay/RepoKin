@@ -23,7 +23,7 @@ import {
   type TeamDispatchError,
 } from "../Errors.ts";
 import { decideTeamCommand } from "../decider.ts";
-import { createEmptyTeamReadModel, projectTeamEvent } from "../projector.ts";
+import { createEmptyTeamReadModel, projectTeamEvent, projectTeamEvents } from "../projector.ts";
 
 const isTeamCommandPreviouslyRejectedError = Schema.is(TeamCommandPreviouslyRejectedError);
 const isTeamCommandInvariantError = Schema.is(TeamCommandInvariantError);
@@ -45,17 +45,12 @@ const makeTeamEngine = Effect.gen(function* () {
   const commandQueue = yield* Queue.unbounded<CommandEnvelope>();
   const eventPubSub = yield* PubSub.unbounded<TeamEvent>();
 
+  // Bulk fold that validates once at the end — boot replay of a large history
+  // must not re-decode the whole read model per event (O(n²)).
   const projectEventsOntoReadModel = (
     baseReadModel: TeamDomainReadModel,
     events: ReadonlyArray<TeamEvent>,
-  ) =>
-    Effect.gen(function* () {
-      let nextReadModel = baseReadModel;
-      for (const event of events) {
-        nextReadModel = yield* projectTeamEvent(nextReadModel, event);
-      }
-      return nextReadModel;
-    });
+  ) => projectTeamEvents(baseReadModel, events);
 
   const processEnvelope = (envelope: CommandEnvelope): Effect.Effect<void> =>
     Effect.exit(
