@@ -30,6 +30,7 @@ import {
   verifyTeamDeliveryReceiptEnvelope,
   verifyTeamEventEnvelope,
   verifyTeamMessageEnvelope,
+  verifyTeamWorkSignalEnvelope,
 } from "../SignedMessaging.ts";
 import { TeamEngineService } from "../Services/TeamEngine.ts";
 import { TeamFileStore } from "../Services/TeamFileStore.ts";
@@ -38,6 +39,7 @@ import {
   TeamRelayMessaging,
   type TeamRelayMessagingShape,
 } from "../Services/TeamRelayMessaging.ts";
+import { TeamWorkSignals } from "../Services/TeamWorkSignals.ts";
 
 const TEAM_RELAY_POLL_INTERVAL = "10 seconds";
 
@@ -91,30 +93,16 @@ function replicatedEventOccurredAt(event: ReplicatedTeamEvent): string {
   }
 }
 
-/** Distinct roster environments other than the local one — the fan-out targets. */
-export function collectRemoteEnvironments(input: {
-  readonly roster: TeamRosterReadModel;
-  readonly localEnvironmentId: EnvironmentId;
-}): ReadonlyArray<EnvironmentId> {
-  const seen = new Set<string>();
-  const result: EnvironmentId[] = [];
-  const add = (environmentId: EnvironmentId | undefined) => {
-    if (environmentId === undefined || String(environmentId) === String(input.localEnvironmentId)) {
-      return;
-    }
-    if (seen.has(String(environmentId))) return;
-    seen.add(String(environmentId));
-    result.push(environmentId);
-  };
-  for (const agent of input.roster.agents) add(agent.homeEnvironment);
-  for (const human of input.roster.humans) {
-    for (const environment of human.environments ?? []) add(environment.environmentId);
-  }
-  return result;
-}
+export { collectRemoteEnvironments } from "../remoteEnvironments.ts";
 
 function isSignedEventEnvelope(envelope: TeamRelayEnvelope): envelope is TeamSignedEventEnvelope {
   return "payload" in envelope && "event" in envelope.payload;
+}
+
+function isSignedWorkSignalEnvelope(
+  envelope: TeamRelayEnvelope,
+): envelope is import("@t3tools/contracts/team").TeamSignedWorkSignalEnvelope {
+  return "payload" in envelope && "signals" in envelope.payload;
 }
 
 function isSignedMessageEnvelope(
@@ -183,6 +171,7 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
   const teamEngine = yield* TeamEngineService;
   const teamFileStore = yield* TeamFileStore;
   const teamRelayPresence = yield* TeamRelayPresence;
+  const teamWorkSignals = yield* TeamWorkSignals;
   const crypto = yield* Crypto.Crypto;
   const keyPair = yield* getOrCreateEnvironmentKeyPairFromSecretStore(secrets);
   const readRelayConfig = readTeamRelayConfig(secrets);
@@ -477,6 +466,24 @@ const makeTeamRelayMessaging = Effect.gen(function* () {
                   }),
                 ),
               );
+              return;
+            }
+            if (isSignedWorkSignalEnvelope(envelope)) {
+              const result = yield* verifyTeamWorkSignalEnvelope({
+                envelope,
+                roster,
+                relayIssuer: relayConfig.issuer,
+                nowEpochSeconds,
+              });
+              if (result._tag === "dropped") {
+                yield* Effect.logWarning("dropped inbound work signal", {
+                  reason: result.reason,
+                  detail: result.detail,
+                });
+                return;
+              }
+              // Ephemeral cache only — never re-dispatched as domain events (R3.1).
+              yield* teamWorkSignals.ingestRemoteSignals(result.signals);
               return;
             }
             if (isSignedMessageEnvelope(envelope)) {

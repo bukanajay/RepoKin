@@ -44,6 +44,7 @@ import {
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { Switch } from "../ui/switch";
 import { SettingsPageContainer, SettingsRow } from "./settingsLayout";
 
 const NO_BOUND_PROVIDER_VALUE = "__repokin_no_bound_provider__";
@@ -248,6 +249,18 @@ export function RepoKinSettingsPanel() {
     updateSettings({
       repokin: {
         trustedMechanics: { ...settings.repokin.trustedMechanics, [normalizedCwd]: perProject },
+        workLocationSharing: settings.repokin.workLocationSharing,
+      },
+    });
+  }
+
+  const workLocationSharing = settings.repokin.workLocationSharing !== false;
+
+  function handleWorkLocationSharingChange(enabled: boolean) {
+    updateSettings({
+      repokin: {
+        trustedMechanics: settings.repokin.trustedMechanics,
+        workLocationSharing: enabled,
       },
     });
   }
@@ -387,6 +400,23 @@ export function RepoKinSettingsPanel() {
             />
           </div>
         </SettingsRow>
+
+        <SettingsRow
+          title="Work-location sharing"
+          description="Publish coarse directory activity (never file contents) so teammates can see overlaps on the work map. Off keeps your location private on this environment (FR-14.4)."
+          control={
+            <Switch
+              checked={workLocationSharing}
+              onCheckedChange={handleWorkLocationSharingChange}
+              aria-label="Share work location with roster"
+            />
+          }
+          status={
+            workLocationSharing
+              ? "Sharing directory activity with the roster."
+              : "Off — not publishing work locations."
+          }
+        />
 
         <SettingsRow
           title="Runtime bindings"

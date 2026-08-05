@@ -472,6 +472,12 @@ export const RepoKinTrustSettings = Schema.Struct({
     TrimmedNonEmptyString,
     Schema.Record(TrimmedNonEmptyString, TrimmedNonEmptyString),
   ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  /**
+   * Work-location sharing kill switch (PRD FR-14.4). On by default at directory
+   * granularity; when false this environment neither collects nor publishes
+   * work signals (local work map still renders remote teammates' signals).
+   */
+  workLocationSharing: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 }).annotate({
   description: "Environment-local RepoKin trust decisions keyed by project/workspace and agent id.",
 });
@@ -689,6 +695,7 @@ export const ServerSettingsPatch = Schema.Struct({
           Schema.Record(TrimmedNonEmptyString, TrimmedNonEmptyString),
         ),
       ),
+      workLocationSharing: Schema.optionalKey(Schema.Boolean),
     }),
   ),
 });

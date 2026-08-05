@@ -15,6 +15,7 @@ import {
   TeamSignedDeliveryReceiptEnvelope,
   TeamSignedEventEnvelope,
   TeamSignedMessageEnvelope,
+  TeamSignedWorkSignalEnvelope,
 } from "./team.ts";
 
 export const RelayAgentAwarenessPlatform = Schema.Literal("ios");
@@ -868,10 +869,14 @@ export const RelayPublishResponse = Schema.Struct({
 export type RelayPublishResponse = typeof RelayPublishResponse.Type;
 
 export const RelayTeamMessageDeliveryRequest = Schema.Struct({
-  envelope: Schema.Union([TeamSignedMessageEnvelope, TeamSignedEventEnvelope]),
+  envelope: Schema.Union([
+    TeamSignedMessageEnvelope,
+    TeamSignedEventEnvelope,
+    TeamSignedWorkSignalEnvelope,
+  ]),
 }).annotate({
   description:
-    "Opaque signed team envelope — a direct message or a replicated domain event. Both expose `payload.recipientEnvironmentId`, so the relay transports either unchanged; receiving environments verify against the roster.",
+    "Opaque signed team envelope — a direct message, replicated domain event, or ephemeral work-signal snapshot. All expose `payload.recipientEnvironmentId`, so the relay transports them unchanged; receiving environments verify against the roster.",
 });
 export type RelayTeamMessageDeliveryRequest = typeof RelayTeamMessageDeliveryRequest.Type;
 

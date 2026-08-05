@@ -13,6 +13,8 @@ export const RELAY_ACTIVITY_PUBLISH_TYP = "t3-env-activity+jwt";
 export const RELAY_TEAM_MESSAGE_TYP = "t3-team-message+jwt";
 export const RELAY_TEAM_DELIVERY_RECEIPT_TYP = "t3-team-delivery-receipt+jwt";
 export const RELAY_TEAM_EVENT_TYP = "t3-team-event+jwt";
+/** Ephemeral work-location signals (R3); short-lived, not event-sourced. */
+export const RELAY_TEAM_WORK_SIGNAL_TYP = "t3-team-work-signal+jwt";
 
 export class RelayJwtError extends Schema.TaggedErrorClass<RelayJwtError>()("RelayJwtError", {
   operation: Schema.Literals(["sign", "verify"]),

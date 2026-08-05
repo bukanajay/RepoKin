@@ -109,6 +109,7 @@ import { TeamDelegationRunReactorLive } from "./team/Layers/TeamDelegationRunRea
 import { TeamMentionDelegationReactorLive } from "./team/Layers/TeamMentionDelegationReactor.ts";
 import { TeamInboxDeliveryReactorLive } from "./team/Layers/TeamInboxDeliveryReactor.ts";
 import { TeamRelayMessagingLive } from "./team/Layers/TeamRelayMessaging.ts";
+import { TeamWorkSignalsLive } from "./team/Layers/TeamWorkSignals.ts";
 import * as TeamFileStoreLayer from "./team/Layers/TeamFileStore.ts";
 import {
   clearPersistedServerRuntimeState,
@@ -231,6 +232,8 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(TeamDelegationRunReactorLive),
   Layer.provideMerge(TeamDelegationReportReactorLive),
   Layer.provideMerge(TeamMentionDelegationReactorLive),
+  // Work signals before relay messaging: inbound poll ingests into TeamWorkSignals.
+  Layer.provideMerge(TeamWorkSignalsLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
   Layer.provideMerge(TeamRelayMessagingLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
   Layer.provideMerge(RuntimeReceiptBusLive),

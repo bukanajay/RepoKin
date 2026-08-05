@@ -48,6 +48,17 @@ export function createTeamEnvironmentAtoms<R, E>(
       label: "environment-data:team:channel-posts-read",
       tag: WS_METHODS.teamReadChannelPosts,
     }),
+    // R3 work map + radar — local signals + cached remote, throttled by the
+    // presence cadence on the server.
+    workMap: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:team:work-map",
+      tag: WS_METHODS.teamReadWorkMap,
+      staleTimeMs: 5_000,
+    }),
+    postStandupDigest: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:team:standup-digest",
+      tag: WS_METHODS.teamPostStandupDigest,
+    }),
     dispatchCommand: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:team:dispatch-command",
       tag: WS_METHODS.teamDispatchCommand,

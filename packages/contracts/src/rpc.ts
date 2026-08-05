@@ -72,6 +72,11 @@ import {
   TeamRosterSyncError,
   TeamRosterSyncInput,
   TeamRosterSyncResult,
+  TeamWorkMapReadInput,
+  TeamWorkMapReadResult,
+  TeamStandupDigestError,
+  TeamStandupDigestInput,
+  TeamStandupDigestResult,
 } from "./team.ts";
 import { KeybindingsConfigError } from "./keybindings.ts";
 import {
@@ -230,6 +235,8 @@ export const WS_METHODS = {
   teamSyncRoster: "team.syncRoster",
   teamReadLocalState: "team.readLocalState",
   teamReadChannelPosts: "team.readChannelPosts",
+  teamReadWorkMap: "team.readWorkMap",
+  teamPostStandupDigest: "team.postStandupDigest",
   teamDispatchCommand: "team.dispatchCommand",
   teamHeartbeatHumanPresence: "team.heartbeatHumanPresence",
 
@@ -643,6 +650,18 @@ export const WsTeamReadChannelPostsRpc = Rpc.make(WS_METHODS.teamReadChannelPost
   error: EnvironmentAuthorizationError,
 });
 
+export const WsTeamReadWorkMapRpc = Rpc.make(WS_METHODS.teamReadWorkMap, {
+  payload: TeamWorkMapReadInput,
+  success: TeamWorkMapReadResult,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsTeamPostStandupDigestRpc = Rpc.make(WS_METHODS.teamPostStandupDigest, {
+  payload: TeamStandupDigestInput,
+  success: TeamStandupDigestResult,
+  error: Schema.Union([TeamStandupDigestError, EnvironmentAuthorizationError]),
+});
+
 export const WsTeamDispatchCommandRpc = Rpc.make(WS_METHODS.teamDispatchCommand, {
   payload: TeamCommand,
   success: TeamCommandDispatchResult,
@@ -926,6 +945,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsTeamSyncRosterRpc,
   WsTeamReadLocalStateRpc,
   WsTeamReadChannelPostsRpc,
+  WsTeamReadWorkMapRpc,
+  WsTeamPostStandupDigestRpc,
   WsTeamDispatchCommandRpc,
   WsTeamHeartbeatHumanPresenceRpc,
   WsTerminalOpenRpc,
