@@ -361,6 +361,34 @@ reachable from the palette.
 
 ---
 
+## 4d. R6 — Task comments + structured review (FR-18.4 / FR-13.6)
+
+**Goal:** complete the board side of the R2 loop — discuss work on the task
+and record approve / request-changes without inventing a second workflow
+engine.
+
+### R6.1 Contracts
+
+- `TaskCommentId`, `TeamTaskComment`, `TeamTaskReviewVerdict`
+- Commands: `team.task.comment`, `team.task.review`
+- Events: `team.task.commented`, `team.task.reviewed` (replicated)
+- `TeamTaskReadModel.comments` (decode default `[]`)
+
+### R6.2 Server
+
+- Decider: any roster member may comment; only humans may review; agents
+  cannot self-approve via review (FR-18.3 spirit).
+- Review: `approve` → `done`, `request-changes` → `in-progress`, with a
+  review-kind comment carrying findings.
+- Projector + relay fan-out + signed re-dispatch.
+
+### R6.3 UI
+
+- Board card opens a task detail dialog: description, comment thread,
+  Approve / Request changes when `in-review`.
+
+---
+
 ## 5. Mock-removal tracker
 
 The §0 contract, in table form. R1 creates every row; later milestones only

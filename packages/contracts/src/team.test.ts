@@ -39,6 +39,7 @@ import {
   TeamSignedMessageProofPayload,
   TeamTaskCommand,
   TeamTaskEvent,
+  TeamTaskReadModel,
   isChannelId,
   isAgentId,
   isHumanId,
@@ -837,6 +838,61 @@ describe("R2 events and read models", () => {
     });
     expect(board.tasks[0]?.state).toBe("in-progress");
     expect(board.tasks[0]?.refs?.channelId).toBe("team");
+    expect(board.tasks[0]?.comments).toEqual([]);
+  });
+
+  it("decodes task comment + review command shapes (R6)", () => {
+    const decodeTaskCommand = Schema.decodeUnknownSync(TeamTaskCommand);
+    const decodeTask = Schema.decodeUnknownSync(TeamTaskReadModel);
+
+    expect(
+      decodeTaskCommand({
+        commandId: "cmd-1",
+        projectId: "project-1",
+        type: "team.task.comment",
+        taskId: "task_1",
+        commentId: "cmt_1",
+        authorId: "human_ajay",
+        body: "Looks good so far.",
+      }),
+    ).toMatchObject({ type: "team.task.comment", body: "Looks good so far." });
+
+    expect(
+      decodeTaskCommand({
+        commandId: "cmd-2",
+        projectId: "project-1",
+        type: "team.task.review",
+        taskId: "task_1",
+        commentId: "rev_1",
+        reviewerId: "human_ajay",
+        verdict: "request-changes",
+        findings: "Cover empty assignee.",
+      }),
+    ).toMatchObject({ type: "team.task.review", verdict: "request-changes" });
+
+    const task = decodeTask({
+      taskId: "task_1",
+      title: "Ship",
+      description: null,
+      labels: [],
+      refs: null,
+      state: "in-review",
+      assigneeId: "agent_aria",
+      createdById: "human_ajay",
+      createdAt: "2026-08-04T08:00:00.000Z",
+      updatedAt: "2026-08-04T09:00:00.000Z",
+      comments: [
+        {
+          commentId: "rev_1",
+          authorId: "human_ajay",
+          body: "Cover empty assignee.",
+          kind: "review",
+          verdict: "request-changes",
+          at: "2026-08-04T09:00:00.000Z",
+        },
+      ],
+    });
+    expect(task.comments[0]?.verdict).toBe("request-changes");
   });
 });
 

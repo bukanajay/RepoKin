@@ -269,6 +269,31 @@ export function signedEventPayloadToCommand(payload: TeamSignedEventPayload): Te
         assignedById: event.assignedById,
         metadata: { actorMemberId: event.assignedById, environmentId },
       };
+    case "team.task.commented":
+      return {
+        commandId,
+        projectId: payload.projectId,
+        type: "team.task.comment",
+        taskId: event.taskId,
+        commentId: event.commentId,
+        authorId: event.authorId,
+        body: event.body,
+        metadata: { actorMemberId: event.authorId, environmentId },
+      };
+    case "team.task.reviewed":
+      return {
+        commandId,
+        projectId: payload.projectId,
+        type: "team.task.review",
+        taskId: event.taskId,
+        commentId: event.commentId,
+        reviewerId: event.reviewerId,
+        verdict: event.verdict,
+        ...(event.findings !== null && event.findings.length > 0
+          ? { findings: event.findings }
+          : {}),
+        metadata: { actorMemberId: event.reviewerId, environmentId },
+      };
     case "team.request.created":
       return {
         commandId,

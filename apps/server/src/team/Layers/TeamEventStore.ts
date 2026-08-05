@@ -75,6 +75,8 @@ function eventOccurredAt(event: PlannedTeamEvent): string {
     case "team.task.moved":
     case "team.task.updated":
     case "team.task.assigned":
+    case "team.task.commented":
+    case "team.task.reviewed":
       return event.at;
   }
 }

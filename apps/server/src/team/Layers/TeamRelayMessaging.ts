@@ -54,6 +54,8 @@ const REPLICATED_EVENT_TYPES = new Set<TeamEvent["type"]>([
   "team.task.moved",
   "team.task.updated",
   "team.task.assigned",
+  "team.task.commented",
+  "team.task.reviewed",
   "team.request.created",
   "team.request.responded",
 ]);
@@ -75,6 +77,10 @@ function replicatedEventActorId(event: ReplicatedTeamEvent): MemberId {
       return event.updatedById;
     case "team.task.assigned":
       return event.assignedById;
+    case "team.task.commented":
+      return event.authorId;
+    case "team.task.reviewed":
+      return event.reviewerId;
     case "team.request.created":
       return event.fromMemberId;
     case "team.request.responded":

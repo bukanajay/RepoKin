@@ -845,6 +845,8 @@ export const TeamActivityKind = Schema.Literals([
   "task.moved",
   "task.updated",
   "task.assigned",
+  "task.commented",
+  "task.reviewed",
 ]).annotate({
   description: "Timeline-visible activity emitted by the local team domain.",
 });
@@ -989,6 +991,10 @@ export type PostId = typeof PostId.Type;
 export const TaskId = TrimmedNonEmptyString.pipe(Schema.brand("TaskId"));
 export type TaskId = typeof TaskId.Type;
 
+/** Opaque id for a comment on a board task (FR-18.4). */
+export const TaskCommentId = TrimmedNonEmptyString.pipe(Schema.brand("TaskCommentId"));
+export type TaskCommentId = typeof TaskCommentId.Type;
+
 const isChannelIdValue = Schema.is(ChannelId);
 export const isChannelId = (value: unknown): value is ChannelId => isChannelIdValue(value);
 
@@ -1131,6 +1137,25 @@ export const TeamTaskRefs = preserveUnknownFields(
 );
 export type TeamTaskRefs = typeof TeamTaskRefs.Type;
 
+/** Structured human review outcome on a task (FR-13.6). */
+export const TeamTaskReviewVerdict = Schema.Literals(["approve", "request-changes"]).annotate({
+  description: "Approve ships the task to done; request-changes returns it to in-progress.",
+});
+export type TeamTaskReviewVerdict = typeof TeamTaskReviewVerdict.Type;
+
+/** One comment on a task (FR-18.4) — plain text; review verdicts are tagged. */
+export const TeamTaskComment = Schema.Struct({
+  commentId: TaskCommentId,
+  authorId: MemberId,
+  body: Schema.String,
+  kind: Schema.Literals(["text", "review"]),
+  verdict: Schema.NullOr(TeamTaskReviewVerdict),
+  at: IsoDateTime,
+}).annotate({
+  description: "A task comment or structured review finding (FR-18.4 / FR-13.6).",
+});
+export type TeamTaskComment = typeof TeamTaskComment.Type;
+
 // ---------------------------------------------------------------------------
 // R2 commands
 // ---------------------------------------------------------------------------
@@ -1212,6 +1237,34 @@ export const TeamTaskAssignCommand = Schema.Struct({
 });
 export type TeamTaskAssignCommand = typeof TeamTaskAssignCommand.Type;
 
+export const TeamTaskCommentCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.task.comment"),
+  taskId: TaskId,
+  commentId: TaskCommentId,
+  authorId: MemberId,
+  body: trimmedNonEmpty({ description: "Comment body (FR-18.4)." }, 20_000),
+}).annotate({
+  description: "Add a free-text comment on a board task (FR-18.4).",
+});
+export type TeamTaskCommentCommand = typeof TeamTaskCommentCommand.Type;
+
+export const TeamTaskReviewCommand = Schema.Struct({
+  ...TeamCommandBase.fields,
+  type: Schema.Literal("team.task.review"),
+  taskId: TaskId,
+  commentId: TaskCommentId,
+  reviewerId: MemberId,
+  verdict: TeamTaskReviewVerdict,
+  findings: Schema.optionalKey(
+    trimmedNonEmpty({ description: "Optional findings / request-changes note." }, 20_000),
+  ),
+}).annotate({
+  description:
+    "Structured human review of a task (FR-13.6): approve → done, request-changes → in-progress.",
+});
+export type TeamTaskReviewCommand = typeof TeamTaskReviewCommand.Type;
+
 // R2.3 delegation: a request is the accept/decline gate for handing work to a
 // member. A task delegation links `taskId` (no thread exists until accept); a
 // thread handoff links `threadId`.
@@ -1242,6 +1295,8 @@ export const TeamTaskCommand = Schema.Union([
   TeamTaskMoveCommand,
   TeamTaskUpdateCommand,
   TeamTaskAssignCommand,
+  TeamTaskCommentCommand,
+  TeamTaskReviewCommand,
 ]);
 export type TeamTaskCommand = typeof TeamTaskCommand.Type;
 
@@ -1260,6 +1315,8 @@ export const TeamCommand = Schema.Union([
   TeamTaskMoveCommand,
   TeamTaskUpdateCommand,
   TeamTaskAssignCommand,
+  TeamTaskCommentCommand,
+  TeamTaskReviewCommand,
 ]);
 export type TeamCommand = typeof TeamCommand.Type;
 
@@ -1288,6 +1345,8 @@ export const TeamEventType = Schema.Literals([
   "team.task.moved",
   "team.task.updated",
   "team.task.assigned",
+  "team.task.commented",
+  "team.task.reviewed",
 ]).annotate({
   description: "Persisted local team-domain event type.",
 });
@@ -1535,6 +1594,32 @@ export const TeamTaskAssignedEvent = Schema.Struct({
 }).annotate({ description: "A task was assigned or unassigned." });
 export type TeamTaskAssignedEvent = typeof TeamTaskAssignedEvent.Type;
 
+export const TeamTaskCommentedEvent = Schema.Struct({
+  ...R2EventBase,
+  type: Schema.Literal("team.task.commented"),
+  taskId: TaskId,
+  commentId: TaskCommentId,
+  authorId: MemberId,
+  body: Schema.String,
+}).annotate({ description: "A free-text comment was added to a board task (FR-18.4)." });
+export type TeamTaskCommentedEvent = typeof TeamTaskCommentedEvent.Type;
+
+export const TeamTaskReviewedEvent = Schema.Struct({
+  ...R2EventBase,
+  type: Schema.Literal("team.task.reviewed"),
+  taskId: TaskId,
+  commentId: TaskCommentId,
+  reviewerId: MemberId,
+  verdict: TeamTaskReviewVerdict,
+  findings: Schema.NullOr(Schema.String),
+  fromState: TeamTaskState,
+  toState: TeamTaskState,
+}).annotate({
+  description:
+    "A structured review was recorded; toState is done (approve) or in-progress (request-changes).",
+});
+export type TeamTaskReviewedEvent = typeof TeamTaskReviewedEvent.Type;
+
 export const TeamChannelEvent = Schema.Union([TeamChannelDeclaredEvent, TeamChannelPostedEvent]);
 export type TeamChannelEvent = typeof TeamChannelEvent.Type;
 
@@ -1543,6 +1628,8 @@ export const TeamTaskEvent = Schema.Union([
   TeamTaskMovedEvent,
   TeamTaskUpdatedEvent,
   TeamTaskAssignedEvent,
+  TeamTaskCommentedEvent,
+  TeamTaskReviewedEvent,
 ]);
 export type TeamTaskEvent = typeof TeamTaskEvent.Type;
 
@@ -1561,6 +1648,8 @@ export const TeamEvent = Schema.Union([
   TeamTaskMovedEvent,
   TeamTaskUpdatedEvent,
   TeamTaskAssignedEvent,
+  TeamTaskCommentedEvent,
+  TeamTaskReviewedEvent,
 ]);
 export type TeamEvent = typeof TeamEvent.Type;
 export type PlannedTeamEvent = TeamEvent extends infer Event
@@ -1586,6 +1675,8 @@ export const ReplicatedTeamEvent = Schema.Union([
   TeamTaskMovedEvent,
   TeamTaskUpdatedEvent,
   TeamTaskAssignedEvent,
+  TeamTaskCommentedEvent,
+  TeamTaskReviewedEvent,
   // R2.3 delegation across environments: the handoff request and its response
   // ride the same fan-out so a cross-environment mention → task → accept works.
   TeamRequestCreatedEvent,
@@ -1812,7 +1903,12 @@ export const TeamTaskReadModel = Schema.Struct({
   createdById: MemberId,
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
-}).annotate({ description: "A single board task." });
+  comments: Schema.Array(TeamTaskComment).pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed([] as TeamTaskComment[] as readonly TeamTaskComment[]),
+    ),
+  ),
+}).annotate({ description: "A single board task with optional comments (FR-18.4)." });
 export type TeamTaskReadModel = typeof TeamTaskReadModel.Type;
 
 export const TeamBoardReadModel = Schema.Struct({

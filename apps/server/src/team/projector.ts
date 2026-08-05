@@ -126,6 +126,8 @@ function eventOccurredAt(event: TeamEvent): string {
     case "team.task.moved":
     case "team.task.updated":
     case "team.task.assigned":
+    case "team.task.commented":
+    case "team.task.reviewed":
       return event.at;
   }
 }
@@ -533,6 +535,7 @@ export function applyTeamEvent(model: TeamDomainReadModel, event: TeamEvent): Te
                 createdById: event.createdById,
                 createdAt: event.at,
                 updatedAt: event.at,
+                comments: [],
               },
             ],
             activities: appendActivity(
@@ -651,6 +654,100 @@ export function applyTeamEvent(model: TeamDomainReadModel, event: TeamEvent): Te
         },
         event.type,
       );
+
+    case "team.task.commented":
+      return buildReadModel(
+        {
+          ...nextBase,
+          projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
+            tasks: project.tasks.map((task) =>
+              task.taskId === event.taskId
+                ? {
+                    ...task,
+                    updatedAt: event.at,
+                    comments: [
+                      ...(task.comments ?? []),
+                      {
+                        commentId: event.commentId,
+                        authorId: event.authorId,
+                        body: event.body,
+                        kind: "text" as const,
+                        verdict: null,
+                        at: event.at,
+                      },
+                    ],
+                  }
+                : task,
+            ),
+            activities: appendActivity(
+              project.activities,
+              activity({
+                eventId: event.eventId,
+                kind: "task.commented",
+                occurredAt: event.at,
+                actorMemberId: event.authorId,
+                subjectMemberId: null,
+                threadId: null,
+                messageId: null,
+                requestId: null,
+                summary: `${event.authorId} commented on ${event.taskId}`,
+              }),
+            ),
+          })),
+        },
+        event.type,
+      );
+
+    case "team.task.reviewed": {
+      const findings =
+        event.findings !== null && event.findings.trim().length > 0
+          ? event.findings.trim()
+          : event.verdict === "approve"
+            ? "Approved."
+            : "Changes requested.";
+      return buildReadModel(
+        {
+          ...nextBase,
+          projects: upsertProject(nextBase.projects, event.aggregateId, event.at, (project) => ({
+            tasks: project.tasks.map((task) =>
+              task.taskId === event.taskId
+                ? {
+                    ...task,
+                    state: event.toState,
+                    updatedAt: event.at,
+                    comments: [
+                      ...(task.comments ?? []),
+                      {
+                        commentId: event.commentId,
+                        authorId: event.reviewerId,
+                        body: findings,
+                        kind: "review" as const,
+                        verdict: event.verdict,
+                        at: event.at,
+                      },
+                    ],
+                  }
+                : task,
+            ),
+            activities: appendActivity(
+              project.activities,
+              activity({
+                eventId: event.eventId,
+                kind: "task.reviewed",
+                occurredAt: event.at,
+                actorMemberId: event.reviewerId,
+                subjectMemberId: null,
+                threadId: null,
+                messageId: null,
+                requestId: null,
+                summary: `${event.reviewerId} reviewed ${event.taskId}: ${event.verdict}`,
+              }),
+            ),
+          })),
+        },
+        event.type,
+      );
+    }
   }
 }
 

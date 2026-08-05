@@ -1,6 +1,7 @@
 import { CommandId } from "@t3tools/contracts";
 import {
   MemberId,
+  TaskCommentId,
   TaskId,
   type TeamTaskReadModel,
   type TeamTaskState,
@@ -17,6 +18,7 @@ import {
   type LiveMemberSummary,
 } from "./liveTeamMembers";
 import { useTeamScope } from "./teamScope";
+import type { TaskReviewVerdict } from "./TaskDetailDialog";
 
 /**
  * Board data seam — LIVE (R2.4 flip). Reads tasks from the team read model and
@@ -51,13 +53,17 @@ export type BoardData = {
   /** Roster members eligible to be assigned a new task. */
   assignableMembers: readonly LiveMemberSummary[];
   createTask: (input: CreateTaskInput) => void;
+  /** Comment / review write path (local human resolved). */
+  canWrite: boolean;
+  commentOnTask: (taskId: string, body: string) => void;
+  reviewTask: (taskId: string, verdict: TaskReviewVerdict, findings: string) => void;
 };
 
 const EMPTY_TASKS: ReadonlyMap<BoardTaskState, readonly BoardTask[]> = new Map();
 
 export function useBoardData(): BoardData {
   const { environmentId, project } = useTeamScope();
-  const dispatchCommand = useAtomCommand(teamEnvironment.dispatchCommand, "move team task");
+  const dispatchCommand = useAtomCommand(teamEnvironment.dispatchCommand, "team board command");
   const dispatchCreate = useAtomCommand(teamEnvironment.dispatchCommand, "create team task");
 
   const rosterAtom =
@@ -130,6 +136,60 @@ export function useBoardData(): BoardData {
     [dispatchCreate, environmentId, localHumanId, localState, project],
   );
 
+  const commentOnTask = useCallback(
+    (taskId: string, body: string) => {
+      const trimmed = body.trim();
+      if (
+        trimmed.length === 0 ||
+        environmentId === null ||
+        project === null ||
+        localHumanId === null
+      ) {
+        return;
+      }
+      void dispatchCommand({
+        environmentId,
+        input: {
+          type: "team.task.comment",
+          commandId: CommandId.make(`client:team-task-comment:${randomUUID()}`),
+          projectId: project.id,
+          taskId: TaskId.make(taskId),
+          commentId: TaskCommentId.make(`cmt-${randomUUID()}`),
+          authorId: MemberId.make(localHumanId),
+          body: trimmed,
+          metadata: { actorMemberId: MemberId.make(localHumanId) },
+        },
+      }).then((result) => {
+        if (result._tag === "Success") localState.refresh();
+      });
+    },
+    [dispatchCommand, environmentId, localHumanId, localState, project],
+  );
+
+  const reviewTask = useCallback(
+    (taskId: string, verdict: TaskReviewVerdict, findings: string) => {
+      if (environmentId === null || project === null || localHumanId === null) return;
+      const trimmedFindings = findings.trim();
+      void dispatchCommand({
+        environmentId,
+        input: {
+          type: "team.task.review",
+          commandId: CommandId.make(`client:team-task-review:${randomUUID()}`),
+          projectId: project.id,
+          taskId: TaskId.make(taskId),
+          commentId: TaskCommentId.make(`rev-${randomUUID()}`),
+          reviewerId: MemberId.make(localHumanId),
+          verdict,
+          ...(trimmedFindings.length > 0 ? { findings: trimmedFindings } : {}),
+          metadata: { actorMemberId: MemberId.make(localHumanId) },
+        },
+      }).then((result) => {
+        if (result._tag === "Success") localState.refresh();
+      });
+    },
+    [dispatchCommand, environmentId, localHumanId, localState, project],
+  );
+
   return useMemo<BoardData>(() => {
     const base = {
       tasksByState: EMPTY_TASKS,
@@ -139,6 +199,9 @@ export function useBoardData(): BoardData {
       canCreate: false,
       assignableMembers: [] as readonly LiveMemberSummary[],
       createTask,
+      canWrite: false,
+      commentOnTask,
+      reviewTask,
     };
     if (environmentId === null) return { status: "no-environment", ...base };
     if (project === null) return { status: "no-project", ...base };
@@ -164,6 +227,19 @@ export function useBoardData(): BoardData {
       canCreate: localHumanId !== null,
       assignableMembers: [...memberById.values()],
       createTask,
+      canWrite: localHumanId !== null,
+      commentOnTask,
+      reviewTask,
     };
-  }, [createTask, environmentId, localHumanId, localState.data, moveTask, project, roster.data]);
+  }, [
+    commentOnTask,
+    createTask,
+    environmentId,
+    localHumanId,
+    localState.data,
+    moveTask,
+    project,
+    reviewTask,
+    roster.data,
+  ]);
 }

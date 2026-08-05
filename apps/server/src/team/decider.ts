@@ -392,6 +392,55 @@ export const decideTeamCommand = Effect.fn("decideTeamCommand")(function* ({
         at: occurredAt,
       };
     }
+
+    case "team.task.comment": {
+      yield* requireMember({ readModel, command, memberId: command.authorId });
+      yield* requireTask({ readModel, command, taskId: command.taskId });
+      return {
+        ...base,
+        type: "team.task.commented",
+        taskId: command.taskId,
+        commentId: command.commentId,
+        authorId: command.authorId,
+        body: command.body,
+        at: occurredAt,
+      };
+    }
+
+    case "team.task.review": {
+      yield* requireMember({ readModel, command, memberId: command.reviewerId });
+      const task = yield* requireTask({ readModel, command, taskId: command.taskId });
+      // FR-13.6 / FR-18.3: only humans review; agent assignee cannot self-approve.
+      if (isAgentMember(readModel, command.projectId, command.reviewerId)) {
+        return yield* new TeamCommandInvariantError({
+          commandType: command.type,
+          detail: `Agent '${command.reviewerId}' cannot submit a structured review (FR-13.6).`,
+        });
+      }
+      if (
+        command.verdict === "approve" &&
+        task.assigneeId === command.reviewerId &&
+        isAgentMember(readModel, command.projectId, command.reviewerId)
+      ) {
+        return yield* new TeamCommandInvariantError({
+          commandType: command.type,
+          detail: `Reviewer cannot approve their own assigned agent work (FR-18.3).`,
+        });
+      }
+      const toState = command.verdict === "approve" ? ("done" as const) : ("in-progress" as const);
+      return {
+        ...base,
+        type: "team.task.reviewed",
+        taskId: command.taskId,
+        commentId: command.commentId,
+        reviewerId: command.reviewerId,
+        verdict: command.verdict,
+        findings: command.findings ?? null,
+        fromState: task.state,
+        toState,
+        at: occurredAt,
+      };
+    }
   }
 });
 

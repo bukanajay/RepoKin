@@ -400,6 +400,116 @@ it.layer(NodeServices.layer)("team R2 decider/projector — board", (it) => {
       expect(humanDone.type).toBe("team.task.moved");
     }),
   );
+
+  it.effect("records task comments and structured reviews (FR-18.4 / FR-13.6)", () =>
+    Effect.gen(function* () {
+      const seeded = yield* seedRoster();
+      let readModel = seeded.readModel;
+      let seq = seeded.seq;
+
+      const created = yield* apply(
+        readModel,
+        {
+          commandId: "cmd-task-review-create",
+          projectId,
+          type: "team.task.create",
+          taskId: "task-review",
+          title: "Ship the board review",
+          createdById: humanId,
+          assigneeId: agentId,
+        },
+        seq + 1,
+      );
+      readModel = created.readModel;
+      seq += 1;
+
+      const commented = yield* apply(
+        readModel,
+        {
+          commandId: "cmd-task-comment",
+          projectId,
+          type: "team.task.comment",
+          taskId: "task-review",
+          commentId: "cmt-1",
+          authorId: humanId,
+          body: "Please cover the edge case on empty assignees.",
+        },
+        seq + 1,
+      );
+      readModel = commented.readModel;
+      seq += 1;
+      expect(readModel.projects[0]?.tasks[0]?.comments).toHaveLength(1);
+      expect(readModel.projects[0]?.tasks[0]?.comments[0]?.body).toContain("edge case");
+
+      // Move into review so approve is a realistic transition.
+      const inReview = yield* apply(
+        readModel,
+        {
+          commandId: "cmd-task-to-review",
+          projectId,
+          type: "team.task.move",
+          taskId: "task-review",
+          toState: "in-review",
+          movedById: agentId,
+        },
+        seq + 1,
+      );
+      readModel = inReview.readModel;
+      seq += 1;
+
+      const agentReview = yield* Effect.flip(
+        decideTeamCommand({
+          readModel,
+          command: decodeCommand({
+            commandId: "cmd-agent-review",
+            projectId,
+            type: "team.task.review",
+            taskId: "task-review",
+            commentId: "rev-agent",
+            reviewerId: agentId,
+            verdict: "approve",
+          }),
+        }),
+      );
+      expect(agentReview.message).toContain("cannot submit a structured review");
+
+      const changes = yield* apply(
+        readModel,
+        {
+          commandId: "cmd-request-changes",
+          projectId,
+          type: "team.task.review",
+          taskId: "task-review",
+          commentId: "rev-1",
+          reviewerId: humanId,
+          verdict: "request-changes",
+          findings: "Missing empty-assignee coverage.",
+        },
+        seq + 1,
+      );
+      readModel = changes.readModel;
+      seq += 1;
+      expect(readModel.projects[0]?.tasks[0]?.state).toBe("in-progress");
+      expect(readModel.projects[0]?.tasks[0]?.comments.at(-1)?.verdict).toBe("request-changes");
+
+      const approved = yield* apply(
+        readModel,
+        {
+          commandId: "cmd-approve",
+          projectId,
+          type: "team.task.review",
+          taskId: "task-review",
+          commentId: "rev-2",
+          reviewerId: humanId,
+          verdict: "approve",
+          findings: "Looks good.",
+        },
+        seq + 1,
+      );
+      expect(approved.readModel.projects[0]?.tasks[0]?.state).toBe("done");
+      expect(approved.readModel.projects[0]?.tasks[0]?.comments.at(-1)?.kind).toBe("review");
+    }),
+  );
 });
 
 it.layer(NodeServices.layer)("team R2 decider/projector — delegation (R2.3)", (it) => {
