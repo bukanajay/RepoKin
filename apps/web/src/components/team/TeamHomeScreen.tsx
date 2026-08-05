@@ -1,7 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRightIcon, InboxIcon, PlusIcon } from "lucide-react";
+import { ArrowRightIcon, InboxIcon, NewspaperIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 
+import { teamEnvironment } from "../../state/team";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
 import { ActivityRow } from "./ActivityRow";
@@ -15,6 +17,7 @@ import { deriveMemberAccentColor } from "./memberIdentity";
 import { useTeamRosterActions } from "./useTeamRosterActions";
 import { useTeamScope } from "./teamScope";
 import { useTeamHomeData, type TeamHomeData, type TeamHomeWaitingItem } from "./useTeamHomeData";
+import { useWorkMapData } from "./useWorkMapData";
 
 function SectionTitle({ title, linkTo }: { title: string; linkTo?: string }) {
   return (
@@ -30,6 +33,86 @@ function SectionTitle({ title, linkTo }: { title: string; linkTo?: string }) {
         </Link>
       ) : null}
     </div>
+  );
+}
+
+/** One-action standup posts this environment's digest to #team (FR-15.3). */
+function StandupCard() {
+  const { environmentId, project } = useTeamScope();
+  const postStandup = useAtomCommand(teamEnvironment.postStandupDigest, "post standup digest");
+  const [status, setStatus] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  if (environmentId === null || project === null) return null;
+
+  return (
+    <section className="flex flex-col gap-2.5">
+      <SectionTitle title="Standup" />
+      <div className="flex flex-col gap-2 rounded-2xl border px-3 py-3">
+        <p className="text-xs text-muted-foreground">
+          Generate a digest of this environment's activity and post it to{" "}
+          <span className="font-mono">#team</span>.
+        </p>
+        <Button
+          size="sm"
+          disabled={pending}
+          onClick={() => {
+            setPending(true);
+            setStatus(null);
+            void postStandup({
+              environmentId,
+              input: { projectId: project.id },
+            })
+              .then((result) => {
+                if (result._tag === "Success") {
+                  setStatus(`Posted “${result.value.title}” to #${result.value.channelId}.`);
+                } else {
+                  setStatus("Could not post standup. Declare #team first if it is missing.");
+                }
+              })
+              .finally(() => setPending(false));
+          }}
+        >
+          {pending ? <Spinner className="size-3.5" /> : <NewspaperIcon className="size-3.5" />}
+          {pending ? "Posting…" : "Post standup to #team"}
+        </Button>
+        {status !== null ? <p className="text-xs text-muted-foreground">{status}</p> : null}
+      </div>
+    </section>
+  );
+}
+
+/** Passive overlap radar on Home (FR-14.3) — dismissible list, never a modal. */
+function HomeRadarRail() {
+  const workMap = useWorkMapData();
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
+
+  if (workMap.status !== "ready" || workMap.overlaps.length === 0) return null;
+
+  const visible = workMap.overlaps.filter((overlap) => !dismissed.has(overlap.path));
+  if (visible.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-2.5">
+      <SectionTitle title="Radar" linkTo="/team/map" />
+      <div className="flex flex-col divide-y rounded-2xl border">
+        {visible.map((overlap) => (
+          <div key={overlap.path} className="flex items-start gap-2 px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-mono text-xs text-muted-foreground">{overlap.path}</p>
+              <p className="text-sm text-foreground">{overlap.note}</p>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => setDismissed((previous) => new Set([...previous, overlap.path]))}
+            >
+              Dismiss
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -228,6 +311,9 @@ export function TeamHomeScreen() {
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">
+          <StandupCard />
+          <HomeRadarRail />
+
           <section className="flex flex-col gap-2.5">
             <SectionTitle title="Waiting on you" linkTo="/team/inbox" />
             {data.waitingOnMe.length === 0 ? (
