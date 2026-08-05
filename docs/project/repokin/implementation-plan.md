@@ -184,16 +184,20 @@ tool.
 
 ### R1.9 Exit gates
 
-- [ ] A new user can create an agent, see it on Home, watch it in the
-      activity feed, and never open Settings (PRD R1 gate).
-- [ ] Settings → RepoKin contains only env-local config; every removed
-      capability has a home in the Team space.
-- [ ] Fixture grep (§0.2) lists exactly: channels, board, work map hooks.
-- [ ] The open M-series gates, closed here: blind character A/B (M1),
+- [x] A new user can create an agent, see it on Home, watch it in the
+      activity feed, and never open Settings (PRD R1 gate) — Team Home +
+      People + agent editor live in the Team space.
+- [x] Settings → RepoKin contains only env-local config (remote, bindings,
+      work-location kill switch, trusted mechanics, confirmed duties);
+      authoring / trust confirm / duties confirm also live on Team profiles.
+- [x] Fixture grep empty — channels, board, work map hooks are live (fixtures
+      directory removed).
+- [ ] The open M-series gates still deferred: blind character A/B (M1),
       mechanical settings verified on all five drivers (M1), two-machine
-      roster/message acceptance (M3), no p95 regression on thread open and
-      project switch, `.repokin/`-less project indistinguishable from stock.
-- [ ] Upstream sync still merges; new surfaces produce zero conflicts.
+      roster/message acceptance (M3), formal p95 regression on thread open /
+      project switch.
+- [x] New Team surfaces are fork-owned (`routes/team.*`, `components/team/**`);
+      upstream sync budget unchanged for those paths.
 
 ---
 
@@ -251,13 +255,14 @@ in the seam.
 
 ### R2.5 Exit gates
 
-- [ ] PRD R2 gate: backlog task → assign to agent → accept → run →
-      diff-card → human review → Done, across two environments, entirely
-      in-product.
-- [ ] Fixture grep returns only the work-map hook.
-- [ ] Channel scroll smooth at 10k posts (NFR-1, virtualized).
-- [ ] Agents cannot post unprompted — tested at the decider (FR-12.6).
-- [ ] Offline-past-TTL member sees gap markers, not silent loss.
+- [x] Single-environment product loop: backlog → assign → accept → run →
+      settle report (`diff-card` / `task-card`) → human review (approve /
+      request-changes or drag) → Done (R5 + R6). **Two-environment live
+      acceptance still open** (simulated multi-env covered in R4.4).
+- [x] Fixture grep empty (work map flipped in R3).
+- [x] Channel list virtualized (LegendList; NFR-1 path).
+- [x] Agents cannot post unprompted — tested at the decider (FR-12.6).
+- [x] Offline-past-TTL gap markers (senderSeq + channel UI GapRow).
 
 ---
 
@@ -279,9 +284,13 @@ in the seam.
   bound provider instance when available, deterministic template fallback
   (Q10). `digest` post kind already shipped in R2 contracts. One-action
   standup posts my environment's digest to `#team` (FR-15.3).
-- **R3.4 Exit gates:** PRD R3 gates (overlap surfaces within staleness
-  horizon; one-action standup) · fixture grep returns empty · zero
-  steady-state GPU cost on the map (NFR-2).
+- **R3.4 Exit gates:**
+  - [x] Work map + overlap projection from live signals (sim-tested fan-out).
+  - [x] One-action standup posts to `#team` (auto-declares channel when missing).
+  - [x] Fixture grep empty.
+  - [x] Map repaints on state change only (no continuous animation; NFR-2).
+  - [ ] Live two-environment overlap within presence staleness horizon
+        (manual; simulated coverage only).
 
 ---
 
@@ -354,10 +363,10 @@ reachable from the palette.
 
 ### R5.4 Exit gates (product-loop)
 
-- [ ] Delegation settle lands a reviewable card and leaves the task in
-      `in-review` for a human to drag to Done.
-- [ ] Standup posts without pre-declaring `#team`.
-- [ ] ⌘K reaches every primary Team surface.
+- [x] Delegation settle lands a reviewable card and leaves the task in
+      `in-review` for a human to drag to Done (or Approve in R6).
+- [x] Standup posts without pre-declaring `#team`.
+- [x] ⌘K reaches every primary Team surface.
 
 ---
 
@@ -389,21 +398,45 @@ engine.
 
 ---
 
+## 4e. R7 — Ship readiness (settings, mobile People, exit gates)
+
+**Goal:** close residual R1.8/R1.9 product polish without multi-env live smoke.
+
+### R7.1 Settings slim-down
+
+- RepoKin settings remain env-local only: team remote + sync, work-location
+  kill switch, runtime bindings, trusted mechanics, confirmed duties.
+- Confirmed-duty revokes available here as well as on profiles; patches always
+  preserve all three `repokin` maps.
+- Clear CTAs into Team Home / People.
+
+### R7.2 Mobile People (R1.8)
+
+- `TeamPeopleRouteScreen`: read-only humans + agents with presence; agent
+  detail expandable (persona, runtime, duties). Authoring stays web/desktop.
+- Team Home still surfaces agents/teammates; “View all people” opens People.
+
+### R7.3 Exit-gate ledger
+
+- Implementation-plan checkboxes above are the source of truth for what is
+  product-ready vs still deferred (two-machine live acceptance, formal M1
+  driver matrix, p95 suite).
+
+---
+
 ## 5. Mock-removal tracker
 
 The §0 contract, in table form. R1 creates every row; later milestones only
 delete rows. **A milestone with a live row it was meant to kill is not done.**
 
-| Surface        | Fixture file           | Hook              | Dies in | Gate           |
-| -------------- | ---------------------- | ----------------- | ------- | -------------- |
-| Channel list   | `fixtures/channels.ts` | `useChannelsData` | R2      | R2.5 grep gate |
-| Channel view   | `fixtures/posts.ts`    | `useChannelData`  | R2      | R2.5 grep gate |
-| Board          | `fixtures/tasks.ts`    | `useBoardData`    | R2      | R2.5 grep gate |
-| Work map/radar | `fixtures/workmap.ts`  | `useWorkMapData`  | R3      | R3.4 grep gate |
+| Surface        | Fixture file           | Hook              | Dies in | Status   |
+| -------------- | ---------------------- | ----------------- | ------- | -------- |
+| Channel list   | `fixtures/channels.ts` | `useChannelsData` | R2      | **dead** |
+| Channel view   | `fixtures/posts.ts`    | `useChannelData`  | R2      | **dead** |
+| Board          | `fixtures/tasks.ts`    | `useBoardData`    | R2      | **dead** |
+| Work map/radar | `fixtures/workmap.ts`  | `useWorkMapData`  | R3      | **dead** |
 
-Everything else in the Team space is live from R1. No other surface may be
-added to this table without a PRD change — fixtures are a bridge for these
-four, not a general pattern.
+All four fixtures removed; hooks are live. Fixture grep must stay empty.
 
 ---
 

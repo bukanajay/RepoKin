@@ -250,6 +250,25 @@ export function RepoKinSettingsPanel() {
       repokin: {
         trustedMechanics: { ...settings.repokin.trustedMechanics, [normalizedCwd]: perProject },
         workLocationSharing: settings.repokin.workLocationSharing,
+        confirmedDuties: settings.repokin.confirmedDuties,
+      },
+    });
+  }
+
+  function handleRevokeDuty(agentId: string, dutyId: string) {
+    const perAgent = { ...(settings.repokin.confirmedDuties[normalizedCwd]?.[agentId] ?? {}) };
+    delete perAgent[dutyId];
+    updateSettings({
+      repokin: {
+        trustedMechanics: settings.repokin.trustedMechanics,
+        workLocationSharing: settings.repokin.workLocationSharing,
+        confirmedDuties: {
+          ...settings.repokin.confirmedDuties,
+          [normalizedCwd]: {
+            ...(settings.repokin.confirmedDuties[normalizedCwd] ?? {}),
+            [agentId]: perAgent,
+          },
+        },
       },
     });
   }
@@ -261,9 +280,23 @@ export function RepoKinSettingsPanel() {
       repokin: {
         trustedMechanics: settings.repokin.trustedMechanics,
         workLocationSharing: enabled,
+        confirmedDuties: settings.repokin.confirmedDuties,
       },
     });
   }
+
+  const confirmedDutyEntries = useMemo(() => {
+    const perWorkspace = settings.repokin.confirmedDuties[normalizedCwd] ?? {};
+    const rows: Array<{ agentId: string; dutyId: string; hash: string }> = [];
+    for (const [agentId, duties] of Object.entries(perWorkspace)) {
+      for (const [dutyId, hash] of Object.entries(duties)) {
+        rows.push({ agentId, dutyId, hash });
+      }
+    }
+    return rows.toSorted((left, right) =>
+      `${left.agentId}/${left.dutyId}`.localeCompare(`${right.agentId}/${right.dutyId}`),
+    );
+  }, [normalizedCwd, settings.repokin.confirmedDuties]);
 
   const unpublishedCommitCount = vcsStatus.data?.aheadCount ?? 0;
   const canPublishTeamChanges =
@@ -278,9 +311,9 @@ export function RepoKinSettingsPanel() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h2 className="text-xl font-semibold text-foreground">RepoKin</h2>
-            <p className="truncate text-sm text-muted-foreground">
-              Environment-local configuration for this machine. Manage your team, agents, and
-              conversations in the{" "}
+            <p className="text-sm text-muted-foreground">
+              Machine-local only: team remote, runtime bindings, trust, and duty confirmations.
+              Create agents, channels, and work in the{" "}
               <Link
                 to="/team"
                 className="font-medium text-foreground underline-offset-2 hover:underline"
@@ -290,10 +323,15 @@ export function RepoKinSettingsPanel() {
               .
             </p>
           </div>
-          <Button size="sm" variant="outline" render={<Link to="/team" />}>
-            <UsersIcon className="size-4" />
-            Open Team
-          </Button>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button size="sm" variant="outline" render={<Link to="/team/people" />}>
+              <UsersIcon className="size-4" />
+              People
+            </Button>
+            <Button size="sm" render={<Link to="/team" />}>
+              Open Team
+            </Button>
+          </div>
         </div>
 
         <label className="grid max-w-sm gap-1.5">
@@ -504,7 +542,7 @@ export function RepoKinSettingsPanel() {
 
         <SettingsRow
           title="Trusted mechanics"
-          description="Agents whose compiled harness settings you've trusted for this project. Trust and review live on each agent's profile in the Team space."
+          description="Env-local store of trusted harness hashes. Confirm or revoke on each agent's profile in Team → People."
           status={
             trustedEntries.length === 0
               ? "No trusted mechanics for this project."
@@ -521,6 +559,46 @@ export function RepoKinSettingsPanel() {
                     <div className="truncate font-mono text-xs text-muted-foreground">{hash}</div>
                   </div>
                   <Button size="xs" variant="outline" onClick={() => handleRevokeTrust(agentId)}>
+                    Revoke
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </SettingsRow>
+
+        <SettingsRow
+          title="Confirmed duties"
+          description="Env-local store of duty content hashes (FR-16.4). Confirm duties on agent profiles; revoke here or there to inert them on this machine."
+          status={
+            confirmedDutyEntries.length === 0
+              ? "No duties confirmed for this project."
+              : `${confirmedDutyEntries.length} confirmation${confirmedDutyEntries.length === 1 ? "" : "s"}.`
+          }
+        >
+          {confirmedDutyEntries.length > 0 ? (
+            <div className="mt-4 divide-y divide-border/60 rounded-lg border border-border/70 bg-card shadow-xs/5">
+              {confirmedDutyEntries.map((entry) => (
+                <div
+                  key={`${entry.agentId}:${entry.dutyId}`}
+                  className="flex items-center gap-3 px-3 py-3 sm:px-4"
+                >
+                  <ShieldCheckIcon className="size-4 shrink-0 text-emerald-500" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-foreground">
+                      {entry.agentId}
+                      <span className="font-normal text-muted-foreground"> / </span>
+                      <span className="font-mono text-xs">{entry.dutyId}</span>
+                    </div>
+                    <div className="truncate font-mono text-xs text-muted-foreground">
+                      {entry.hash}
+                    </div>
+                  </div>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    onClick={() => handleRevokeDuty(entry.agentId, entry.dutyId)}
+                  >
                     Revoke
                   </Button>
                 </div>
