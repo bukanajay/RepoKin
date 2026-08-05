@@ -70,6 +70,11 @@ cp .env.example .env
 
 Most local development does not require additional environment variables.
 
+### Day-one (desktop + team)
+
+See **[docs/project/repokin/day-one.md](./docs/project/repokin/day-one.md)** for
+building a macOS DMG, first open, iOS pairing, and teammate setups.
+
 ### Development mode
 
 Start the server and web client together with hot reload:

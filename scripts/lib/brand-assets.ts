@@ -5,13 +5,15 @@ export const BRAND_ASSET_PATHS = {
 
   productionIconComposerProject: "assets/prod/app-icon.icon",
   productionIosIconPng: "assets/prod/black-ios-1024.png",
-  productionMacIconPng: "assets/prod/black-macos-1024.png",
-  productionLinuxIconPng: "assets/prod/black-universal-1024.png",
-  productionWindowsIconIco: "assets/prod/t3-black-windows.ico",
-  productionWebFaviconIco: "assets/prod/t3-black-web-favicon.ico",
-  productionWebFavicon16Png: "assets/prod/t3-black-web-favicon-16x16.png",
-  productionWebFavicon32Png: "assets/prod/t3-black-web-favicon-32x32.png",
-  productionWebAppleTouchIconPng: "assets/prod/t3-black-web-apple-touch-180.png",
+  // RepoKin release artwork (fork brand). Upstream T3 black assets remain under
+  // assets/prod/ for reference; packaging and desktop resources use these.
+  productionMacIconPng: "assets/repokin/icon-1024.png",
+  productionLinuxIconPng: "assets/repokin/icon-1024.png",
+  productionWindowsIconIco: "assets/repokin/windows.ico",
+  productionWebFaviconIco: "assets/repokin/favicon.ico",
+  productionWebFavicon16Png: "assets/repokin/favicon-16x16.png",
+  productionWebFavicon32Png: "assets/repokin/favicon-32x32.png",
+  productionWebAppleTouchIconPng: "assets/repokin/apple-touch-icon.png",
 
   nightlyIconComposerProject: "assets/nightly/app-icon.icon",
   nightlyIosIconPng: "assets/nightly/nightly-ios-1024.png",

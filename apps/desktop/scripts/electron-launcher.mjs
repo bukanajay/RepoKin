@@ -17,9 +17,11 @@ const devBundleIdSuffix = NodePath.basename(repoRoot)
   .replaceAll(/[^a-z0-9]+/g, "");
 export const APP_DISPLAY_NAME = isDevelopment ? "RepoKin (Dev)" : "RepoKin (Alpha)";
 export const APP_BUNDLE_ID = isDevelopment
-  ? `com.t3tools.t3code.dev.${devBundleIdSuffix || "local"}`
-  : "com.t3tools.t3code";
-const APP_PROTOCOL_SCHEMES = isDevelopment ? ["t3code-dev"] : ["t3code"];
+  ? `com.repokin.app.dev.${devBundleIdSuffix || "local"}`
+  : "com.repokin.app";
+// Keep legacy t3code schemes so existing pairing deep-links still open the app;
+// product display name and dock icon are RepoKin.
+const APP_PROTOCOL_SCHEMES = isDevelopment ? ["t3code-dev", "repokin-dev"] : ["t3code", "repokin"];
 const LAUNCHER_VERSION = 14;
 const defaultIconPath = NodePath.join(desktopDir, "resources", "icon.icns");
 const developmentMacIconPngPath = NodePath.join(

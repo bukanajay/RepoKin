@@ -1,5 +1,17 @@
 # Brand icons
 
+## RepoKin fork release artwork
+
+Packaged desktop / web release branding for this fork uses **`assets/repokin/`**
+(anvil mark). `scripts/lib/brand-assets.ts` points production packaging at those
+paths. Tracked copies under `apps/desktop/resources/` (`icon.png` / `.icns` /
+`.ico`) are regenerated from `assets/repokin/icon-1024.png` for the Electron
+app and dock.
+
+Upstream T3 Icon Composer projects remain below for reference / mergeability.
+
+---
+
 The three Icon Composer projects are the source of truth for full application icons:
 
 - `dev/app-icon.icon`

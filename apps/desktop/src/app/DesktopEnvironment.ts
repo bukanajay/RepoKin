@@ -162,7 +162,9 @@ const make = Effect.fn("desktop.environment.make")(function* (
     baseDir,
     isDevelopment && Option.isNone(configuredBaseDir) ? "dev" : "userdata",
   );
-  const userDataDirName = isDevelopment ? "t3code-dev" : "t3code";
+  // Prefer RepoKin-named userData dirs; legacy T3 Code paths still win when present
+  // so existing installs keep their settings (see DesktopAppIdentity.resolveUserDataPath).
+  const userDataDirName = isDevelopment ? "RepoKin (Dev)" : "RepoKin (Alpha)";
   const legacyUserDataDirName = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
   const linuxApplicationsDir = path.join(
     Option.getOrElse(config.xdgDataHome, () => path.join(homeDirectory, ".local", "share")),
@@ -207,10 +209,10 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
+      isDevelopment ? "com.repokin.app.dev" : "com.repokin.app",
     ),
-    linuxDesktopEntryName: isDevelopment ? "t3code-dev.desktop" : "t3code.desktop",
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
+    linuxDesktopEntryName: isDevelopment ? "repokin-dev.desktop" : "repokin.desktop",
+    linuxWmClass: isDevelopment ? "repokin-dev" : "repokin",
     linuxApplicationsDir,
     appImagePath: config.appImagePath,
     userDataDirName,
