@@ -492,6 +492,7 @@ export function applyTeamEvent(model: TeamDomainReadModel, event: TeamEvent): Te
                   authorEnvironmentId: event.authorEnvironmentId,
                   content: event.content,
                   postedAt: event.postedAt,
+                  senderSeq: event.senderSeq,
                 },
               ],
               activities: appendActivity(

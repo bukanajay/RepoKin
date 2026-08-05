@@ -4,6 +4,7 @@ import {
   MemberId,
   PostId,
   TEAM_CHANNEL_POSTS_PAGE_SIZE,
+  type TeamChannelGapMarker,
   type TeamPostReadModel,
 } from "@t3tools/contracts/team";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -25,6 +26,9 @@ import { useTeamScope } from "./teamScope";
  * `teamReadChannelPosts` so a busy channel never ships its whole history. The
  * reactive newest window keeps the tail live; older pages are fetched on demand
  * and accumulated (union by postId) so a live tail never opens a gap.
+ *
+ * Gap markers (PRD FR-12.4 / Q7) come with every posts window and are merged
+ * by identity so a partial history still surfaces missed posts honestly.
  */
 
 type PostBase = {
@@ -51,6 +55,20 @@ export type ChannelPost = PostBase &
     | { kind: "digest"; title: string; bullets: readonly string[] }
   );
 
+/** Honest missed-history marker (offline past relay TTL). */
+export type ChannelGap = {
+  kind: "gap";
+  /** Stable key for list recycling. */
+  gapId: string;
+  channelId: string;
+  afterPostId: string | null;
+  beforePostId: string | null;
+  missedCount: number | null;
+};
+
+/** Posts and gap markers interleaved for the virtualized timeline. */
+export type ChannelTimelineItem = ChannelPost | ChannelGap;
+
 export type ChannelInfo = {
   channelId: string;
   slug: string;
@@ -62,6 +80,11 @@ export type ChannelData = {
   status: "no-environment" | "no-project" | "loading" | "ready";
   channel: ChannelInfo | null;
   posts: readonly ChannelPost[];
+  /**
+   * Posts + gap markers in display order (oldest → newest). Prefer this over
+   * `posts` for the channel list so missed history is visible (NFR-5).
+   */
+  timeline: readonly ChannelTimelineItem[];
   /** True while the first page of posts is still loading. */
   postsPending: boolean;
   /** True when older posts exist before the oldest loaded post. */
@@ -73,6 +96,75 @@ export type ChannelData = {
   canPost: boolean;
   sendTextPost: (body: string) => void;
 };
+
+function gapIdentity(gap: TeamChannelGapMarker): string {
+  return `gap:${gap.channelId}:${gap.afterPostId ?? "start"}:${gap.beforePostId ?? "end"}`;
+}
+
+function flattenGap(gap: TeamChannelGapMarker): ChannelGap {
+  return {
+    kind: "gap",
+    gapId: gapIdentity(gap),
+    channelId: gap.channelId,
+    afterPostId: gap.afterPostId,
+    beforePostId: gap.beforePostId,
+    missedCount: gap.missedCount,
+  };
+}
+
+/**
+ * Interleave gap markers with posts. A gap whose `beforePostId` matches a
+ * loaded post is placed immediately before that post; a gap with no
+ * `beforePostId` (open-ended) is placed after its `afterPostId`. Gaps that
+ * reference unloaded posts are still shown at the top so history loss is
+ * never silent.
+ */
+export function interleaveTimeline(
+  posts: readonly ChannelPost[],
+  gaps: readonly ChannelGap[],
+): ChannelTimelineItem[] {
+  if (gaps.length === 0) return [...posts];
+
+  const postIndex = new Map(posts.map((post, index) => [post.postId, index]));
+  const beforeBuckets = new Map<number, ChannelGap[]>();
+  const leading: ChannelGap[] = [];
+
+  for (const gap of gaps) {
+    if (gap.beforePostId !== null && postIndex.has(gap.beforePostId)) {
+      const index = postIndex.get(gap.beforePostId)!;
+      const bucket = beforeBuckets.get(index);
+      if (bucket === undefined) beforeBuckets.set(index, [gap]);
+      else bucket.push(gap);
+      continue;
+    }
+    if (gap.afterPostId !== null && postIndex.has(gap.afterPostId)) {
+      // Place after the known post = before the next index.
+      const index = postIndex.get(gap.afterPostId)! + 1;
+      if (index >= posts.length) {
+        // After the last loaded post.
+        const bucket = beforeBuckets.get(posts.length);
+        if (bucket === undefined) beforeBuckets.set(posts.length, [gap]);
+        else bucket.push(gap);
+      } else {
+        const bucket = beforeBuckets.get(index);
+        if (bucket === undefined) beforeBuckets.set(index, [gap]);
+        else bucket.push(gap);
+      }
+      continue;
+    }
+    leading.push(gap);
+  }
+
+  const timeline: ChannelTimelineItem[] = [...leading];
+  for (let index = 0; index < posts.length; index++) {
+    const before = beforeBuckets.get(index);
+    if (before !== undefined) timeline.push(...before);
+    timeline.push(posts[index]!);
+  }
+  const trailing = beforeBuckets.get(posts.length);
+  if (trailing !== undefined) timeline.push(...trailing);
+  return timeline;
+}
 
 function flattenPost(post: TeamPostReadModel): ChannelPost {
   const base: PostBase = {
@@ -176,6 +268,7 @@ export function useChannelData(channelSlug: string): ChannelData {
 
   // Accumulated posts across the live tail + any fetched older pages.
   const [postsById, setPostsById] = useState<ReadonlyMap<string, TeamPostReadModel>>(EMPTY_POSTS);
+  const [gapsById, setGapsById] = useState<ReadonlyMap<string, ChannelGap>>(new Map());
   const [hasMoreBefore, setHasMoreBefore] = useState(false);
   const seededHasMore = useRef(false);
   const loadingOlder = useRef(false);
@@ -186,9 +279,25 @@ export function useChannelData(channelSlug: string): ChannelData {
   // Reset accumulation when the target channel/project/environment changes.
   useEffect(() => {
     setPostsById(EMPTY_POSTS);
+    setGapsById(new Map());
     setHasMoreBefore(false);
     seededHasMore.current = false;
   }, [channelSlug, project?.id, environmentId]);
+
+  const mergeGaps = useCallback((incoming: ReadonlyArray<TeamChannelGapMarker>) => {
+    if (incoming.length === 0) return;
+    setGapsById((previous) => {
+      let next: Map<string, ChannelGap> | null = null;
+      for (const raw of incoming) {
+        const gap = flattenGap(raw);
+        if (!previous.has(gap.gapId)) {
+          next ??= new Map(previous);
+          next.set(gap.gapId, gap);
+        }
+      }
+      return next ?? previous;
+    });
+  }, []);
 
   // Merge each newest-window snapshot; seed hasMoreBefore from the first one.
   useEffect(() => {
@@ -197,15 +306,21 @@ export function useChannelData(channelSlug: string): ChannelData {
     if (data.posts.length > 0) {
       setPostsById((previous) => mergePosts(previous, data.posts));
     }
+    mergeGaps(data.gaps ?? []);
     if (!seededHasMore.current) {
       seededHasMore.current = true;
       setHasMoreBefore(data.hasMoreBefore);
     }
-  }, [newest.data]);
+  }, [mergeGaps, newest.data]);
 
   const posts = useMemo(
     () => Array.from(postsById.values()).sort(comparePosts).map(flattenPost),
     [postsById],
+  );
+
+  const timeline = useMemo(
+    () => interleaveTimeline(posts, Array.from(gapsById.values())),
+    [gapsById, posts],
   );
 
   const loadOlder = useCallback(() => {
@@ -232,12 +347,13 @@ export function useChannelData(channelSlug: string): ChannelData {
         if (result._tag === "Success") {
           setPostsById((previous) => mergePosts(previous, result.value.posts));
           setHasMoreBefore(result.value.hasMoreBefore);
+          mergeGaps(result.value.gaps ?? []);
         }
       })
       .finally(() => {
         loadingOlder.current = false;
       });
-  }, [channelSlug, environmentId, hasMoreBefore, posts, project, readOlder]);
+  }, [channelSlug, environmentId, hasMoreBefore, mergeGaps, posts, project, readOlder]);
 
   const sendTextPost = useCallback(
     (body: string) => {
@@ -274,6 +390,7 @@ export function useChannelData(channelSlug: string): ChannelData {
     const base = {
       channel: null,
       posts: [] as readonly ChannelPost[],
+      timeline: [] as readonly ChannelTimelineItem[],
       postsPending: false,
       hasMoreBefore: false,
       loadOlder,
@@ -302,6 +419,7 @@ export function useChannelData(channelSlug: string): ChannelData {
       status: "ready",
       channel,
       posts: channel === null ? [] : posts,
+      timeline: channel === null ? [] : timeline,
       postsPending: channel !== null && posts.length === 0 && newest.isPending,
       hasMoreBefore,
       loadOlder,
@@ -317,6 +435,7 @@ export function useChannelData(channelSlug: string): ChannelData {
     localHumanId,
     localState.data,
     newest.isPending,
+    timeline,
     posts,
     project,
     roster.data,

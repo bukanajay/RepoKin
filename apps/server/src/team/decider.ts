@@ -31,6 +31,34 @@ function defaultTeamMessageExpiresAt(occurredAt: string): string {
   return DateTime.formatIso(DateTime.add(DateTime.makeUnsafe(occurredAt), { hours: 24 }));
 }
 
+/**
+ * Next per-sender causal sequence for a channel post (PRD FR-12.5).
+ * Keyed by (channel, authorId) — the author is the causal "sender"; member
+ * ids are roster-unique so multi-author environments don't share a counter.
+ * Legacy posts (senderSeq 0) do not advance the high-water mark.
+ */
+function nextSenderSeq(input: {
+  readonly readModel: TeamDomainReadModel;
+  readonly projectId: TeamCommand["projectId"];
+  readonly channelId: string;
+  readonly authorId: string;
+}): number {
+  const project = input.readModel.projects.find(
+    (candidate) => candidate.projectId === input.projectId,
+  );
+  let highWater = 0;
+  for (const post of project?.posts ?? []) {
+    if (
+      post.channelId === input.channelId &&
+      post.authorId === input.authorId &&
+      post.senderSeq > highWater
+    ) {
+      highWater = post.senderSeq;
+    }
+  }
+  return highWater + 1;
+}
+
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const decodeMemberId = Schema.decodeUnknownSync(MemberId);
 
@@ -239,16 +267,32 @@ export const decideTeamCommand = Effect.fn("decideTeamCommand")(function* ({
         authorId: command.authorId,
         content: command.content,
       });
+      const authorEnvironmentId = command.metadata?.environmentId ?? null;
+      // Remote re-dispatch carries the origin's senderSeq so gap detection on
+      // the receiver can see jumps (PRD Q7). Local authors get the next value
+      // for this (channel, author environment) stream; when environment is
+      // unknown we still advance a local stream keyed by author so a later
+      // stamp doesn't reset the counter mid-channel.
+      const senderSeq =
+        command.senderSeq !== undefined
+          ? command.senderSeq
+          : nextSenderSeq({
+              readModel,
+              projectId: command.projectId,
+              channelId: command.channelId,
+              authorId: command.authorId,
+            });
       return {
         ...base,
         type: "team.channel.posted",
         postId: command.postId,
         channelId: command.channelId,
         authorId: command.authorId,
-        authorEnvironmentId: command.metadata?.environmentId ?? null,
+        authorEnvironmentId,
         content: command.content,
         postedAt: occurredAt,
         at: occurredAt,
+        senderSeq,
       };
     }
 

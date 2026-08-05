@@ -20,7 +20,13 @@ import { MemberChip } from "./MemberChip";
 import { TeamCard } from "./TeamCard";
 import { TeamScreenShell } from "./TeamScreenShell";
 import { deriveMemberAccentColor } from "./memberIdentity";
-import { useChannelData, type ChannelData, type ChannelPost } from "./useChannelData";
+import {
+  useChannelData,
+  type ChannelData,
+  type ChannelGap,
+  type ChannelPost,
+  type ChannelTimelineItem,
+} from "./useChannelData";
 
 function PostBody({ post }: { post: ChannelPost }) {
   switch (post.kind) {
@@ -103,13 +109,38 @@ function PostBody({ post }: { post: ChannelPost }) {
   }
 }
 
-function keyExtractor(post: ChannelPost) {
-  return post.postId;
+function keyExtractor(item: ChannelTimelineItem) {
+  return item.kind === "gap" ? item.gapId : item.postId;
 }
 
-// Item type feeds LegendList's view recycling — one recycle pool per post kind.
-function getItemType(post: ChannelPost) {
-  return post.kind;
+// Item type feeds LegendList's view recycling — one recycle pool per kind.
+function getItemType(item: ChannelTimelineItem) {
+  return item.kind;
+}
+
+function gapLabel(gap: ChannelGap): string {
+  if (gap.missedCount !== null && gap.missedCount > 0) {
+    return gap.missedCount === 1
+      ? "1 post may have been missed while offline"
+      : `${gap.missedCount} posts may have been missed while offline`;
+  }
+  return "Some posts may have been missed while offline";
+}
+
+function GapRow({ gap }: { gap: ChannelGap }) {
+  // Honest delivery state (NFR-5 / PRD Q7) — no animation, no spinner.
+  return (
+    <div
+      role="status"
+      className="flex items-center gap-3 border-b border-border/40 py-3 text-xs text-muted-foreground"
+    >
+      <span className="h-px flex-1 bg-border/70" aria-hidden />
+      <span className="shrink-0 rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5">
+        {gapLabel(gap)}
+      </span>
+      <span className="h-px flex-1 bg-border/70" aria-hidden />
+    </div>
+  );
 }
 
 function PostRow({ post, data }: { post: ChannelPost; data: ChannelData }) {
@@ -177,10 +208,11 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
     setDraft("");
   };
 
-  // Stable renderItem; PostRow is a pure render of its props, so LegendList may
-  // recycle its DOM rows safely (`recycleItems`).
+  // Stable renderItem; rows are pure renders of their props, so LegendList may
+  // recycle DOM rows safely (`recycleItems`).
   const renderItem = useCallback(
-    ({ item }: { item: ChannelPost }) => <PostRow post={item} data={data} />,
+    ({ item }: { item: ChannelTimelineItem }) =>
+      item.kind === "gap" ? <GapRow gap={item} /> : <PostRow post={item} data={data} />,
     [data],
   );
 
@@ -202,7 +234,7 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
         <p className="shrink-0 pb-2 text-xs text-muted-foreground">{channel.description}</p>
       ) : null}
 
-      {data.posts.length === 0 ? (
+      {data.timeline.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
           {data.postsPending ? (
             <span className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -214,8 +246,8 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
           )}
         </div>
       ) : (
-        <LegendList<ChannelPost>
-          data={data.posts}
+        <LegendList<ChannelTimelineItem>
+          data={data.timeline}
           keyExtractor={keyExtractor}
           getItemType={getItemType}
           renderItem={renderItem}

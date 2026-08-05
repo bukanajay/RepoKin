@@ -1,6 +1,7 @@
 import type {
   ChannelId,
   PostId,
+  TeamChannelGapMarker,
   TeamChannelPostStats,
   TeamPostReadModel,
 } from "@t3tools/contracts/team";
@@ -20,13 +21,90 @@ function comparePosts(left: TeamPostReadModel, right: TeamPostReadModel): number
 export interface ChannelPostWindow {
   readonly posts: TeamPostReadModel[];
   readonly hasMoreBefore: boolean;
+  readonly gaps: TeamChannelGapMarker[];
+}
+
+/**
+ * Detect honest history gaps from per-sender causal sequences (PRD FR-12.4 /
+ * FR-12.5 / Q7). A jump in `senderSeq` for the same author means intermediate
+ * posts never arrived (typically offline past relay TTL).
+ *
+ * - `senderSeq === 0` is legacy/unknown and is ignored.
+ * - Only posts with a known `authorEnvironmentId` participate (cross-env
+ *   fan-out is what can drop); pure local history has no TTL loss.
+ * - Grouped by authorId (the causal sender), not environment, so two members
+ *   on one environment don't create false gaps in each other's streams.
+ */
+export function detectChannelGaps(
+  posts: ReadonlyArray<TeamPostReadModel>,
+  channelId: ChannelId,
+): TeamChannelGapMarker[] {
+  const channelPosts = posts
+    .filter(
+      (post) =>
+        post.channelId === channelId && post.authorEnvironmentId !== null && post.senderSeq > 0,
+    )
+    .sort(comparePosts);
+
+  // Group by author — the causal "sender" of FR-12.5.
+  const bySender = new Map<string, TeamPostReadModel[]>();
+  for (const post of channelPosts) {
+    const key = String(post.authorId);
+    const list = bySender.get(key);
+    if (list === undefined) bySender.set(key, [post]);
+    else list.push(post);
+  }
+
+  const gaps: TeamChannelGapMarker[] = [];
+  for (const stream of bySender.values()) {
+    // Re-order by senderSeq so a late-arriving older post still reveals the
+    // right gap (arrival order is not causal order — FR-12.5).
+    const ordered = [...stream].sort((left, right) => {
+      const bySeq = left.senderSeq - right.senderSeq;
+      return bySeq !== 0 ? bySeq : comparePosts(left, right);
+    });
+
+    const first = ordered[0];
+    if (first !== undefined && first.senderSeq > 1) {
+      gaps.push({
+        channelId,
+        afterPostId: null,
+        beforePostId: first.postId,
+        missedCount: first.senderSeq - 1,
+      });
+    }
+
+    for (let index = 1; index < ordered.length; index++) {
+      const previous = ordered[index - 1]!;
+      const current = ordered[index]!;
+      const jump = current.senderSeq - previous.senderSeq;
+      if (jump > 1) {
+        gaps.push({
+          channelId,
+          afterPostId: previous.postId,
+          beforePostId: current.postId,
+          missedCount: jump - 1,
+        });
+      }
+    }
+  }
+
+  // Stable presentation order: by the post the gap precedes (or after-post
+  // when the gap is open-ended — not currently emitted).
+  gaps.sort((left, right) => {
+    const leftKey = left.beforePostId ?? left.afterPostId ?? "";
+    const rightKey = right.beforePostId ?? right.afterPostId ?? "";
+    return String(leftKey).localeCompare(String(rightKey));
+  });
+  return gaps;
 }
 
 /**
  * Return the newest `limit` posts of `channelId` strictly older than the
  * `before` cursor (or the channel tail when `before` is null), ascending
  * (oldest→newest) so the client can prepend when paging older. `hasMoreBefore`
- * reports whether any older post precedes the returned window.
+ * reports whether any older post precedes the returned window. `gaps` covers
+ * the whole channel so a windowed client still sees missed history.
  */
 export function selectChannelPostWindow(
   posts: ReadonlyArray<TeamPostReadModel>,
@@ -47,7 +125,11 @@ export function selectChannelPostWindow(
         })();
 
   const start = Math.max(0, end - normalizedLimit);
-  return { posts: channelPosts.slice(start, end), hasMoreBefore: start > 0 };
+  return {
+    posts: channelPosts.slice(start, end),
+    hasMoreBefore: start > 0,
+    gaps: detectChannelGaps(posts, channelId),
+  };
 }
 
 /**

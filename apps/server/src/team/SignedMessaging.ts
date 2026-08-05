@@ -22,12 +22,17 @@ import {
   TeamSignedMessagePayload,
   type TeamSignedMessageEnvelope,
   TeamSignedMessageProofPayload,
+  TeamSignedWorkSignalPayload,
+  type TeamSignedWorkSignalEnvelope,
+  TeamSignedWorkSignalProofPayload,
   type TeamRosterReadModel,
+  type TeamWorkSignal,
 } from "@t3tools/contracts/team";
 import {
   RELAY_TEAM_DELIVERY_RECEIPT_TYP,
   RELAY_TEAM_EVENT_TYP,
   RELAY_TEAM_MESSAGE_TYP,
+  RELAY_TEAM_WORK_SIGNAL_TYP,
   normalizeRelayIssuer,
   signRelayJwt,
   verifyRelayJwt,
@@ -48,7 +53,13 @@ const decodeSignedDeliveryReceiptProofPayload = Schema.decodeUnknownEffect(
 );
 const decodeSignedEventPayload = Schema.decodeUnknownEffect(TeamSignedEventPayload);
 const decodeSignedEventProofPayload = Schema.decodeUnknownEffect(TeamSignedEventProofPayload);
+const decodeSignedWorkSignalPayload = Schema.decodeUnknownEffect(TeamSignedWorkSignalPayload);
+const decodeSignedWorkSignalProofPayload = Schema.decodeUnknownEffect(
+  TeamSignedWorkSignalProofPayload,
+);
 const TEAM_RELAY_ENVELOPE_LIFETIME = { hours: 24 } as const;
+/** Work signals are ephemeral; shorter TTL than durable messages (FR-14.1). */
+const TEAM_WORK_SIGNAL_ENVELOPE_LIFETIME = { hours: 2 } as const;
 
 export type TeamSignedMessageDropReason =
   | "payload-decode-failed"
@@ -93,6 +104,18 @@ export interface TeamSignedEventAccepted {
 }
 
 export type TeamSignedEventVerificationResult = TeamSignedEventAccepted | TeamSignedMessageDropped;
+
+export interface TeamSignedWorkSignalAccepted {
+  readonly _tag: "accepted";
+  readonly signals: readonly TeamWorkSignal[];
+  readonly projectId: TeamSignedWorkSignalPayload["projectId"];
+  readonly proof: TeamSignedWorkSignalProofPayload;
+  readonly senderPublicKey: string;
+}
+
+export type TeamSignedWorkSignalVerificationResult =
+  | TeamSignedWorkSignalAccepted
+  | TeamSignedMessageDropped;
 
 const dropped = (
   reason: TeamSignedMessageDropReason,
@@ -192,6 +215,9 @@ export function signedEventPayloadToCommand(payload: TeamSignedEventPayload): Te
         channelId: event.channelId,
         authorId: event.authorId,
         content: event.content,
+        // Preserve origin causal sequence so the receiver can detect gaps
+        // (PRD FR-12.5 / Q7) even when intermediate posts never arrived.
+        ...(event.senderSeq > 0 ? { senderSeq: event.senderSeq } : {}),
         metadata: { actorMemberId: event.authorId, environmentId },
       };
     case "team.task.created":
@@ -543,3 +569,89 @@ export const verifyTeamEventEnvelope = Effect.fn("TeamSignedMessaging.verifyEven
     } satisfies TeamSignedEventAccepted;
   },
 );
+
+export const signTeamWorkSignalEnvelope = Effect.fn("TeamSignedMessaging.signWorkSignalEnvelope")(
+  function* (input: {
+    readonly privateKey: string;
+    readonly relayIssuer: string;
+    readonly payload: TeamSignedWorkSignalPayload;
+    readonly jti: string;
+    readonly now?: DateTime.Utc;
+  }) {
+    const now = input.now ?? (yield* DateTime.now);
+    const expiresAt = DateTime.add(now, TEAM_WORK_SIGNAL_ENVELOPE_LIFETIME);
+    const proofPayload = {
+      iss: `t3-env:${input.payload.senderEnvironmentId}`,
+      aud: normalizeRelayIssuer(input.relayIssuer),
+      sub: input.payload.senderEnvironmentId,
+      jti: input.jti,
+      iat: Math.floor(now.epochMilliseconds / 1_000),
+      exp: Math.floor(expiresAt.epochMilliseconds / 1_000),
+      senderEnvironmentId: input.payload.senderEnvironmentId,
+      recipientEnvironmentId: input.payload.recipientEnvironmentId,
+      workSignal: input.payload,
+    } satisfies TeamSignedWorkSignalProofPayload;
+    const proof = yield* signRelayJwt({
+      privateKey: input.privateKey,
+      typ: RELAY_TEAM_WORK_SIGNAL_TYP,
+      payload: proofPayload,
+    });
+    return { payload: input.payload, proof };
+  },
+);
+
+export const verifyTeamWorkSignalEnvelope = Effect.fn(
+  "TeamSignedMessaging.verifyWorkSignalEnvelope",
+)(function* (input: {
+  readonly envelope: TeamSignedWorkSignalEnvelope;
+  readonly roster: TeamRosterReadModel;
+  readonly relayIssuer: string;
+  readonly nowEpochSeconds: number;
+}) {
+  const payloadOption = yield* decodeSignedWorkSignalPayload(input.envelope.payload).pipe(
+    Effect.option,
+  );
+  if (Option.isNone(payloadOption)) {
+    return dropped("payload-decode-failed", "The signed work-signal payload is malformed.");
+  }
+
+  const payload = payloadOption.value;
+  const publicKeyResult = resolveRosterPublicKeyForMember({
+    roster: input.roster,
+    memberId: payload.senderId,
+    environmentId: payload.senderEnvironmentId,
+  });
+  if ("_tag" in publicKeyResult) {
+    return publicKeyResult;
+  }
+
+  const proofOption = yield* verifyRelayJwt({
+    publicKey: publicKeyResult.publicKey,
+    token: input.envelope.proof,
+    typ: RELAY_TEAM_WORK_SIGNAL_TYP,
+    issuer: `t3-env:${payload.senderEnvironmentId}`,
+    audience: normalizeRelayIssuer(input.relayIssuer),
+    nowEpochSeconds: input.nowEpochSeconds,
+    maxTokenAge: "2 hours",
+  }).pipe(Effect.flatMap(decodeSignedWorkSignalProofPayload), Effect.option);
+  if (Option.isNone(proofOption)) {
+    return dropped("proof-invalid", "The signed work-signal proof did not verify.");
+  }
+
+  const proof = proofOption.value;
+  if (
+    proof.senderEnvironmentId !== payload.senderEnvironmentId ||
+    proof.recipientEnvironmentId !== payload.recipientEnvironmentId ||
+    !Equal.equals(proof.workSignal, payload)
+  ) {
+    return dropped("payload-mismatch", "The signed proof does not cover the work-signal payload.");
+  }
+
+  return {
+    _tag: "accepted",
+    signals: payload.signals,
+    projectId: payload.projectId,
+    proof,
+    senderPublicKey: publicKeyResult.publicKey,
+  } satisfies TeamSignedWorkSignalAccepted;
+});

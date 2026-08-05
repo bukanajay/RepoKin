@@ -49,6 +49,7 @@ function postedEvent(index: number): TeamEvent {
     authorEnvironmentId: null,
     content: { kind: "text", body: `Message #${index}` },
     postedAt: at,
+    senderSeq: index + 1,
   });
 }
 

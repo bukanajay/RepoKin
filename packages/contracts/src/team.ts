@@ -1108,6 +1108,10 @@ export const TeamChannelPostCommand = Schema.Struct({
   channelId: ChannelId,
   authorId: MemberId,
   content: TeamPostContent,
+  // Carried on remote re-dispatch so a receiver preserves the origin's
+  // per-sender sequence (PRD FR-12.5 / Q7). Local authors omit it; the
+  // decider assigns the next value.
+  senderSeq: Schema.optionalKey(NonNegativeInt),
 }).annotate({
   description:
     "Post to a channel. Agents may only post when prompted (FR-12.6, enforced server-side).",
@@ -1437,6 +1441,10 @@ export const TeamChannelPostedEvent = Schema.Struct({
   authorEnvironmentId: Schema.NullOr(EnvironmentId),
   content: TeamPostContent,
   postedAt: IsoDateTime,
+  // Per-(channel, author environment) causal sequence. Starts at 1. 0 means
+  // "unknown/legacy" and is ignored by gap detection. When a receiver sees a
+  // jump, it surfaces a gap marker rather than inventing posts (PRD Q7).
+  senderSeq: NonNegativeInt.pipe(Schema.withDecodingDefault(Effect.succeed(0))),
 }).annotate({ description: "A post landed in a channel." });
 export type TeamChannelPostedEvent = typeof TeamChannelPostedEvent.Type;
 
@@ -1576,13 +1584,67 @@ export const TeamSignedEventEnvelope = Schema.Struct({
 });
 export type TeamSignedEventEnvelope = typeof TeamSignedEventEnvelope.Type;
 
+// Work-signal shape lives here (before TeamRelayEnvelope) so fan-out envelopes
+// can reference it without a TDZ. The R3 read-model section re-exports usage.
+export const TeamWorkSignal = Schema.Struct({
+  projectId: ProjectId,
+  memberId: MemberId,
+  memberType: MemberType,
+  environmentId: EnvironmentId,
+  /** Repo-relative directories (already coarsened). */
+  directories: Schema.Array(TrimmedNonEmptyString),
+  updatedAt: IsoDateTime,
+  source: Schema.Literals(["working-tree", "thread", "mixed"]),
+}).annotate({
+  description: "Coarse work-location signal for one member in one project.",
+});
+export type TeamWorkSignal = typeof TeamWorkSignal.Type;
+
+/**
+ * Ephemeral work-location snapshot fanned out over the relay (R3.1). Field
+ * layout mirrors TeamSignedEventPayload so `deliverTeamMessage` routes by
+ * `recipientEnvironmentId` unchanged. Not event-sourced — receivers cache
+ * only (PRD FR-14.1).
+ */
+export const TeamSignedWorkSignalPayload = Schema.Struct({
+  projectId: ProjectId,
+  senderId: MemberId,
+  senderEnvironmentId: EnvironmentId,
+  recipientEnvironmentId: EnvironmentId,
+  signals: Schema.Array(TeamWorkSignal),
+  sentAt: IsoDateTime,
+  expiresAt: Schema.optionalKey(IsoDateTime),
+}).annotate({
+  description: "A local environment's work-signal snapshot for one remote roster peer.",
+});
+export type TeamSignedWorkSignalPayload = typeof TeamSignedWorkSignalPayload.Type;
+
+export const TeamSignedWorkSignalProofPayload = Schema.Struct({
+  ...TeamSignedJwtRegisteredClaims,
+  senderEnvironmentId: EnvironmentId,
+  recipientEnvironmentId: EnvironmentId,
+  workSignal: TeamSignedWorkSignalPayload,
+}).annotate({
+  description: "JWT payload signed by the author environment for a work-signal snapshot.",
+});
+export type TeamSignedWorkSignalProofPayload = typeof TeamSignedWorkSignalProofPayload.Type;
+
+export const TeamSignedWorkSignalEnvelope = Schema.Struct({
+  payload: TeamSignedWorkSignalPayload,
+  proof: TrimmedNonEmptyString,
+}).annotate({
+  description: "Relay-transported signed work-signal envelope (ephemeral, R3).",
+});
+export type TeamSignedWorkSignalEnvelope = typeof TeamSignedWorkSignalEnvelope.Type;
+
 export const TeamRelayEnvelope = Schema.Union([
   TeamSignedMessageEnvelope,
   TeamSignedDeliveryReceiptEnvelope,
   TeamSignedEventEnvelope,
+  TeamSignedWorkSignalEnvelope,
 ]).annotate({
   description:
-    "Signed RepoKin message, delivery receipt, or replicated domain event transported through the relay.",
+    "Signed RepoKin message, delivery receipt, replicated domain event, or work-signal snapshot transported through the relay.",
 });
 export type TeamRelayEnvelope = typeof TeamRelayEnvelope.Type;
 
@@ -1672,6 +1734,8 @@ export const TeamPostReadModel = Schema.Struct({
   authorEnvironmentId: Schema.NullOr(EnvironmentId),
   content: TeamPostContent,
   postedAt: IsoDateTime,
+  // Mirrors TeamChannelPostedEvent.senderSeq; 0 = legacy / unknown.
+  senderSeq: NonNegativeInt.pipe(Schema.withDecodingDefault(Effect.succeed(0))),
 }).annotate({ description: "A single channel post." });
 export type TeamPostReadModel = typeof TeamPostReadModel.Type;
 
@@ -1815,6 +1879,13 @@ export const TeamChannelPostsReadResult = Schema.Struct({
   posts: Schema.Array(TeamPostReadModel),
   // Whether older posts exist before `posts[0]` (drives fetch-older on scroll).
   hasMoreBefore: Schema.Boolean,
+  // Gaps over the whole channel history (PRD FR-12.4 / Q7). Cheap to recompute
+  // and small even when the post history is large; clients merge by identity.
+  gaps: Schema.Array(TeamChannelGapMarker).pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed([] as TeamChannelGapMarker[] as readonly TeamChannelGapMarker[]),
+    ),
+  ),
   snapshotSequence: NonNegativeInt,
 }).annotate({ description: "One newest-first window of a channel's posts." });
 export type TeamChannelPostsReadResult = typeof TeamChannelPostsReadResult.Type;
@@ -1828,6 +1899,79 @@ export type TeamCommandDispatchResult = typeof TeamCommandDispatchResult.Type;
 
 export class TeamDispatchCommandError extends Schema.TaggedErrorClass<TeamDispatchCommandError>()(
   "TeamDispatchCommandError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+// ---------------------------------------------------------------------------
+// R3 — Work map / radar (visibility)
+// ---------------------------------------------------------------------------
+
+// TeamWorkSignal is defined earlier (with the relay envelope family) so fan-out
+// schemas can reference it without a temporal dead zone.
+
+export const TeamWorkMapNode = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  weight: NonNegativeInt,
+  memberIds: Schema.Array(MemberId),
+}).annotate({ description: "One treemap cell of the work map." });
+export type TeamWorkMapNode = typeof TeamWorkMapNode.Type;
+
+export const TeamWorkMapOverlap = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  memberIds: Schema.Array(MemberId),
+  note: TrimmedNonEmptyString,
+}).annotate({
+  description: "Advisory overlap radar entry (FR-14.3 / FR-14.5).",
+});
+export type TeamWorkMapOverlap = typeof TeamWorkMapOverlap.Type;
+
+export const TeamWorkMapReadInput = Schema.Struct({
+  projectId: ProjectId,
+}).annotate({ description: "Read the live work map for one project." });
+export type TeamWorkMapReadInput = typeof TeamWorkMapReadInput.Type;
+
+export const TeamWorkMapReadResult = Schema.Struct({
+  projectId: ProjectId,
+  nodes: Schema.Array(TeamWorkMapNode),
+  overlaps: Schema.Array(TeamWorkMapOverlap),
+  signals: Schema.Array(TeamWorkSignal),
+  /** Whether this environment is publishing work-location signals (FR-14.4). */
+  sharingEnabled: Schema.Boolean,
+  updatedAt: IsoDateTime,
+}).annotate({
+  description: "Work map + radar projection for one project (R3).",
+});
+export type TeamWorkMapReadResult = typeof TeamWorkMapReadResult.Type;
+
+// ---------------------------------------------------------------------------
+// R3.3 — Digests + standup
+// ---------------------------------------------------------------------------
+
+export const TeamStandupDigestInput = Schema.Struct({
+  projectId: ProjectId,
+  /** Channel slug to post into; defaults to `team` when omitted. */
+  channelId: Schema.optionalKey(ChannelId),
+}).annotate({
+  description: "Generate this environment's digest and post it to a channel (FR-15.3).",
+});
+export type TeamStandupDigestInput = typeof TeamStandupDigestInput.Type;
+
+export const TeamStandupDigestResult = Schema.Struct({
+  postId: PostId,
+  channelId: ChannelId,
+  title: TrimmedNonEmptyString,
+  bullets: Schema.Array(TrimmedNonEmptyString),
+}).annotate({
+  description: "Standup digest that was posted to the channel.",
+});
+export type TeamStandupDigestResult = typeof TeamStandupDigestResult.Type;
+
+export class TeamStandupDigestError extends Schema.TaggedErrorClass<TeamStandupDigestError>()(
+  "TeamStandupDigestError",
   {
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),

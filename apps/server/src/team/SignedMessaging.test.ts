@@ -403,6 +403,7 @@ const channelPostedEvent: ReplicatedTeamEvent = {
   authorEnvironmentId: EnvironmentId.make("env_sender"),
   content: { kind: "text", body: "shipped it" },
   postedAt: "2026-07-30T00:00:00.000Z",
+  senderSeq: 1,
 };
 
 const eventPayload: TeamSignedEventPayload = {
@@ -442,6 +443,7 @@ it.effect("accepts a replicated channel post and maps it to a post command", () 
         channelId: "team",
         authorId: "human_julius",
         content: { kind: "text", body: "shipped it" },
+        senderSeq: 1,
         metadata: { actorMemberId: "human_julius", environmentId: "env_sender" },
       });
     }

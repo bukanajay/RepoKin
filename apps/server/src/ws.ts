@@ -126,6 +126,8 @@ import { isTeamRosterSyncOperationError } from "./team/Services/RosterSync.ts";
 import { RosterSync } from "./team/Services/RosterSync.ts";
 import { TeamEngineService } from "./team/Services/TeamEngine.ts";
 import { TeamPresenceResolver } from "./team/Services/TeamPresenceResolver.ts";
+import { TeamWorkSignals } from "./team/Services/TeamWorkSignals.ts";
+import { postStandupDigest } from "./team/standUp.ts";
 import { updateTeamFile } from "./team/TeamFileUpdate.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
@@ -2002,6 +2004,7 @@ const makeWsRpcLayer = (
               return {
                 posts: window.posts,
                 hasMoreBefore: window.hasMoreBefore,
+                gaps: window.gaps,
                 snapshotSequence: readModel.snapshotSequence,
               };
             }),
@@ -2018,6 +2021,18 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "team" },
           ),
+        [WS_METHODS.teamReadWorkMap]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.teamReadWorkMap,
+            TeamWorkSignals.pipe(
+              Effect.flatMap((workSignals) => workSignals.readWorkMap(input.projectId)),
+            ),
+            { "rpc.aggregate": "team" },
+          ),
+        [WS_METHODS.teamPostStandupDigest]: (input) =>
+          observeRpcEffect(WS_METHODS.teamPostStandupDigest, postStandupDigest(input), {
+            "rpc.aggregate": "team",
+          }),
         [WS_METHODS.teamHeartbeatHumanPresence]: () =>
           observeRpcEffect(
             WS_METHODS.teamHeartbeatHumanPresence,

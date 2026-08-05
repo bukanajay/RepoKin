@@ -110,8 +110,68 @@ it.layer(NodeServices.layer)("team R2 decider/projector — channels", (it) => {
         postId: "post-1",
         channelId: "team",
         authorId: "human_ajay",
+        senderSeq: 1,
       });
+      if (posted.event.type === "team.channel.posted") {
+        expect(posted.event.senderSeq).toBe(1);
+      }
       expect(posted.readModel.projects[0]?.activities.at(-1)?.kind).toBe("channel.posted");
+    }),
+  );
+
+  it.effect("advances senderSeq and preserves a remote-carried sequence (PRD Q7)", () =>
+    Effect.gen(function* () {
+      const seeded = yield* seedRoster();
+      const first = yield* apply(
+        seeded.readModel,
+        {
+          commandId: "cmd-post-a",
+          projectId,
+          type: "team.channel.post",
+          postId: "post-a",
+          channelId: "team",
+          authorId: humanId,
+          content: { kind: "text", body: "first" },
+          metadata: { actorMemberId: humanId, environmentId: "env_local" },
+        },
+        seeded.seq + 1,
+      );
+      // Local author advances 1 → 2.
+      const second = yield* apply(
+        first.readModel,
+        {
+          commandId: "cmd-post-b",
+          projectId,
+          type: "team.channel.post",
+          postId: "post-b",
+          channelId: "team",
+          authorId: humanId,
+          content: { kind: "text", body: "second" },
+          metadata: { actorMemberId: humanId, environmentId: "env_local" },
+        },
+        seeded.seq + 2,
+      );
+      // Remote re-dispatch carries an origin sequence past a gap (seq 5).
+      const remote = yield* apply(
+        second.readModel,
+        {
+          commandId: "cmd-post-remote",
+          projectId,
+          type: "team.channel.post",
+          postId: "post-remote",
+          channelId: "team",
+          authorId: humanId,
+          content: { kind: "text", body: "after a gap" },
+          senderSeq: 5,
+          metadata: { actorMemberId: humanId, environmentId: "env_remote" },
+        },
+        seeded.seq + 3,
+      );
+
+      const posts = remote.readModel.projects[0]?.posts ?? [];
+      expect(posts.find((p) => p.postId === "post-a")?.senderSeq).toBe(1);
+      expect(posts.find((p) => p.postId === "post-b")?.senderSeq).toBe(2);
+      expect(posts.find((p) => p.postId === "post-remote")?.senderSeq).toBe(5);
     }),
   );
 

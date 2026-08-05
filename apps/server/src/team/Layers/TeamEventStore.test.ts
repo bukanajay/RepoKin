@@ -88,6 +88,7 @@ layer("TeamEventStore", (it) => {
             content: { kind: "text", body: `Message #${index}` },
             postedAt,
             at: postedAt,
+            senderSeq: index + 1,
             metadata: { actorMemberId: author },
           }),
         { discard: true },
