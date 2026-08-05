@@ -28,12 +28,16 @@ import {
 import { useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
+  ActivityIcon,
   ArrowLeftIcon,
   CornerLeftUpIcon,
   FileSearchIcon,
   FolderIcon,
   FolderPlusIcon,
+  HashIcon,
+  KanbanSquareIcon,
   LinkIcon,
+  MapIcon,
   MessageSquareIcon,
   SettingsIcon,
   SquarePenIcon,
@@ -1478,12 +1482,100 @@ function OpenCommandPaletteDialog(props: {
 
   actionItems.push({
     kind: "action",
+    value: "action:team-channels",
+    searchTerms: ["team", "channels", "channel", "#team", "chat"],
+    title: "Open Team channels",
+    icon: <HashIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/team/channels" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:team-channel-team",
+    searchTerms: ["team", "channel", "#team", "open #team"],
+    title: "Open #team",
+    icon: <HashIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/team/channels/$channelId", params: { channelId: "team" } });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
     value: "action:team-board",
     searchTerms: ["team", "board", "kanban", "tasks", "backlog"],
     title: "Open Team board",
-    icon: <UsersIcon className={ITEM_ICON_CLASS} />,
+    icon: <KanbanSquareIcon className={ITEM_ICON_CLASS} />,
     run: async () => {
       await navigate({ to: "/team/board" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:team-people",
+    searchTerms: ["team", "people", "roster", "members", "agents"],
+    title: "Open Team people",
+    icon: <UsersIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/team/people" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:team-activity",
+    searchTerms: ["team", "activity", "feed", "timeline"],
+    title: "Open Team activity",
+    icon: <ActivityIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/team/activity" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:team-map",
+    searchTerms: ["team", "map", "work map", "radar", "overlap"],
+    title: "Open work map",
+    icon: <MapIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/team/map" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:team-pulse",
+    searchTerms: ["team", "pulse", "contributions", "hot spots", "repo pulse"],
+    title: "Open repo pulse",
+    icon: <ActivityIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/team/pulse" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:team-decisions",
+    searchTerms: ["team", "decisions", "adr", "decision records"],
+    title: "Open decisions",
+    icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/team/decisions" });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:team-inbox",
+    searchTerms: ["team", "inbox", "notifications", "requests"],
+    title: "Open Team inbox",
+    icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      await navigate({ to: "/team/inbox" });
     },
   });
 

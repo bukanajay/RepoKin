@@ -113,10 +113,40 @@ export const postStandupDigest = Effect.fn("TeamStandup.post")(function* (input:
   const declared = (domainProject?.channels ?? []).some(
     (channel) => String(channel.id) === String(channelId),
   );
+  // FR-12.1: `#team` is the default coordination channel — auto-declare it when
+  // standup is the first write so the one-action path never fails on an empty
+  // project (R5 ergonomics).
   if (!declared) {
-    return yield* new TeamStandupDigestError({
-      message: `Channel '#${channelId}' does not exist. Declare it before posting a standup.`,
-    });
+    if (String(channelId) !== "team") {
+      return yield* new TeamStandupDigestError({
+        message: `Channel '#${channelId}' does not exist. Declare it before posting a standup.`,
+      });
+    }
+    yield* teamEngine
+      .dispatch({
+        type: "team.channel.declare",
+        commandId: CommandId.make(`server:team-standup-declare:${yield* crypto.randomUUIDv4}`),
+        projectId: input.projectId,
+        declaration: {
+          schemaVersion: 1 as const,
+          id: channelId,
+          name: "#team",
+          description: "Everything the whole team should see.",
+        },
+        metadata: {
+          actorMemberId: MemberId.make(localHumanId),
+          environmentId,
+        },
+      })
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new TeamStandupDigestError({
+              message: "Failed to auto-declare the default #team channel for standup.",
+              cause,
+            }),
+        ),
+      );
   }
 
   const now = yield* DateTime.now;

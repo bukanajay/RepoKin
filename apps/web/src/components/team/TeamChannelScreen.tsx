@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { LegendList } from "@legendapp/list/react";
 import {
   ArrowLeftIcon,
+  ArrowRightIcon,
   FileDiffIcon,
   FileTextIcon,
   GitCommitIcon,
@@ -45,7 +46,39 @@ import {
   type ChannelTimelineItem,
 } from "./useChannelData";
 
-function PostBody({ post }: { post: ChannelPost }) {
+function CardDeepLink({
+  to,
+  params,
+  label,
+}: {
+  to: "/$environmentId/$threadId" | "/team/board";
+  params?: { environmentId: string; threadId: string };
+  label: string;
+}) {
+  if (to === "/$environmentId/$threadId" && params !== undefined) {
+    return (
+      <Link
+        to="/$environmentId/$threadId"
+        params={params}
+        className="inline-flex items-center gap-1 rounded-md text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {label}
+        <ArrowRightIcon className="size-3" />
+      </Link>
+    );
+  }
+  return (
+    <Link
+      to="/team/board"
+      className="inline-flex items-center gap-1 rounded-md text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {label}
+      <ArrowRightIcon className="size-3" />
+    </Link>
+  );
+}
+
+function PostBody({ post, environmentId }: { post: ChannelPost; environmentId: string | null }) {
   switch (post.kind) {
     case "text":
       return (
@@ -61,6 +94,15 @@ function PostBody({ post }: { post: ChannelPost }) {
               {post.title}
             </span>
           }
+          deepLink={
+            environmentId !== null ? (
+              <CardDeepLink
+                to="/$environmentId/$threadId"
+                params={{ environmentId, threadId: post.threadId }}
+                label="Open"
+              />
+            ) : undefined
+          }
           liveState={<span>{post.status}</span>}
         />
       );
@@ -74,14 +116,17 @@ function PostBody({ post }: { post: ChannelPost }) {
               {post.title}
             </span>
           }
+          deepLink={<CardDeepLink to="/team/board" label="Board" />}
         >
           <span className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="font-medium text-success-foreground">+{post.additions}</span>
             <span className="font-medium text-destructive">−{post.deletions}</span>
             <span>{post.changedFiles} files</span>
-            <Badge variant="outline" size="sm" className="font-mono">
-              {post.branch}
-            </Badge>
+            {post.branch !== null && post.branch.length > 0 ? (
+              <Badge variant="outline" size="sm" className="font-mono">
+                {post.branch}
+              </Badge>
+            ) : null}
           </span>
         </TeamCard>
       );
@@ -95,6 +140,7 @@ function PostBody({ post }: { post: ChannelPost }) {
               {post.title}
             </span>
           }
+          deepLink={<CardDeepLink to="/team/board" label="Board" />}
           liveState={<span className="capitalize">{post.taskState.replace("-", " ")}</span>}
         />
       );
@@ -163,10 +209,12 @@ function GapRow({ gap }: { gap: ChannelGap }) {
 function PostRow({
   post,
   data,
+  environmentId,
   onPromote,
 }: {
   post: ChannelPost;
   data: ChannelData;
+  environmentId: string | null;
   onPromote?: (post: ChannelPost) => void;
 }) {
   const author = data.memberById.get(post.authorId);
@@ -202,7 +250,7 @@ function PostRow({
         ) : null}
       </div>
       <div className="ps-8">
-        <PostBody post={post} />
+        <PostBody post={post} environmentId={environmentId} />
       </div>
     </div>
   );
@@ -336,9 +384,9 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
       item.kind === "gap" ? (
         <GapRow gap={item} />
       ) : (
-        <PostRow post={item} data={data} onPromote={openPromote} />
+        <PostRow post={item} data={data} environmentId={environmentId} onPromote={openPromote} />
       ),
-    [data, openPromote],
+    [data, environmentId, openPromote],
   );
 
   // Chat-shaped layout: the post list is its own bottom-anchored scroller

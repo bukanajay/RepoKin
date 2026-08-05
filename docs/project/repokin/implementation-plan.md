@@ -326,6 +326,41 @@ strictly trust-gated (PRD §6.6).
 
 ---
 
+## 4c. R5 — Close the R2 product loop
+
+**Goal:** the end-to-end workplace loop feels complete without a second
+environment: terminal reports are reviewable, defaults exist, and Team is
+reachable from the palette.
+**Estimate:** short slice after R4.
+
+### R5.1 Terminal reports (FR-13.5)
+
+- On delegated thread settle: move task → `in-review` (agent never self-dones,
+  FR-18.3).
+- Post one structured card: `diff-card` when checkpoint file stats exist
+  (additions/deletions/files + optional assistant summary in title), else
+  `task-card`.
+- Channel cards deep-link to the board or thread (Open / Board).
+
+### R5.2 Default `#team` bootstrap (FR-12.1)
+
+- One-action standup auto-declares `#team` when missing so the R3 gate path
+  does not fail on a fresh project.
+
+### R5.3 Command palette team verbs (§7.2)
+
+- Palette entries for home, channels, `#team`, board, people, activity, work
+  map, pulse, decisions, inbox.
+
+### R5.4 Exit gates (product-loop)
+
+- [ ] Delegation settle lands a reviewable card and leaves the task in
+      `in-review` for a human to drag to Done.
+- [ ] Standup posts without pre-declaring `#team`.
+- [ ] ⌘K reaches every primary Team surface.
+
+---
+
 ## 5. Mock-removal tracker
 
 The §0 contract, in table form. R1 creates every row; later milestones only

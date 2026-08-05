@@ -67,7 +67,7 @@ function StandupCard() {
                 if (result._tag === "Success") {
                   setStatus(`Posted “${result.value.title}” to #${result.value.channelId}.`);
                 } else {
-                  setStatus("Could not post standup. Declare #team first if it is missing.");
+                  setStatus("Could not post standup. Check roster / local human identity.");
                 }
               })
               .finally(() => setPending(false));
