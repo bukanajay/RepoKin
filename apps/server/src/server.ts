@@ -110,6 +110,7 @@ import { TeamMentionDelegationReactorLive } from "./team/Layers/TeamMentionDeleg
 import { TeamInboxDeliveryReactorLive } from "./team/Layers/TeamInboxDeliveryReactor.ts";
 import { TeamRelayMessagingLive } from "./team/Layers/TeamRelayMessaging.ts";
 import { TeamWorkSignalsLive } from "./team/Layers/TeamWorkSignals.ts";
+import { TeamDutyReactorLive } from "./team/Layers/TeamDutyReactor.ts";
 import * as TeamFileStoreLayer from "./team/Layers/TeamFileStore.ts";
 import {
   clearPersistedServerRuntimeState,
@@ -240,6 +241,8 @@ const ReactorLayerLive = Layer.empty.pipe(
     ),
   ),
   Layer.provideMerge(TeamRelayMessagingLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
+  // R4 duties: home-env schedule poll; TeamEngine + settings from outer graph.
+  Layer.provideMerge(TeamDutyReactorLive.pipe(Layer.provide(TeamFileStoreLayer.layer))),
   Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
   Layer.provideMerge(RuntimeReceiptBusLive),
 );

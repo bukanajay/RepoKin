@@ -1,8 +1,8 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { ProviderInteractionMode, RuntimeMode, ServerProviderModel } from "@t3tools/contracts";
 import { isProviderAvailable, ProviderDriverKind } from "@t3tools/contracts";
-import type { AgentProfile } from "@t3tools/contracts/team";
-import { SaveIcon } from "lucide-react";
+import type { AgentDuty, AgentProfile } from "@t3tools/contracts/team";
+import { PlusIcon, SaveIcon, TrashIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
@@ -96,6 +96,7 @@ export function AgentEditorDialog({ open, onOpenChange, agent, onSaved }: AgentE
   const [interactionMode, setInteractionMode] = useState<ProviderInteractionMode>("default");
   const [driver, setDriver] = useState("");
   const [model, setModel] = useState("");
+  const [duties, setDuties] = useState<AgentDuty[]>([]);
   const [status, setStatus] = useState<string | null>(null);
 
   const serverProviders = useAtomValue(primaryServerProvidersAtom);
@@ -133,6 +134,7 @@ export function AgentEditorDialog({ open, onOpenChange, agent, onSaved }: AgentE
       setInteractionMode("default");
       setDriver("");
       setModel("");
+      setDuties([]);
     } else {
       setAgentId(agent.id);
       setName(agent.name);
@@ -144,6 +146,7 @@ export function AgentEditorDialog({ open, onOpenChange, agent, onSaved }: AgentE
       setInteractionMode(agent.character.interactionMode ?? "default");
       setDriver(agent.character.provider?.driver ?? "");
       setModel(agent.character.provider?.model ?? "");
+      setDuties([...(agent.duties ?? [])]);
     }
     setStatus(null);
   }, [agent, open]);
@@ -179,6 +182,14 @@ export function AgentEditorDialog({ open, onOpenChange, agent, onSaved }: AgentE
               },
             }),
       },
+      duties: duties
+        .filter((duty) => duty.id.trim().length > 0 && duty.goal.trim().length > 0)
+        .map((duty) => ({
+          ...duty,
+          id: duty.id.trim(),
+          goal: duty.goal.trim(),
+          reportChannelId: duty.reportChannelId.trim() || "team",
+        })),
     });
     if (ok) {
       onSaved?.();
@@ -186,6 +197,29 @@ export function AgentEditorDialog({ open, onOpenChange, agent, onSaved }: AgentE
       return;
     }
     setStatus("Save failed. Check the agent id, owner id, and persona.");
+  };
+
+  const addDuty = () => {
+    setDuties((current) => [
+      ...current,
+      {
+        id: `duty-${current.length + 1}`,
+        goal: "",
+        schedule: { kind: "daily", hourUtc: 9, minuteUtc: 0 },
+        reportChannelId: "team",
+        enabled: true,
+      },
+    ]);
+  };
+
+  const updateDuty = (index: number, patch: Partial<AgentDuty>) => {
+    setDuties((current) =>
+      current.map((duty, dutyIndex) => (dutyIndex === index ? { ...duty, ...patch } : duty)),
+    );
+  };
+
+  const removeDuty = (index: number) => {
+    setDuties((current) => current.filter((_, dutyIndex) => dutyIndex !== index));
   };
 
   return (
@@ -371,6 +405,147 @@ export function AgentEditorDialog({ open, onOpenChange, agent, onSaved }: AgentE
               rows={4}
             />
           </Field>
+
+          <div className="sm:col-span-2 flex flex-col gap-2 rounded-xl border border-border/70 p-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Duties (R4)
+              </span>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                className="ms-auto"
+                onClick={addDuty}
+              >
+                <PlusIcon className="size-3.5" />
+                Add duty
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Scheduled work on the home environment. New or changed duties stay inert until you
+              confirm them on the agent profile.
+            </p>
+            {duties.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No duties yet.</p>
+            ) : (
+              duties.map((duty, index) => (
+                <div
+                  key={`${duty.id}-${index}`}
+                  className="grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-2 sm:grid-cols-2"
+                >
+                  <Field label="Duty id">
+                    <Input
+                      nativeInput
+                      value={duty.id}
+                      onChange={(event) => updateDuty(index, { id: event.currentTarget.value })}
+                      placeholder="nightly-review"
+                    />
+                  </Field>
+                  <Field label="Report channel">
+                    <Input
+                      nativeInput
+                      value={duty.reportChannelId}
+                      onChange={(event) =>
+                        updateDuty(index, { reportChannelId: event.currentTarget.value })
+                      }
+                      placeholder="team"
+                    />
+                  </Field>
+                  <Field label="Goal" className="sm:col-span-2">
+                    <Textarea
+                      value={duty.goal}
+                      onChange={(event) => updateDuty(index, { goal: event.currentTarget.value })}
+                      rows={2}
+                      placeholder="What should this agent do each run?"
+                    />
+                  </Field>
+                  <Field label="Schedule">
+                    <Select
+                      value={duty.schedule.kind}
+                      onValueChange={(value) => {
+                        if (value === "interval") {
+                          updateDuty(index, {
+                            schedule: { kind: "interval", everyMinutes: 60 },
+                          });
+                        } else if (value === "daily") {
+                          updateDuty(index, {
+                            schedule: { kind: "daily", hourUtc: 9, minuteUtc: 0 },
+                          });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full" aria-label="Duty schedule kind">
+                        <SelectValue>
+                          {duty.schedule.kind === "daily" ? "Daily (UTC)" : "Interval"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectPopup align="start">
+                        <SelectItem hideIndicator value="daily">
+                          Daily (UTC)
+                        </SelectItem>
+                        <SelectItem hideIndicator value="interval">
+                          Interval
+                        </SelectItem>
+                      </SelectPopup>
+                    </Select>
+                  </Field>
+                  {duty.schedule.kind === "daily" ? (
+                    <Field label="Hour UTC">
+                      <Input
+                        nativeInput
+                        type="number"
+                        min={0}
+                        max={23}
+                        value={String(duty.schedule.hourUtc)}
+                        onChange={(event) =>
+                          updateDuty(index, {
+                            schedule: {
+                              kind: "daily",
+                              hourUtc: Math.min(
+                                23,
+                                Math.max(0, Number(event.currentTarget.value) || 0),
+                              ),
+                              minuteUtc:
+                                duty.schedule.kind === "daily" ? duty.schedule.minuteUtc : 0,
+                            },
+                          })
+                        }
+                      />
+                    </Field>
+                  ) : (
+                    <Field label="Every N minutes">
+                      <Input
+                        nativeInput
+                        type="number"
+                        min={5}
+                        value={String(duty.schedule.everyMinutes)}
+                        onChange={(event) =>
+                          updateDuty(index, {
+                            schedule: {
+                              kind: "interval",
+                              everyMinutes: Math.max(5, Number(event.currentTarget.value) || 5),
+                            },
+                          })
+                        }
+                      />
+                    </Field>
+                  )}
+                  <div className="sm:col-span-2 flex justify-end">
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => removeDuty(index)}
+                    >
+                      <TrashIcon className="size-3.5" />
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         <AlertDialogFooter className="shrink-0 sm:items-center sm:justify-between">

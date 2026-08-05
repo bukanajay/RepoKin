@@ -478,6 +478,18 @@ export const RepoKinTrustSettings = Schema.Struct({
    * work signals (local work map still renders remote teammates' signals).
    */
   workLocationSharing: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  /**
+   * Confirmed duty content hashes (FR-16.4). Keyed by
+   * workspaceRoot → agentId → dutyId → hash. A duty is inert on this
+   * environment until its hash is recorded here.
+   */
+  confirmedDuties: Schema.Record(
+    TrimmedNonEmptyString,
+    Schema.Record(
+      TrimmedNonEmptyString,
+      Schema.Record(TrimmedNonEmptyString, TrimmedNonEmptyString),
+    ),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 }).annotate({
   description: "Environment-local RepoKin trust decisions keyed by project/workspace and agent id.",
 });
@@ -696,6 +708,15 @@ export const ServerSettingsPatch = Schema.Struct({
         ),
       ),
       workLocationSharing: Schema.optionalKey(Schema.Boolean),
+      confirmedDuties: Schema.optionalKey(
+        Schema.Record(
+          TrimmedNonEmptyString,
+          Schema.Record(
+            TrimmedNonEmptyString,
+            Schema.Record(TrimmedNonEmptyString, TrimmedNonEmptyString),
+          ),
+        ),
+      ),
     }),
   ),
 });

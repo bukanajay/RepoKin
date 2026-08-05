@@ -362,6 +362,43 @@ export const HumanProfile = preserveUnknownFields(
 );
 export type HumanProfile = typeof HumanProfile.Type;
 
+/**
+ * R4 agent duty (FR-16). Repo-sourced T0 schedule on the agent profile.
+ * Inert on a home environment until the owner confirms the duty content hash
+ * (FR-16.4). Runs only on the home environment under the agent's mechanical
+ * character and trust (FR-16.2).
+ */
+export const AgentDutySchedule = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("interval"),
+    everyMinutes: Schema.Int.check(Schema.isBetween({ minimum: 5, maximum: 10_080 })),
+  }).annotate({ description: "Run every N minutes (min 5, max 7 days)." }),
+  Schema.Struct({
+    kind: Schema.Literal("daily"),
+    hourUtc: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 23 })),
+    minuteUtc: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 59 })),
+  }).annotate({ description: "Run once per day at the given UTC time." }),
+]).annotate({ description: "When a duty should fire." });
+export type AgentDutySchedule = typeof AgentDutySchedule.Type;
+
+export const AgentDuty = Schema.Struct({
+  id: trimmedNonEmpty({ description: "Stable duty id / slug within the agent profile." }),
+  goal: trimmedNonEmpty(
+    { description: "What the agent should do each run (becomes the thread prompt)." },
+    20_000,
+  ),
+  schedule: AgentDutySchedule,
+  reportChannelId: trimmedNonEmpty({
+    description: "Channel slug that receives the terminal duty report card (FR-16.3).",
+  }),
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))).annotate({
+    description: "Profile-level enable; still requires home-env confirmation (FR-16.4).",
+  }),
+}).annotate({
+  description: "One scheduled recurring duty declared on an agent (R4 / FR-16).",
+});
+export type AgentDuty = typeof AgentDuty.Type;
+
 export const AgentProfile = preserveUnknownFields(
   Schema.Struct({
     $schema: Schema.optionalKey(
@@ -393,6 +430,11 @@ export const AgentProfile = preserveUnknownFields(
     character: Character.annotate({
       description: "Expressive and mechanical character definition for this agent.",
     }),
+    duties: Schema.Array(AgentDuty)
+      .pipe(Schema.withDecodingDefault(Effect.succeed([] as AgentDuty[] as readonly AgentDuty[])))
+      .annotate({
+        description: "Scheduled duties for this agent (R4). Empty by default.",
+      }),
     createdAt: Schema.optionalKey(IsoDateTime),
     updatedAt: Schema.optionalKey(IsoDateTime),
   }).annotate({

@@ -1,5 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowLeftIcon, ArrowRightIcon, PencilIcon, ShieldCheckIcon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ClockIcon,
+  PencilIcon,
+  ShieldCheckIcon,
+} from "lucide-react";
 import { useState } from "react";
 
 import { formatRelativeTimeLabel } from "../../timestampFormat";
@@ -37,7 +43,15 @@ function ProfileList({ label, values }: { label: string; values: readonly string
 
 export function TeamMemberProfileScreen({ memberId }: { memberId: string }) {
   const data = useTeamMemberProfileData(memberId);
-  const { canWrite, isTrusted, trustMechanics, revokeTrust } = useTeamRosterActions();
+  const {
+    canWrite,
+    isTrusted,
+    trustMechanics,
+    revokeTrust,
+    confirmDuty,
+    isDutyConfirmed,
+    revokeDutyConfirmation,
+  } = useTeamRosterActions();
   const [editorOpen, setEditorOpen] = useState(false);
 
   if (data.status !== "ready" || data.profile === null) {
@@ -177,6 +191,67 @@ export function TeamMemberProfileScreen({ memberId }: { memberId: string }) {
           <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
             {data.instructionPreview.instructions}
           </pre>
+        </section>
+      ) : null}
+
+      {/* R4 duties — confirm on home environment (FR-16.4) */}
+      {profile.type === "agent" && (profile.duties?.length ?? 0) > 0 ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+            <ClockIcon className="size-4 text-muted-foreground" />
+            Duties
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Confirmed duties may run on this environment when it is the agent&apos;s home. Changing
+            a duty requires re-confirmation.
+          </p>
+          <div className="flex flex-col divide-y rounded-2xl border">
+            {profile.duties.map((duty) => {
+              const confirmed = isDutyConfirmed(profile.id, duty);
+              return (
+                <div
+                  key={duty.id}
+                  className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-medium text-foreground">
+                        {duty.id}
+                      </span>
+                      <Badge variant={confirmed ? "success" : "warning"} size="sm">
+                        {confirmed ? "Confirmed" : "Inert"}
+                      </Badge>
+                      {duty.enabled === false ? (
+                        <Badge variant="outline" size="sm">
+                          Disabled
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="truncate text-sm text-muted-foreground">{duty.goal}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {duty.schedule.kind === "daily"
+                        ? `Daily at ${String(duty.schedule.hourUtc).padStart(2, "0")}:${String(duty.schedule.minuteUtc).padStart(2, "0")} UTC`
+                        : `Every ${duty.schedule.everyMinutes} min`}{" "}
+                      · reports to #{duty.reportChannelId}
+                    </p>
+                  </div>
+                  {canWrite ? (
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() =>
+                        confirmed
+                          ? revokeDutyConfirmation(profile.id, duty.id)
+                          : confirmDuty(profile.id, duty)
+                      }
+                    >
+                      {confirmed ? "Revoke" : "Confirm duty"}
+                    </Button>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </section>
       ) : null}
 

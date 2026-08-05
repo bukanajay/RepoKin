@@ -285,6 +285,39 @@ in the seam.
 
 ---
 
+## 4b. R4 — Duties (workplace maturity)
+
+**Goal:** scheduled agent work that is repo-declared, home-env only, and
+strictly trust-gated (PRD §6.6).
+**Estimate:** first slice ~1 week.
+
+### R4.1 Contracts
+
+- `AgentDuty` + schedule (`interval` | `daily`) on `AgentProfile.duties`
+  (T0, decoding default `[]`).
+- Env-local confirmation store: `settings.repokin.confirmedDuties`
+  (workspace → agent → duty → content hash). FR-16.4.
+
+### R4.2 Runner
+
+- `TeamDutyReactor`: home environment only; confirmed + schedule match →
+  post one terminal event card to the report channel (FR-16.3 / FR-12.6).
+  Missed windows post an explicit miss event (FR-16.2). Full thread start
+  for duty goals reuses delegation plumbing as a follow-up.
+
+### R4.3 UI
+
+- Agent editor: declare / edit / remove duties.
+- Member profile: confirm / revoke duties on this environment.
+
+### R4.4 Multi-env verification (simulated)
+
+- `multiEnv.simulation.test.ts`: two logical envs exchange signed channel
+  posts (senderSeq + gaps) and work-signal snapshots (overlap projection)
+  without two physical machines.
+
+---
+
 ## 5. Mock-removal tracker
 
 The §0 contract, in table form. R1 creates every row; later milestones only
