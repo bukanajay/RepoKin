@@ -135,6 +135,7 @@ import {
 } from "./team/decisions.ts";
 import { readRepoPulse } from "./team/repoPulse.ts";
 import { postStandupDigest } from "./team/standUp.ts";
+import { runDutyNow } from "./team/runDutyNow.ts";
 import { updateTeamFile } from "./team/TeamFileUpdate.ts";
 import { TeamFileStore as TeamFileStoreService } from "./team/Services/TeamFileStore.ts";
 import { TeamPromoteDecisionError } from "@t3tools/contracts/team";
@@ -2106,6 +2107,10 @@ const makeWsRpcLayer = (
             }),
             { "rpc.aggregate": "team" },
           ),
+        [WS_METHODS.teamRunDutyNow]: (input) =>
+          observeRpcEffect(WS_METHODS.teamRunDutyNow, runDutyNow(input), {
+            "rpc.aggregate": "team",
+          }),
         [WS_METHODS.teamHeartbeatHumanPresence]: () =>
           observeRpcEffect(
             WS_METHODS.teamHeartbeatHumanPresence,

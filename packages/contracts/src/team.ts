@@ -430,11 +430,9 @@ export const AgentProfile = preserveUnknownFields(
     character: Character.annotate({
       description: "Expressive and mechanical character definition for this agent.",
     }),
-    duties: Schema.Array(AgentDuty)
-      .pipe(Schema.withDecodingDefault(Effect.succeed([] as AgentDuty[] as readonly AgentDuty[])))
-      .annotate({
-        description: "Scheduled duties for this agent (R4). Empty by default.",
-      }),
+    duties: Schema.optionalKey(Schema.Array(AgentDuty)).annotate({
+      description: "Scheduled duties for this agent (R4). Omit or empty when none.",
+    }),
     createdAt: Schema.optionalKey(IsoDateTime),
     updatedAt: Schema.optionalKey(IsoDateTime),
   }).annotate({
@@ -2081,6 +2079,32 @@ export type TeamPromoteDecisionResult = typeof TeamPromoteDecisionResult.Type;
 
 export class TeamPromoteDecisionError extends Schema.TaggedErrorClass<TeamPromoteDecisionError>()(
   "TeamPromoteDecisionError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+/** Force-fire a confirmed duty on this environment (smoke / manual override). */
+export const TeamRunDutyNowInput = Schema.Struct({
+  projectId: ProjectId,
+  cwd: TrimmedNonEmptyString,
+  agentId: MemberId,
+  dutyId: trimmedNonEmpty({ description: "Duty id on the agent profile." }),
+}).annotate({
+  description: "Run a confirmed duty immediately on the home environment (R4 smoke).",
+});
+export type TeamRunDutyNowInput = typeof TeamRunDutyNowInput.Type;
+
+export const TeamRunDutyNowResult = Schema.Struct({
+  taskId: TaskId,
+  threadId: ThreadId,
+  dutyId: TrimmedNonEmptyString,
+}).annotate({ description: "Duty run started: board task + agent thread." });
+export type TeamRunDutyNowResult = typeof TeamRunDutyNowResult.Type;
+
+export class TeamRunDutyNowError extends Schema.TaggedErrorClass<TeamRunDutyNowError>()(
+  "TeamRunDutyNowError",
   {
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),

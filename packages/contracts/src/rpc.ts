@@ -84,6 +84,9 @@ import {
   TeamListDecisionsResult,
   TeamRepoPulseReadInput,
   TeamRepoPulseReadResult,
+  TeamRunDutyNowError,
+  TeamRunDutyNowInput,
+  TeamRunDutyNowResult,
 } from "./team.ts";
 import { KeybindingsConfigError } from "./keybindings.ts";
 import {
@@ -247,6 +250,7 @@ export const WS_METHODS = {
   teamPromoteDecision: "team.promoteDecision",
   teamListDecisions: "team.listDecisions",
   teamReadRepoPulse: "team.readRepoPulse",
+  teamRunDutyNow: "team.runDutyNow",
   teamDispatchCommand: "team.dispatchCommand",
   teamHeartbeatHumanPresence: "team.heartbeatHumanPresence",
 
@@ -690,6 +694,12 @@ export const WsTeamReadRepoPulseRpc = Rpc.make(WS_METHODS.teamReadRepoPulse, {
   error: EnvironmentAuthorizationError,
 });
 
+export const WsTeamRunDutyNowRpc = Rpc.make(WS_METHODS.teamRunDutyNow, {
+  payload: TeamRunDutyNowInput,
+  success: TeamRunDutyNowResult,
+  error: Schema.Union([TeamRunDutyNowError, EnvironmentAuthorizationError]),
+});
+
 export const WsTeamDispatchCommandRpc = Rpc.make(WS_METHODS.teamDispatchCommand, {
   payload: TeamCommand,
   success: TeamCommandDispatchResult,
@@ -978,6 +988,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsTeamPromoteDecisionRpc,
   WsTeamListDecisionsRpc,
   WsTeamReadRepoPulseRpc,
+  WsTeamRunDutyNowRpc,
   WsTeamDispatchCommandRpc,
   WsTeamHeartbeatHumanPresenceRpc,
   WsTerminalOpenRpc,

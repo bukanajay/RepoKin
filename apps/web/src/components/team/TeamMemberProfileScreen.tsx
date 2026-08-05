@@ -1,14 +1,18 @@
 import { Link } from "@tanstack/react-router";
+import { MemberId } from "@t3tools/contracts/team";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ClockIcon,
   PencilIcon,
+  PlayIcon,
   ShieldCheckIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { formatRelativeTimeLabel } from "../../timestampFormat";
+import { teamEnvironment } from "../../state/team";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
@@ -17,6 +21,7 @@ import { AgentEditorDialog } from "./AgentEditorDialog";
 import { MemberAvatar } from "./MemberAvatar";
 import { PresenceDot, presenceStateLabel } from "./PresenceDot";
 import { TeamScreenShell } from "./TeamScreenShell";
+import { useTeamScope } from "./teamScope";
 import { useTeamMemberProfileData } from "./useTeamMemberProfileData";
 import { useTeamRosterActions } from "./useTeamRosterActions";
 
@@ -43,6 +48,7 @@ function ProfileList({ label, values }: { label: string; values: readonly string
 
 export function TeamMemberProfileScreen({ memberId }: { memberId: string }) {
   const data = useTeamMemberProfileData(memberId);
+  const { environmentId, project } = useTeamScope();
   const {
     canWrite,
     isTrusted,
@@ -52,7 +58,39 @@ export function TeamMemberProfileScreen({ memberId }: { memberId: string }) {
     isDutyConfirmed,
     revokeDutyConfirmation,
   } = useTeamRosterActions();
+  const runDutyNow = useAtomCommand(teamEnvironment.runDutyNow, "run duty now");
   const [editorOpen, setEditorOpen] = useState(false);
+  const [dutyRunStatus, setDutyRunStatus] = useState<string | null>(null);
+  const [runningDutyId, setRunningDutyId] = useState<string | null>(null);
+
+  const handleRunDutyNow = useCallback(
+    (dutyId: string) => {
+      if (environmentId === null || project === null) return;
+      setRunningDutyId(dutyId);
+      setDutyRunStatus(`Starting duty \`${dutyId}\`…`);
+      void runDutyNow({
+        environmentId,
+        input: {
+          projectId: project.id,
+          cwd: project.workspaceRoot,
+          agentId: MemberId.make(memberId),
+          dutyId,
+        },
+      }).then((result) => {
+        setRunningDutyId(null);
+        if (result._tag === "Success") {
+          setDutyRunStatus(
+            `Duty \`${result.value.dutyId}\` started · task ${result.value.taskId} · thread ${result.value.threadId}`,
+          );
+        } else {
+          setDutyRunStatus(
+            `Could not run duty \`${dutyId}\`. Confirm it on the home environment and check provider trust.`,
+          );
+        }
+      });
+    },
+    [environmentId, memberId, project, runDutyNow],
+  );
 
   if (data.status !== "ready" || data.profile === null) {
     return (
@@ -203,27 +241,42 @@ export function TeamMemberProfileScreen({ memberId }: { memberId: string }) {
           </h2>
           <p className="text-xs text-muted-foreground">
             Confirmed duties may run on this environment when it is the agent&apos;s home. Changing
-            a duty requires re-confirmation.
+            a duty requires re-confirmation. Use <strong>Run now</strong> to force-fire a confirmed
+            duty for smoke testing.
           </p>
+          {dutyRunStatus !== null ? (
+            <p className="rounded-xl border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              {dutyRunStatus}
+            </p>
+          ) : null}
           <div className="flex flex-col divide-y rounded-2xl border">
-            {profile.duties.map((duty) => {
+            {(profile.duties ?? []).map((duty) => {
               const confirmed = isDutyConfirmed(profile.id, duty);
+              const disabled = duty.enabled === false;
+              const canRun = canWrite && confirmed && !disabled;
+              const isRunning = runningDutyId === duty.id;
               return (
                 <div
                   key={duty.id}
                   className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs font-medium text-foreground">
                         {duty.id}
                       </span>
                       <Badge variant={confirmed ? "success" : "warning"} size="sm">
                         {confirmed ? "Confirmed" : "Inert"}
                       </Badge>
-                      {duty.enabled === false ? (
+                      {disabled ? (
                         <Badge variant="outline" size="sm">
                           Disabled
+                        </Badge>
+                      ) : null}
+                      {isRunning ? (
+                        <Badge variant="outline" size="sm" className="gap-1">
+                          <Spinner className="size-3" />
+                          Starting
                         </Badge>
                       ) : null}
                     </div>
@@ -236,17 +289,40 @@ export function TeamMemberProfileScreen({ memberId }: { memberId: string }) {
                     </p>
                   </div>
                   {canWrite ? (
-                    <Button
-                      size="xs"
-                      variant="outline"
-                      onClick={() =>
-                        confirmed
-                          ? revokeDutyConfirmation(profile.id, duty.id)
-                          : confirmDuty(profile.id, duty)
-                      }
-                    >
-                      {confirmed ? "Revoke" : "Confirm duty"}
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={!canRun || runningDutyId !== null}
+                        title={
+                          !confirmed
+                            ? "Confirm this duty before running"
+                            : disabled
+                              ? "Duty is disabled on the profile"
+                              : "Force-fire this duty now (home environment only)"
+                        }
+                        onClick={() => handleRunDutyNow(duty.id)}
+                      >
+                        {isRunning ? (
+                          <Spinner className="size-3.5" />
+                        ) : (
+                          <PlayIcon className="size-3.5" />
+                        )}
+                        Run now
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={runningDutyId !== null}
+                        onClick={() =>
+                          confirmed
+                            ? revokeDutyConfirmation(profile.id, duty.id)
+                            : confirmDuty(profile.id, duty)
+                        }
+                      >
+                        {confirmed ? "Revoke" : "Confirm duty"}
+                      </Button>
+                    </div>
                   ) : null}
                 </div>
               );

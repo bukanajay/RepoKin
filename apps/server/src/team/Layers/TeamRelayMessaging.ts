@@ -23,6 +23,7 @@ import { getOrCreateEnvironmentKeyPairFromSecretStore } from "../../cloud/enviro
 import { ServerEnvironment } from "../../environment/ServerEnvironment.ts";
 import { ProjectionSnapshotQuery } from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { makeTeamRelayClient, readTeamRelayConfig } from "../relayClient.ts";
+import { collectRemoteEnvironments } from "../remoteEnvironments.ts";
 import {
   signTeamDeliveryReceiptEnvelope,
   signTeamEventEnvelope,
@@ -93,7 +94,7 @@ function replicatedEventOccurredAt(event: ReplicatedTeamEvent): string {
   }
 }
 
-export { collectRemoteEnvironments } from "../remoteEnvironments.ts";
+export { collectRemoteEnvironments };
 
 function isSignedEventEnvelope(envelope: TeamRelayEnvelope): envelope is TeamSignedEventEnvelope {
   return "payload" in envelope && "event" in envelope.payload;

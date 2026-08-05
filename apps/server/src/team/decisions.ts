@@ -125,7 +125,7 @@ export const writeDecisionRecord = Effect.fn("TeamDecisions.write")(function* (i
   yield* fileSystem
     .makeDirectory(dir, { recursive: true })
     .pipe(Effect.orElseSucceed(() => undefined));
-  yield* writeFileStringAtomically({ filePath: absolute, content: input.markdown });
+  yield* writeFileStringAtomically({ filePath: absolute, contents: input.markdown });
 
   let committed = false;
   if (input.commit === true) {

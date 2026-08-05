@@ -73,6 +73,10 @@ export function createTeamEnvironmentAtoms<R, E>(
       tag: WS_METHODS.teamReadRepoPulse,
       staleTimeMs: 30_000,
     }),
+    runDutyNow: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:team:run-duty-now",
+      tag: WS_METHODS.teamRunDutyNow,
+    }),
     dispatchCommand: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:team:dispatch-command",
       tag: WS_METHODS.teamDispatchCommand,

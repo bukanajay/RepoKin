@@ -258,7 +258,11 @@ it.effect("work-signal snapshot fans out, verifies, and projects overlaps", () =
       })),
     );
     const web = projection.find((node) => node.path === "apps/web/src");
-    expect(web?.memberIds.sort()).toEqual(["agent_aria", "human_julius", "human_maya"]);
+    expect([...(web?.memberIds ?? [])].toSorted()).toEqual([
+      "agent_aria",
+      "human_julius",
+      "human_maya",
+    ]);
 
     const overlaps = detectOverlaps(
       merged.map((signal) => ({

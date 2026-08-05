@@ -28,8 +28,13 @@ import {
   TeamFile,
   TeamFileUpdateInput,
   TeamPostContent,
+  TeamPromoteDecisionInput,
+  TeamPromoteDecisionResult,
+  TeamRepoPulseReadResult,
   TeamRosterSyncResult,
   TeamRosterReadModel,
+  TeamRunDutyNowInput,
+  TeamRunDutyNowResult,
   TeamSignedMessageEnvelope,
   TeamSignedMessageProofPayload,
   TeamTaskCommand,
@@ -832,5 +837,82 @@ describe("R2 events and read models", () => {
     });
     expect(board.tasks[0]?.state).toBe("in-progress");
     expect(board.tasks[0]?.refs?.channelId).toBe("team");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R4 — decisions + pulse + duty run-now
+// ---------------------------------------------------------------------------
+
+const decodePromoteDecisionInput = Schema.decodeUnknownSync(TeamPromoteDecisionInput);
+const decodePromoteDecisionResult = Schema.decodeUnknownSync(TeamPromoteDecisionResult);
+const decodeRunDutyNowInput = Schema.decodeUnknownSync(TeamRunDutyNowInput);
+const decodeRunDutyNowResult = Schema.decodeUnknownSync(TeamRunDutyNowResult);
+const decodeRepoPulseResult = Schema.decodeUnknownSync(TeamRepoPulseReadResult);
+
+describe("R4 promote decision + run duty now", () => {
+  it("decodes promote input with optional commit flag", () => {
+    const input = decodePromoteDecisionInput({
+      projectId: "project-1",
+      cwd: "/repo",
+      title: "Ship duties as threads",
+      body: "Duty runs create board tasks and agent threads.",
+      origin: { kind: "post", postId: "post_1", channelId: "team" },
+      promotedById: "human_ajay",
+      commit: true,
+    });
+    expect(input.commit).toBe(true);
+    expect(input.origin.kind).toBe("post");
+  });
+
+  it("decodes promote result committed flag", () => {
+    const result = decodePromoteDecisionResult({
+      record: {
+        id: "ship-duties-as-threads",
+        title: "Ship duties as threads",
+        body: "Duty runs create board tasks.",
+        origin: { kind: "post", postId: "post_1", channelId: "team" },
+        promotedById: "human_ajay",
+        promotedAt: "2026-08-05T12:00:00.000Z",
+        path: ".repokin/decisions/ship-duties-as-threads.md",
+      },
+      committed: true,
+    });
+    expect(result.committed).toBe(true);
+    expect(result.record.path).toContain("decisions/");
+  });
+
+  it("decodes run-duty-now input and result", () => {
+    const input = decodeRunDutyNowInput({
+      projectId: "project-1",
+      cwd: "/repo",
+      agentId: "agent_aria",
+      dutyId: "nightly-review",
+    });
+    expect(input.dutyId).toBe("nightly-review");
+    expect(input.agentId).toBe("agent_aria");
+
+    const result = decodeRunDutyNowResult({
+      taskId: "task-duty-nightly-review-now",
+      threadId: "thread-duty-task-duty-nightly-review-now",
+      dutyId: "nightly-review",
+    });
+    expect(result.taskId).toContain("duty");
+    expect(result.threadId).toContain("thread");
+  });
+
+  it("decodes repo pulse read result", () => {
+    const pulse = decodeRepoPulseResult({
+      since: "2026-07-06T00:00:00.000Z",
+      until: "2026-08-05T00:00:00.000Z",
+      humans: [{ id: "human_ajay", kind: "human", commits: 4, additions: 40, deletions: 2 }],
+      agents: [{ id: "agent_aria", kind: "agent", commits: 2, additions: 20, deletions: 1 }],
+      unknown: [],
+      hotspots: [{ path: "apps/web", touches: 3, humanTouches: 2, agentTouches: 1 }],
+      totalCommits: 6,
+    });
+    expect(pulse.totalCommits).toBe(6);
+    expect(pulse.humans[0]?.kind).toBe("human");
+    expect(pulse.hotspots[0]?.path).toBe("apps/web");
   });
 });

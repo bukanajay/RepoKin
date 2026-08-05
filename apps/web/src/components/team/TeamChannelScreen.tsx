@@ -1,11 +1,12 @@
 import { MemberId, PostId, ChannelId as TeamChannelId } from "@t3tools/contracts/team";
-import { useCallback, useState } from "react";
+import { useCallback, useId, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { LegendList } from "@legendapp/list/react";
 import {
   ArrowLeftIcon,
   FileDiffIcon,
   FileTextIcon,
+  GitCommitIcon,
   KanbanSquareIcon,
   MessageSquareIcon,
   NewspaperIcon,
@@ -18,7 +19,18 @@ import { teamEnvironment } from "../../state/team";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "../ui/dialog";
 import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 import { Spinner } from "../ui/spinner";
 import { MemberChip } from "./MemberChip";
 import { TeamCard } from "./TeamCard";
@@ -196,16 +208,36 @@ function PostRow({
   );
 }
 
+type PromoteDraft = {
+  post: ChannelPost & { kind: "text" };
+  title: string;
+  commit: boolean;
+};
+
+function defaultPromoteTitle(body: string): string {
+  return (
+    body
+      .split("\n")
+      .find((line) => line.trim().length > 0)
+      ?.trim()
+      .slice(0, 80) ?? "Decision"
+  );
+}
+
 export function TeamChannelScreen({ channelId }: { channelId: string }) {
   const data = useChannelData(channelId);
   const { environmentId, project } = useTeamScope();
   const promoteDecision = useAtomCommand(teamEnvironment.promoteDecision, "promote team decision");
   const [draft, setDraft] = useState("");
   const [promoteStatus, setPromoteStatus] = useState<string | null>(null);
+  const [promoteDraft, setPromoteDraft] = useState<PromoteDraft | null>(null);
+  const [promoteBusy, setPromoteBusy] = useState(false);
+  const promoteFormId = useId();
 
-  const handlePromote = useCallback(
+  const openPromote = useCallback(
     (post: ChannelPost) => {
-      if (environmentId === null || project === null || post.kind !== "text") return;
+      if (post.kind !== "text") return;
+      if (environmentId === null || project === null) return;
       const actorId = [...data.memberById.values()].find(
         (member) => member.memberType === "human",
       )?.memberId;
@@ -213,37 +245,56 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
         setPromoteStatus("No local human identity to attribute the decision.");
         return;
       }
-      const title =
-        post.body
-          .split("\n")
-          .find((line) => line.trim().length > 0)
-          ?.trim()
-          .slice(0, 80) ?? "Decision";
-      void promoteDecision({
-        environmentId,
-        input: {
-          projectId: project.id,
-          cwd: project.workspaceRoot,
-          title,
-          body: post.body,
-          origin: {
-            kind: "post",
-            postId: PostId.make(post.postId),
-            channelId: TeamChannelId.make(post.channelId),
-          },
-          promotedById: MemberId.make(actorId),
-          commit: false,
-        },
-      }).then((result) => {
-        if (result._tag === "Success") {
-          setPromoteStatus(`Saved decision to ${result.value.record.path}`);
-        } else {
-          setPromoteStatus("Could not promote decision.");
-        }
+      setPromoteDraft({
+        post,
+        title: defaultPromoteTitle(post.body),
+        commit: false,
       });
     },
-    [data.memberById, environmentId, project, promoteDecision],
+    [data.canPost, data.memberById, environmentId, project],
   );
+
+  const submitPromote = useCallback(() => {
+    if (promoteDraft === null || environmentId === null || project === null) return;
+    const actorId = [...data.memberById.values()].find(
+      (member) => member.memberType === "human",
+    )?.memberId;
+    if (actorId === undefined) {
+      setPromoteStatus("No local human identity to attribute the decision.");
+      return;
+    }
+    const title = promoteDraft.title.trim() || defaultPromoteTitle(promoteDraft.post.body);
+    setPromoteBusy(true);
+    void promoteDecision({
+      environmentId,
+      input: {
+        projectId: project.id,
+        cwd: project.workspaceRoot,
+        title,
+        body: promoteDraft.post.body,
+        origin: {
+          kind: "post",
+          postId: PostId.make(promoteDraft.post.postId),
+          channelId: TeamChannelId.make(promoteDraft.post.channelId),
+        },
+        promotedById: MemberId.make(actorId),
+        commit: promoteDraft.commit,
+      },
+    }).then((result) => {
+      setPromoteBusy(false);
+      if (result._tag === "Success") {
+        const path = result.value.record.path;
+        setPromoteStatus(
+          result.value.committed
+            ? `Committed decision to ${path}`
+            : `Saved decision to ${path} (not committed)`,
+        );
+        setPromoteDraft(null);
+      } else {
+        setPromoteStatus("Could not promote decision.");
+      }
+    });
+  }, [data.memberById, environmentId, project, promoteDecision, promoteDraft]);
 
   if (data.status !== "ready") {
     return (
@@ -285,9 +336,9 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
       item.kind === "gap" ? (
         <GapRow gap={item} />
       ) : (
-        <PostRow post={item} data={data} onPromote={handlePromote} />
+        <PostRow post={item} data={data} onPromote={openPromote} />
       ),
-    [data, handlePromote],
+    [data, openPromote],
   );
 
   // Chat-shaped layout: the post list is its own bottom-anchored scroller
@@ -363,6 +414,95 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
           </Button>
         </form>
       ) : null}
+
+      <Dialog
+        open={promoteDraft !== null}
+        onOpenChange={(open) => {
+          if (!open && !promoteBusy) setPromoteDraft(null);
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>Promote to decision</DialogTitle>
+            <DialogDescription>
+              Writes a record under <code>.repokin/decisions/</code>. Optionally create a git commit
+              limited to that file.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogPanel>
+            <form
+              id={promoteFormId}
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitPromote();
+              }}
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor={`${promoteFormId}-title`}>Title</Label>
+                <Input
+                  id={`${promoteFormId}-title`}
+                  autoFocus
+                  value={promoteDraft?.title ?? ""}
+                  onChange={(event) => {
+                    const next = event.currentTarget.value;
+                    setPromoteDraft((prev) => (prev === null ? prev : { ...prev, title: next }));
+                  }}
+                  placeholder="Decision title"
+                />
+              </div>
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5">
+                <Checkbox
+                  checked={promoteDraft?.commit ?? false}
+                  onCheckedChange={(checked) => {
+                    setPromoteDraft((prev) =>
+                      prev === null ? prev : { ...prev, commit: checked === true },
+                    );
+                  }}
+                  className="mt-0.5"
+                />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                    <GitCommitIcon className="size-3.5 text-muted-foreground" />
+                    Commit to git
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Stages only the new decision file and commits it under{" "}
+                    <code>.repokin/decisions/</code>.
+                  </span>
+                </span>
+              </label>
+              {promoteDraft !== null ? (
+                <p className="line-clamp-4 whitespace-pre-wrap rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  {promoteDraft.post.body}
+                </p>
+              ) : null}
+            </form>
+          </DialogPanel>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={promoteBusy}
+              onClick={() => setPromoteDraft(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              form={promoteFormId}
+              type="submit"
+              disabled={promoteBusy || promoteDraft === null}
+            >
+              {promoteBusy ? (
+                <Spinner className="size-3.5" />
+              ) : (
+                <FileTextIcon className="size-3.5" />
+              )}
+              {promoteDraft?.commit === true ? "Promote & commit" : "Promote"}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
     </div>
   );
 }
