@@ -1,10 +1,16 @@
+import { useAtomRefresh } from "@effect/atom-react";
 import { AgentId, HumanId, type AgentProfile, type Character } from "@t3tools/contracts/team";
 import { useCallback } from "react";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
 import { teamEnvironment } from "../../state/team";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useTeamScope } from "./teamScope";
+
+const EMPTY_ROSTER_ATOM = Atom.make(AsyncResult.initial<never, never>(false)).pipe(
+  Atom.withLabel("team-roster-actions:empty"),
+);
 
 /**
  * Write actions for the roster, homed in the Team space (R1.4 moved agent
@@ -38,6 +44,14 @@ export function useTeamRosterActions(): TeamRosterActions {
   const canWrite = environmentId !== null && project !== null;
   const cwd = project?.workspaceRoot ?? "";
 
+  // Refresh the shared roster query after a write so profile/people/home screens
+  // re-read the updated character (e.g. a changed provider) without a reload.
+  const rosterAtom =
+    environmentId === null || project === null
+      ? null
+      : teamEnvironment.roster({ environmentId, input: { cwd: project.workspaceRoot } });
+  const refreshRoster = useAtomRefresh(rosterAtom ?? EMPTY_ROSTER_ATOM);
+
   const saveAgent = useCallback(
     async (input: SaveAgentInput): Promise<boolean> => {
       if (environmentId === null || project === null) return false;
@@ -53,9 +67,12 @@ export function useTeamRosterActions(): TeamRosterActions {
         environmentId,
         input: { cwd: project.workspaceRoot, profile, commit: false },
       });
+      if (result._tag === "Success") {
+        refreshRoster();
+      }
       return result._tag === "Success";
     },
-    [environmentId, project, upsertAgent],
+    [environmentId, project, refreshRoster, upsertAgent],
   );
 
   const trustMechanics = useCallback(
