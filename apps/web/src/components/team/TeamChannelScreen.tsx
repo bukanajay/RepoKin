@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { LegendList } from "@legendapp/list/react";
 import {
   ArrowLeftIcon,
   FileDiffIcon,
@@ -102,10 +103,19 @@ function PostBody({ post }: { post: ChannelPost }) {
   }
 }
 
+function keyExtractor(post: ChannelPost) {
+  return post.postId;
+}
+
+// Item type feeds LegendList's view recycling — one recycle pool per post kind.
+function getItemType(post: ChannelPost) {
+  return post.kind;
+}
+
 function PostRow({ post, data }: { post: ChannelPost; data: ChannelData }) {
   const author = data.memberById.get(post.authorId);
   return (
-    <div className="flex flex-col gap-1.5 py-3">
+    <div className="flex flex-col gap-1.5 border-b border-border/60 py-3">
       <div className="flex items-center gap-2">
         {author !== undefined ? (
           <MemberChip
@@ -167,33 +177,53 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
     setDraft("");
   };
 
+  // Stable renderItem; PostRow is a pure render of its props, so LegendList may
+  // recycle its DOM rows safely (`recycleItems`).
+  const renderItem = useCallback(
+    ({ item }: { item: ChannelPost }) => <PostRow post={item} data={data} />,
+    [data],
+  );
+
+  // Chat-shaped layout: the post list is its own bottom-anchored scroller
+  // (virtualized for NFR-1 — smooth at 10k posts), header and composer pinned.
   return (
-    <TeamScreenShell
-      title={channel.name}
-      actions={
+    <div className="mx-auto flex h-full w-full max-w-5xl flex-col px-4 sm:px-6">
+      <div className="flex shrink-0 items-center gap-2.5 pb-2 pt-5">
+        <h1 className="text-lg font-semibold tracking-tight text-foreground">{channel.name}</h1>
         <Link
           to="/team/channels"
-          className="inline-flex items-center gap-1 rounded-md text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="ms-auto inline-flex items-center gap-1 rounded-md text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowLeftIcon className="size-3" />
           All channels
         </Link>
-      }
-    >
-      <p className="text-xs text-muted-foreground">{channel.description}</p>
-
-      <div className="flex flex-col divide-y">
-        {data.posts.map((post) => (
-          <PostRow key={post.postId} post={post} data={data} />
-        ))}
-        {data.posts.length === 0 ? (
-          <p className="py-6 text-sm text-muted-foreground">No posts yet.</p>
-        ) : null}
       </div>
+      {channel.description.length > 0 ? (
+        <p className="shrink-0 pb-2 text-xs text-muted-foreground">{channel.description}</p>
+      ) : null}
+
+      {data.posts.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-muted-foreground">No posts yet.</p>
+        </div>
+      ) : (
+        <LegendList<ChannelPost>
+          data={data.posts}
+          keyExtractor={keyExtractor}
+          getItemType={getItemType}
+          renderItem={renderItem}
+          estimatedItemSize={76}
+          recycleItems
+          alignItemsAtEnd
+          initialScrollAtEnd
+          maintainScrollAtEnd
+          className="min-h-0 flex-1 overflow-x-hidden overscroll-y-contain"
+        />
+      )}
 
       {data.canPost ? (
         <form
-          className="sticky bottom-0 flex items-center gap-2 rounded-2xl border bg-background p-2"
+          className="mb-4 mt-2 flex shrink-0 items-center gap-2 rounded-2xl border bg-background p-2"
           onSubmit={(event) => {
             event.preventDefault();
             submitDraft();
@@ -212,6 +242,6 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
           </Button>
         </form>
       ) : null}
-    </TeamScreenShell>
+    </div>
   );
 }
