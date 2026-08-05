@@ -116,6 +116,7 @@ import * as GitHubCli from "./sourceControl/GitHubCli.ts";
 import * as GitLabCli from "./sourceControl/GitLabCli.ts";
 import * as SourceControlProviderRegistry from "./sourceControl/SourceControlProviderRegistry.ts";
 import { upsertTeamAgent } from "./team/AgentUpsert.ts";
+import { selectChannelPostWindow, summarizeChannelPosts } from "./team/channelPosts.ts";
 import { previewTeamInstructions } from "./team/InstructionPreview.ts";
 import * as CharacterCompiler from "./team/Layers/CharacterCompiler.ts";
 import * as RosterSyncLayer from "./team/Layers/RosterSync.ts";
@@ -1944,9 +1945,14 @@ const makeWsRpcLayer = (
               const teamEngine = yield* TeamEngineService;
               const presenceResolver = yield* TeamPresenceResolver;
               const readModel = yield* teamEngine.getReadModel;
-              const project =
+              const fullProject =
                 readModel.projects.find((candidate) => candidate.projectId === input.projectId) ??
                 null;
+              // Posts are served windowed via team.readChannelPosts; keep them
+              // out of this payload so a busy channel doesn't bloat every read.
+              const channelStats =
+                fullProject === null ? [] : summarizeChannelPosts(fullProject.posts);
+              const project = fullProject === null ? null : { ...fullProject, posts: [] };
               const nowMs = yield* Clock.currentTimeMillis;
               const presences =
                 project === null
@@ -1972,7 +1978,31 @@ const makeWsRpcLayer = (
               return {
                 snapshotSequence: readModel.snapshotSequence,
                 project,
+                channelStats,
                 presences,
+              };
+            }),
+            { "rpc.aggregate": "team" },
+          ),
+        [WS_METHODS.teamReadChannelPosts]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.teamReadChannelPosts,
+            Effect.gen(function* () {
+              const teamEngine = yield* TeamEngineService;
+              const readModel = yield* teamEngine.getReadModel;
+              const project =
+                readModel.projects.find((candidate) => candidate.projectId === input.projectId) ??
+                null;
+              const window = selectChannelPostWindow(
+                project?.posts ?? [],
+                input.channelId,
+                input.limit,
+                input.before,
+              );
+              return {
+                posts: window.posts,
+                hasMoreBefore: window.hasMoreBefore,
+                snapshotSequence: readModel.snapshotSequence,
               };
             }),
             { "rpc.aggregate": "team" },

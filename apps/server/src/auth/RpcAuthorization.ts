@@ -81,6 +81,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.teamPreviewInstructions]: AuthOrchestrationReadScope,
   [WS_METHODS.teamSyncRoster]: AuthOrchestrationOperateScope,
   [WS_METHODS.teamReadLocalState]: AuthOrchestrationReadScope,
+  [WS_METHODS.teamReadChannelPosts]: AuthOrchestrationReadScope,
   [WS_METHODS.teamDispatchCommand]: AuthOrchestrationOperateScope,
   [WS_METHODS.teamHeartbeatHumanPresence]: AuthOrchestrationOperateScope,
   [WS_METHODS.terminalOpen]: AuthTerminalOperateScope,

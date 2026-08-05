@@ -1762,9 +1762,29 @@ export const TeamMemberPresenceEntry = Schema.Struct({
 });
 export type TeamMemberPresenceEntry = typeof TeamMemberPresenceEntry.Type;
 
+/**
+ * Per-channel post rollup, computed server-side so the channel list never has
+ * to ship every post. Lives on the local-state result alongside the (now
+ * posts-less) project.
+ */
+export const TeamChannelPostStats = Schema.Struct({
+  channelId: ChannelId,
+  postCount: NonNegativeInt,
+  lastPostAt: Schema.NullOr(IsoDateTime),
+}).annotate({ description: "Post count and last-activity for one channel." });
+export type TeamChannelPostStats = typeof TeamChannelPostStats.Type;
+
 export const TeamLocalStateReadResult = Schema.Struct({
   snapshotSequence: NonNegativeInt,
+  // The project's `posts` array is intentionally empty here — channel posts are
+  // served windowed via `team.readChannelPosts` so this payload stays small for
+  // busy channels (NFR-1). Use `channelStats` for list-level counts.
   project: Schema.NullOr(TeamProjectReadModel),
+  channelStats: Schema.Array(TeamChannelPostStats).pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed([] as TeamChannelPostStats[] as readonly TeamChannelPostStats[]),
+    ),
+  ),
   // Presence for every member of `project`, resolved locally or (for a
   // roster agent whose home environment differs from this one) via the
   // relay (M3.3). Never surfaced when `project` is null.
@@ -1773,6 +1793,31 @@ export const TeamLocalStateReadResult = Schema.Struct({
   description: "Environment-local team coordination state for one project.",
 });
 export type TeamLocalStateReadResult = typeof TeamLocalStateReadResult.Type;
+
+/** Default number of posts returned per `team.readChannelPosts` window. */
+export const TEAM_CHANNEL_POSTS_PAGE_SIZE = 50;
+
+export const TeamChannelPostsReadInput = Schema.Struct({
+  projectId: ProjectId,
+  channelId: ChannelId,
+  limit: NonNegativeInt,
+  // Cursor: return the newest `limit` posts strictly older than this post. Null
+  // requests the newest window (channel tail).
+  before: Schema.NullOr(PostId),
+}).annotate({
+  description: "Read one window of a channel's posts, newest-first paginated.",
+});
+export type TeamChannelPostsReadInput = typeof TeamChannelPostsReadInput.Type;
+
+export const TeamChannelPostsReadResult = Schema.Struct({
+  // Ascending (oldest→newest) within the window, so the client can prepend when
+  // paging older.
+  posts: Schema.Array(TeamPostReadModel),
+  // Whether older posts exist before `posts[0]` (drives fetch-older on scroll).
+  hasMoreBefore: Schema.Boolean,
+  snapshotSequence: NonNegativeInt,
+}).annotate({ description: "One newest-first window of a channel's posts." });
+export type TeamChannelPostsReadResult = typeof TeamChannelPostsReadResult.Type;
 
 export const TeamCommandDispatchResult = Schema.Struct({
   sequence: NonNegativeInt,

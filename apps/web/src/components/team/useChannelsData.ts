@@ -118,23 +118,23 @@ export function useChannelsData(): ChannelsData {
       ...roster.data.humans.map((human) => human.id as string),
       ...roster.data.agents.map((agent) => agent.id as string),
     ];
-    const posts = localState.data.project?.posts ?? [];
+    // Post counts/last-activity are rolled up server-side so the list never
+    // ships posts (channels with no posts are absent → default to zero).
+    const statsByChannel = new Map(
+      (localState.data.channelStats ?? []).map((stat) => [stat.channelId as string, stat]),
+    );
 
     const channels: ChannelListItem[] = (localState.data.project?.channels ?? []).map(
       (declaration) => {
-        const channelPosts = posts.filter((post) => post.channelId === declaration.id);
-        const lastPostAt = channelPosts.reduce<string | null>(
-          (latest, post) => (latest === null || post.postedAt > latest ? post.postedAt : latest),
-          null,
-        );
+        const stats = statsByChannel.get(declaration.id);
         return {
           channelId: declaration.id,
           slug: declaration.id,
           name: declaration.name,
           description: declaration.description ?? "",
           memberIds: declaration.members ?? allMemberIds,
-          postCount: channelPosts.length,
-          lastPostAt,
+          postCount: stats?.postCount ?? 0,
+          lastPostAt: stats?.lastPostAt ?? null,
         };
       },
     );

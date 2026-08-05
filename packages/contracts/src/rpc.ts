@@ -53,6 +53,8 @@ import {
   TeamAgentUpsertError,
   TeamAgentUpsertInput,
   TeamAgentUpsertResult,
+  TeamChannelPostsReadInput,
+  TeamChannelPostsReadResult,
   TeamCommand,
   TeamCommandDispatchResult,
   TeamDispatchCommandError,
@@ -227,6 +229,7 @@ export const WS_METHODS = {
   teamPreviewInstructions: "team.previewInstructions",
   teamSyncRoster: "team.syncRoster",
   teamReadLocalState: "team.readLocalState",
+  teamReadChannelPosts: "team.readChannelPosts",
   teamDispatchCommand: "team.dispatchCommand",
   teamHeartbeatHumanPresence: "team.heartbeatHumanPresence",
 
@@ -634,6 +637,12 @@ export const WsTeamReadLocalStateRpc = Rpc.make(WS_METHODS.teamReadLocalState, {
   error: EnvironmentAuthorizationError,
 });
 
+export const WsTeamReadChannelPostsRpc = Rpc.make(WS_METHODS.teamReadChannelPosts, {
+  payload: TeamChannelPostsReadInput,
+  success: TeamChannelPostsReadResult,
+  error: EnvironmentAuthorizationError,
+});
+
 export const WsTeamDispatchCommandRpc = Rpc.make(WS_METHODS.teamDispatchCommand, {
   payload: TeamCommand,
   success: TeamCommandDispatchResult,
@@ -916,6 +925,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsTeamPreviewInstructionsRpc,
   WsTeamSyncRosterRpc,
   WsTeamReadLocalStateRpc,
+  WsTeamReadChannelPostsRpc,
   WsTeamDispatchCommandRpc,
   WsTeamHeartbeatHumanPresenceRpc,
   WsTerminalOpenRpc,

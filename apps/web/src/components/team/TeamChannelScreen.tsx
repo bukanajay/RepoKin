@@ -204,7 +204,14 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
 
       {data.posts.length === 0 ? (
         <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-muted-foreground">No posts yet.</p>
+          {data.postsPending ? (
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Spinner className="size-4" />
+              Loading posts…
+            </span>
+          ) : (
+            <p className="text-sm text-muted-foreground">No posts yet.</p>
+          )}
         </div>
       ) : (
         <LegendList<ChannelPost>
@@ -217,6 +224,11 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
           alignItemsAtEnd
           initialScrollAtEnd
           maintainScrollAtEnd
+          // Older posts load at the top; keep the viewport stable when they
+          // prepend so the reader doesn't jump.
+          maintainVisibleContentPosition
+          onStartReached={() => data.loadOlder()}
+          onStartReachedThreshold={0.5}
           className="min-h-0 flex-1 overflow-x-hidden overscroll-y-contain"
         />
       )}
