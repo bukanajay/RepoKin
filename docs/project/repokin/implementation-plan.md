@@ -301,9 +301,10 @@ strictly trust-gated (PRD §6.6).
 ### R4.2 Runner
 
 - `TeamDutyReactor`: home environment only; confirmed + schedule match →
-  post one terminal event card to the report channel (FR-16.3 / FR-12.6).
-  Missed windows post an explicit miss event (FR-16.2). Full thread start
-  for duty goals reuses delegation plumbing as a follow-up.
+  create board task + start agent thread (delegation model path) with duty
+  goal as prompt; `TeamDelegationReportReactor` posts a `task-card` on
+  settle (FR-16.3 / FR-12.6). Missed windows post an explicit miss event
+  (FR-16.2).
 
 ### R4.3 UI
 
@@ -315,6 +316,13 @@ strictly trust-gated (PRD §6.6).
 - `multiEnv.simulation.test.ts`: two logical envs exchange signed channel
   posts (senderSeq + gaps) and work-signal snapshots (overlap projection)
   without two physical machines.
+
+### R4.5 Decision records + pulse (FR-17 / FR-19)
+
+- Promote channel posts → `.repokin/decisions/<slug>.md` (local write;
+  optional commit).
+- Team nav: Decisions list + Pulse (git history, human vs agent trailers,
+  directory hotspots).
 
 ---
 

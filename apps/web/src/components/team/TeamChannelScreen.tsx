@@ -1,9 +1,11 @@
+import { MemberId, PostId, ChannelId as TeamChannelId } from "@t3tools/contracts/team";
 import { useCallback, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { LegendList } from "@legendapp/list/react";
 import {
   ArrowLeftIcon,
   FileDiffIcon,
+  FileTextIcon,
   KanbanSquareIcon,
   MessageSquareIcon,
   NewspaperIcon,
@@ -12,6 +14,8 @@ import {
 } from "lucide-react";
 
 import { formatRelativeTimeLabel } from "../../timestampFormat";
+import { teamEnvironment } from "../../state/team";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -20,6 +24,7 @@ import { MemberChip } from "./MemberChip";
 import { TeamCard } from "./TeamCard";
 import { TeamScreenShell } from "./TeamScreenShell";
 import { deriveMemberAccentColor } from "./memberIdentity";
+import { useTeamScope } from "./teamScope";
 import {
   useChannelData,
   type ChannelData,
@@ -143,7 +148,15 @@ function GapRow({ gap }: { gap: ChannelGap }) {
   );
 }
 
-function PostRow({ post, data }: { post: ChannelPost; data: ChannelData }) {
+function PostRow({
+  post,
+  data,
+  onPromote,
+}: {
+  post: ChannelPost;
+  data: ChannelData;
+  onPromote?: (post: ChannelPost) => void;
+}) {
   const author = data.memberById.get(post.authorId);
   return (
     <div className="flex flex-col gap-1.5 border-b border-border/60 py-3">
@@ -163,6 +176,18 @@ function PostRow({ post, data }: { post: ChannelPost; data: ChannelData }) {
         >
           {formatRelativeTimeLabel(post.postedAt)}
         </time>
+        {post.kind === "text" && onPromote !== undefined ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="shrink-0"
+            title="Promote to decision record"
+            onClick={() => onPromote(post)}
+          >
+            <FileTextIcon className="size-3.5" />
+          </Button>
+        ) : null}
       </div>
       <div className="ps-8">
         <PostBody post={post} />
@@ -173,7 +198,52 @@ function PostRow({ post, data }: { post: ChannelPost; data: ChannelData }) {
 
 export function TeamChannelScreen({ channelId }: { channelId: string }) {
   const data = useChannelData(channelId);
+  const { environmentId, project } = useTeamScope();
+  const promoteDecision = useAtomCommand(teamEnvironment.promoteDecision, "promote team decision");
   const [draft, setDraft] = useState("");
+  const [promoteStatus, setPromoteStatus] = useState<string | null>(null);
+
+  const handlePromote = useCallback(
+    (post: ChannelPost) => {
+      if (environmentId === null || project === null || post.kind !== "text") return;
+      const actorId = [...data.memberById.values()].find(
+        (member) => member.memberType === "human",
+      )?.memberId;
+      if (actorId === undefined || !data.canPost) {
+        setPromoteStatus("No local human identity to attribute the decision.");
+        return;
+      }
+      const title =
+        post.body
+          .split("\n")
+          .find((line) => line.trim().length > 0)
+          ?.trim()
+          .slice(0, 80) ?? "Decision";
+      void promoteDecision({
+        environmentId,
+        input: {
+          projectId: project.id,
+          cwd: project.workspaceRoot,
+          title,
+          body: post.body,
+          origin: {
+            kind: "post",
+            postId: PostId.make(post.postId),
+            channelId: TeamChannelId.make(post.channelId),
+          },
+          promotedById: MemberId.make(actorId),
+          commit: false,
+        },
+      }).then((result) => {
+        if (result._tag === "Success") {
+          setPromoteStatus(`Saved decision to ${result.value.record.path}`);
+        } else {
+          setPromoteStatus("Could not promote decision.");
+        }
+      });
+    },
+    [data.memberById, environmentId, project, promoteDecision],
+  );
 
   if (data.status !== "ready") {
     return (
@@ -212,8 +282,12 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
   // recycle DOM rows safely (`recycleItems`).
   const renderItem = useCallback(
     ({ item }: { item: ChannelTimelineItem }) =>
-      item.kind === "gap" ? <GapRow gap={item} /> : <PostRow post={item} data={data} />,
-    [data],
+      item.kind === "gap" ? (
+        <GapRow gap={item} />
+      ) : (
+        <PostRow post={item} data={data} onPromote={handlePromote} />
+      ),
+    [data, handlePromote],
   );
 
   // Chat-shaped layout: the post list is its own bottom-anchored scroller
@@ -232,6 +306,9 @@ export function TeamChannelScreen({ channelId }: { channelId: string }) {
       </div>
       {channel.description.length > 0 ? (
         <p className="shrink-0 pb-2 text-xs text-muted-foreground">{channel.description}</p>
+      ) : null}
+      {promoteStatus !== null ? (
+        <p className="shrink-0 pb-2 text-xs text-muted-foreground">{promoteStatus}</p>
       ) : null}
 
       {data.timeline.length === 0 ? (

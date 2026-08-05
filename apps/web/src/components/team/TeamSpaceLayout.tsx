@@ -1,5 +1,7 @@
 import {
   ActivityIcon,
+  FileTextIcon,
+  HeartPulseIcon,
   HomeIcon,
   HashIcon,
   InboxIcon,
@@ -24,6 +26,8 @@ const TEAM_NAV_ITEMS = [
   { to: "/team/channels", label: "Channels", icon: HashIcon },
   { to: "/team/board", label: "Board", icon: KanbanSquareIcon },
   { to: "/team/map", label: "Map", icon: MapIcon },
+  { to: "/team/decisions", label: "Decisions", icon: FileTextIcon },
+  { to: "/team/pulse", label: "Pulse", icon: HeartPulseIcon },
 ] as const;
 
 function TeamProjectSelector() {

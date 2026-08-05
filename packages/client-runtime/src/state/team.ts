@@ -59,6 +59,20 @@ export function createTeamEnvironmentAtoms<R, E>(
       label: "environment-data:team:standup-digest",
       tag: WS_METHODS.teamPostStandupDigest,
     }),
+    promoteDecision: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:team:promote-decision",
+      tag: WS_METHODS.teamPromoteDecision,
+    }),
+    listDecisions: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:team:list-decisions",
+      tag: WS_METHODS.teamListDecisions,
+      staleTimeMs: 5_000,
+    }),
+    repoPulse: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:team:repo-pulse",
+      tag: WS_METHODS.teamReadRepoPulse,
+      staleTimeMs: 30_000,
+    }),
     dispatchCommand: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:team:dispatch-command",
       tag: WS_METHODS.teamDispatchCommand,

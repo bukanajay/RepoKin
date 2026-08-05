@@ -970,6 +970,9 @@ export type TeamRequestRespondCommand = typeof TeamRequestRespondCommand.Type;
 
 /** Subdirectory of channel declarations under {@link REPOKIN_DIR_NAME} (T0, git-resident). */
 export const TEAM_CHANNELS_DIR_NAME = "channels";
+
+/** Subdirectory of decision records under {@link REPOKIN_DIR_NAME} (T0, git-resident). */
+export const TEAM_DECISIONS_DIR_NAME = "decisions";
 export const CHANNEL_DECLARATION_SCHEMA_URL = "https://repokin.dev/schema/channel.json";
 
 // ---------------------------------------------------------------------------
@@ -2019,3 +2022,114 @@ export class TeamStandupDigestError extends Schema.TaggedErrorClass<TeamStandupD
     cause: Schema.optional(Schema.Defect()),
   },
 ) {}
+
+// ---------------------------------------------------------------------------
+// R4 — Decision records (FR-17) + Repo pulse (FR-19)
+// ---------------------------------------------------------------------------
+
+export const DecisionId = TrimmedNonEmptyString.pipe(Schema.brand("DecisionId"));
+export type DecisionId = typeof DecisionId.Type;
+
+export const TeamDecisionOrigin = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("post"),
+    postId: PostId,
+    channelId: ChannelId,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("task"),
+    taskId: TaskId,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("thread"),
+    threadId: ThreadId,
+  }),
+]).annotate({ description: "What was promoted into a decision record." });
+export type TeamDecisionOrigin = typeof TeamDecisionOrigin.Type;
+
+export const TeamDecisionRecord = Schema.Struct({
+  id: DecisionId,
+  title: TrimmedNonEmptyString,
+  body: Schema.String,
+  origin: TeamDecisionOrigin,
+  promotedById: MemberId,
+  promotedAt: IsoDateTime,
+  path: TrimmedNonEmptyString,
+}).annotate({
+  description: "A decision record under .repokin/decisions/ (FR-17.1).",
+});
+export type TeamDecisionRecord = typeof TeamDecisionRecord.Type;
+
+export const TeamPromoteDecisionInput = Schema.Struct({
+  projectId: ProjectId,
+  cwd: TrimmedNonEmptyString,
+  title: TrimmedNonEmptyString,
+  body: Schema.String,
+  origin: TeamDecisionOrigin,
+  promotedById: MemberId,
+  /** Optional slug; derived from title when omitted. */
+  slug: Schema.optionalKey(trimmedNonEmpty({ description: "Filename stem under decisions/." })),
+  commit: Schema.optionalKey(Schema.Boolean),
+}).annotate({ description: "Promote origin content to a committed decision record." });
+export type TeamPromoteDecisionInput = typeof TeamPromoteDecisionInput.Type;
+
+export const TeamPromoteDecisionResult = Schema.Struct({
+  record: TeamDecisionRecord,
+  committed: Schema.Boolean,
+}).annotate({ description: "Decision record write result." });
+export type TeamPromoteDecisionResult = typeof TeamPromoteDecisionResult.Type;
+
+export class TeamPromoteDecisionError extends Schema.TaggedErrorClass<TeamPromoteDecisionError>()(
+  "TeamPromoteDecisionError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+export const TeamListDecisionsInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+}).annotate({ description: "List decision records for a workspace." });
+export type TeamListDecisionsInput = typeof TeamListDecisionsInput.Type;
+
+export const TeamListDecisionsResult = Schema.Struct({
+  decisions: Schema.Array(TeamDecisionRecord),
+}).annotate({ description: "Decision records present under .repokin/decisions/." });
+export type TeamListDecisionsResult = typeof TeamListDecisionsResult.Type;
+
+export const TeamRepoPulseContributor = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  kind: Schema.Literals(["human", "agent", "unknown"]),
+  commits: NonNegativeInt,
+  additions: NonNegativeInt,
+  deletions: NonNegativeInt,
+}).annotate({ description: "One contributor bucket in the repo pulse." });
+export type TeamRepoPulseContributor = typeof TeamRepoPulseContributor.Type;
+
+export const TeamRepoPulseHotspot = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  touches: NonNegativeInt,
+  humanTouches: NonNegativeInt,
+  agentTouches: NonNegativeInt,
+}).annotate({ description: "A directory-level activity hotspot." });
+export type TeamRepoPulseHotspot = typeof TeamRepoPulseHotspot.Type;
+
+export const TeamRepoPulseReadInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  /** Days of history to scan (default 30). */
+  days: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 365 }))),
+}).annotate({ description: "Read repo pulse for a workspace (FR-19.1)." });
+export type TeamRepoPulseReadInput = typeof TeamRepoPulseReadInput.Type;
+
+export const TeamRepoPulseReadResult = Schema.Struct({
+  since: IsoDateTime,
+  until: IsoDateTime,
+  humans: Schema.Array(TeamRepoPulseContributor),
+  agents: Schema.Array(TeamRepoPulseContributor),
+  unknown: Schema.Array(TeamRepoPulseContributor),
+  hotspots: Schema.Array(TeamRepoPulseHotspot),
+  totalCommits: NonNegativeInt,
+}).annotate({
+  description: "Contribution pulse split human vs agent from Git history (FR-19.1).",
+});
+export type TeamRepoPulseReadResult = typeof TeamRepoPulseReadResult.Type;

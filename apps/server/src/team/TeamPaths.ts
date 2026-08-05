@@ -9,6 +9,7 @@
 import {
   REPOKIN_DIR_NAME,
   TEAM_AGENTS_DIR_NAME,
+  TEAM_DECISIONS_DIR_NAME,
   TEAM_FILE_NAME,
   TEAM_HUMANS_DIR_NAME,
 } from "@t3tools/contracts/team";
@@ -36,6 +37,15 @@ export const humansDir = (workspaceRoot: string): string =>
 
 export const agentsDir = (workspaceRoot: string): string =>
   joinPosix(repokinDir(workspaceRoot), TEAM_AGENTS_DIR_NAME);
+
+export const decisionsDir = (workspaceRoot: string): string =>
+  joinPosix(repokinDir(workspaceRoot), TEAM_DECISIONS_DIR_NAME);
+
+export const decisionRecordPath = (workspaceRoot: string, slug: string): string =>
+  joinPosix(decisionsDir(workspaceRoot), `${slug}.md`);
+
+export const decisionRecordPathRelative = (slug: string): string =>
+  joinPosix(REPOKIN_DIR_NAME, TEAM_DECISIONS_DIR_NAME, `${slug}.md`);
 
 export const humanProfilePath = (workspaceRoot: string, slug: string): string =>
   joinPosix(humansDir(workspaceRoot), `${slug}.json`);

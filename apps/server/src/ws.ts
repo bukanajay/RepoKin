@@ -127,8 +127,17 @@ import { RosterSync } from "./team/Services/RosterSync.ts";
 import { TeamEngineService } from "./team/Services/TeamEngine.ts";
 import { TeamPresenceResolver } from "./team/Services/TeamPresenceResolver.ts";
 import { TeamWorkSignals } from "./team/Services/TeamWorkSignals.ts";
+import {
+  formatDecisionMarkdown,
+  listDecisionRecords,
+  slugifyDecisionTitle,
+  writeDecisionRecord,
+} from "./team/decisions.ts";
+import { readRepoPulse } from "./team/repoPulse.ts";
 import { postStandupDigest } from "./team/standUp.ts";
 import { updateTeamFile } from "./team/TeamFileUpdate.ts";
+import { TeamFileStore as TeamFileStoreService } from "./team/Services/TeamFileStore.ts";
+import { TeamPromoteDecisionError } from "@t3tools/contracts/team";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
 import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
@@ -2033,6 +2042,70 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.teamPostStandupDigest, postStandupDigest(input), {
             "rpc.aggregate": "team",
           }),
+        [WS_METHODS.teamPromoteDecision]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.teamPromoteDecision,
+            Effect.gen(function* () {
+              const slug = input.slug?.trim() || slugifyDecisionTitle(input.title);
+              const promotedAt = DateTime.formatIso(yield* DateTime.now);
+              const markdown = formatDecisionMarkdown({
+                id: slug,
+                title: input.title,
+                body: input.body,
+                origin: input.origin,
+                promotedById: input.promotedById,
+                promotedAt,
+              });
+              const written = yield* writeDecisionRecord({
+                workspaceRoot: input.cwd,
+                slug,
+                markdown,
+                commit: input.commit === true,
+                commitMessage: `docs(decisions): ${input.title}`,
+              }).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new TeamPromoteDecisionError({
+                      message: "Failed to write decision record.",
+                      cause,
+                    }),
+                ),
+              );
+              return {
+                record: {
+                  id: slug as never,
+                  title: input.title,
+                  body: input.body.trim(),
+                  origin: input.origin,
+                  promotedById: input.promotedById,
+                  promotedAt,
+                  path: written.relativePath,
+                },
+                committed: written.committed,
+              };
+            }),
+            { "rpc.aggregate": "team" },
+          ),
+        [WS_METHODS.teamListDecisions]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.teamListDecisions,
+            listDecisionRecords(input.cwd).pipe(Effect.map((decisions) => ({ decisions }))),
+            { "rpc.aggregate": "team" },
+          ),
+        [WS_METHODS.teamReadRepoPulse]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.teamReadRepoPulse,
+            Effect.gen(function* () {
+              const teamFileStore = yield* TeamFileStoreService;
+              const roster = yield* teamFileStore.readRoster(input.cwd);
+              return yield* readRepoPulse({
+                cwd: input.cwd,
+                days: input.days ?? 30,
+                roster,
+              });
+            }),
+            { "rpc.aggregate": "team" },
+          ),
         [WS_METHODS.teamHeartbeatHumanPresence]: () =>
           observeRpcEffect(
             WS_METHODS.teamHeartbeatHumanPresence,

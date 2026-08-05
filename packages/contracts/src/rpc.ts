@@ -77,6 +77,13 @@ import {
   TeamStandupDigestError,
   TeamStandupDigestInput,
   TeamStandupDigestResult,
+  TeamPromoteDecisionError,
+  TeamPromoteDecisionInput,
+  TeamPromoteDecisionResult,
+  TeamListDecisionsInput,
+  TeamListDecisionsResult,
+  TeamRepoPulseReadInput,
+  TeamRepoPulseReadResult,
 } from "./team.ts";
 import { KeybindingsConfigError } from "./keybindings.ts";
 import {
@@ -237,6 +244,9 @@ export const WS_METHODS = {
   teamReadChannelPosts: "team.readChannelPosts",
   teamReadWorkMap: "team.readWorkMap",
   teamPostStandupDigest: "team.postStandupDigest",
+  teamPromoteDecision: "team.promoteDecision",
+  teamListDecisions: "team.listDecisions",
+  teamReadRepoPulse: "team.readRepoPulse",
   teamDispatchCommand: "team.dispatchCommand",
   teamHeartbeatHumanPresence: "team.heartbeatHumanPresence",
 
@@ -662,6 +672,24 @@ export const WsTeamPostStandupDigestRpc = Rpc.make(WS_METHODS.teamPostStandupDig
   error: Schema.Union([TeamStandupDigestError, EnvironmentAuthorizationError]),
 });
 
+export const WsTeamPromoteDecisionRpc = Rpc.make(WS_METHODS.teamPromoteDecision, {
+  payload: TeamPromoteDecisionInput,
+  success: TeamPromoteDecisionResult,
+  error: Schema.Union([TeamPromoteDecisionError, EnvironmentAuthorizationError]),
+});
+
+export const WsTeamListDecisionsRpc = Rpc.make(WS_METHODS.teamListDecisions, {
+  payload: TeamListDecisionsInput,
+  success: TeamListDecisionsResult,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsTeamReadRepoPulseRpc = Rpc.make(WS_METHODS.teamReadRepoPulse, {
+  payload: TeamRepoPulseReadInput,
+  success: TeamRepoPulseReadResult,
+  error: EnvironmentAuthorizationError,
+});
+
 export const WsTeamDispatchCommandRpc = Rpc.make(WS_METHODS.teamDispatchCommand, {
   payload: TeamCommand,
   success: TeamCommandDispatchResult,
@@ -947,6 +975,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsTeamReadChannelPostsRpc,
   WsTeamReadWorkMapRpc,
   WsTeamPostStandupDigestRpc,
+  WsTeamPromoteDecisionRpc,
+  WsTeamListDecisionsRpc,
+  WsTeamReadRepoPulseRpc,
   WsTeamDispatchCommandRpc,
   WsTeamHeartbeatHumanPresenceRpc,
   WsTerminalOpenRpc,

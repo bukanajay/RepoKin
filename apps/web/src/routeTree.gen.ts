@@ -16,9 +16,11 @@ import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ChatRouteImport } from './routes/_chat'
 import { Route as TeamIndexRouteImport } from './routes/team.index'
 import { Route as ChatIndexRouteImport } from './routes/_chat.index'
+import { Route as TeamPulseRouteImport } from './routes/team.pulse'
 import { Route as TeamPeopleRouteImport } from './routes/team.people'
 import { Route as TeamMapRouteImport } from './routes/team.map'
 import { Route as TeamInboxRouteImport } from './routes/team.inbox'
+import { Route as TeamDecisionsRouteImport } from './routes/team.decisions'
 import { Route as TeamChannelsRouteImport } from './routes/team.channels'
 import { Route as TeamBoardRouteImport } from './routes/team.board'
 import { Route as TeamActivityRouteImport } from './routes/team.activity'
@@ -74,6 +76,11 @@ const ChatIndexRoute = ChatIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ChatRoute,
 } as any)
+const TeamPulseRoute = TeamPulseRouteImport.update({
+  id: '/pulse',
+  path: '/pulse',
+  getParentRoute: () => TeamRoute,
+} as any)
 const TeamPeopleRoute = TeamPeopleRouteImport.update({
   id: '/people',
   path: '/people',
@@ -87,6 +94,11 @@ const TeamMapRoute = TeamMapRouteImport.update({
 const TeamInboxRoute = TeamInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => TeamRoute,
+} as any)
+const TeamDecisionsRoute = TeamDecisionsRouteImport.update({
+  id: '/decisions',
+  path: '/decisions',
   getParentRoute: () => TeamRoute,
 } as any)
 const TeamChannelsRoute = TeamChannelsRouteImport.update({
@@ -211,9 +223,11 @@ export interface FileRoutesByFullPath {
   '/team/activity': typeof TeamActivityRoute
   '/team/board': typeof TeamBoardRoute
   '/team/channels': typeof TeamChannelsRouteWithChildren
+  '/team/decisions': typeof TeamDecisionsRoute
   '/team/inbox': typeof TeamInboxRoute
   '/team/map': typeof TeamMapRoute
   '/team/people': typeof TeamPeopleRouteWithChildren
+  '/team/pulse': typeof TeamPulseRoute
   '/team/': typeof TeamIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
   '/draft/$draftId': typeof ChatDraftDraftIdRoute
@@ -239,8 +253,10 @@ export interface FileRoutesByTo {
   '/settings/source-control': typeof SettingsSourceControlRoute
   '/team/activity': typeof TeamActivityRoute
   '/team/board': typeof TeamBoardRoute
+  '/team/decisions': typeof TeamDecisionsRoute
   '/team/inbox': typeof TeamInboxRoute
   '/team/map': typeof TeamMapRoute
+  '/team/pulse': typeof TeamPulseRoute
   '/': typeof ChatIndexRoute
   '/team': typeof TeamIndexRoute
   '/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -271,9 +287,11 @@ export interface FileRoutesById {
   '/team/activity': typeof TeamActivityRoute
   '/team/board': typeof TeamBoardRoute
   '/team/channels': typeof TeamChannelsRouteWithChildren
+  '/team/decisions': typeof TeamDecisionsRoute
   '/team/inbox': typeof TeamInboxRoute
   '/team/map': typeof TeamMapRoute
   '/team/people': typeof TeamPeopleRouteWithChildren
+  '/team/pulse': typeof TeamPulseRoute
   '/_chat/': typeof ChatIndexRoute
   '/team/': typeof TeamIndexRoute
   '/_chat/$environmentId/$threadId': typeof ChatEnvironmentIdThreadIdRoute
@@ -305,9 +323,11 @@ export interface FileRouteTypes {
     | '/team/activity'
     | '/team/board'
     | '/team/channels'
+    | '/team/decisions'
     | '/team/inbox'
     | '/team/map'
     | '/team/people'
+    | '/team/pulse'
     | '/team/'
     | '/$environmentId/$threadId'
     | '/draft/$draftId'
@@ -333,8 +353,10 @@ export interface FileRouteTypes {
     | '/settings/source-control'
     | '/team/activity'
     | '/team/board'
+    | '/team/decisions'
     | '/team/inbox'
     | '/team/map'
+    | '/team/pulse'
     | '/'
     | '/team'
     | '/$environmentId/$threadId'
@@ -364,9 +386,11 @@ export interface FileRouteTypes {
     | '/team/activity'
     | '/team/board'
     | '/team/channels'
+    | '/team/decisions'
     | '/team/inbox'
     | '/team/map'
     | '/team/people'
+    | '/team/pulse'
     | '/_chat/'
     | '/team/'
     | '/_chat/$environmentId/$threadId'
@@ -437,6 +461,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatIndexRouteImport
       parentRoute: typeof ChatRoute
     }
+    '/team/pulse': {
+      id: '/team/pulse'
+      path: '/pulse'
+      fullPath: '/team/pulse'
+      preLoaderRoute: typeof TeamPulseRouteImport
+      parentRoute: typeof TeamRoute
+    }
     '/team/people': {
       id: '/team/people'
       path: '/people'
@@ -456,6 +487,13 @@ declare module '@tanstack/react-router' {
       path: '/inbox'
       fullPath: '/team/inbox'
       preLoaderRoute: typeof TeamInboxRouteImport
+      parentRoute: typeof TeamRoute
+    }
+    '/team/decisions': {
+      id: '/team/decisions'
+      path: '/decisions'
+      fullPath: '/team/decisions'
+      preLoaderRoute: typeof TeamDecisionsRouteImport
       parentRoute: typeof TeamRoute
     }
     '/team/channels': {
@@ -677,9 +715,11 @@ interface TeamRouteChildren {
   TeamActivityRoute: typeof TeamActivityRoute
   TeamBoardRoute: typeof TeamBoardRoute
   TeamChannelsRoute: typeof TeamChannelsRouteWithChildren
+  TeamDecisionsRoute: typeof TeamDecisionsRoute
   TeamInboxRoute: typeof TeamInboxRoute
   TeamMapRoute: typeof TeamMapRoute
   TeamPeopleRoute: typeof TeamPeopleRouteWithChildren
+  TeamPulseRoute: typeof TeamPulseRoute
   TeamIndexRoute: typeof TeamIndexRoute
 }
 
@@ -687,9 +727,11 @@ const TeamRouteChildren: TeamRouteChildren = {
   TeamActivityRoute: TeamActivityRoute,
   TeamBoardRoute: TeamBoardRoute,
   TeamChannelsRoute: TeamChannelsRouteWithChildren,
+  TeamDecisionsRoute: TeamDecisionsRoute,
   TeamInboxRoute: TeamInboxRoute,
   TeamMapRoute: TeamMapRoute,
   TeamPeopleRoute: TeamPeopleRouteWithChildren,
+  TeamPulseRoute: TeamPulseRoute,
   TeamIndexRoute: TeamIndexRoute,
 }
 
