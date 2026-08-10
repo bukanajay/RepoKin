@@ -2832,6 +2832,7 @@ export default function Sidebar() {
               `Delete ${count} thread${count === 1 ? "" : "s"}?`,
               "This permanently clears conversation history for these threads.",
             ].join("\n"),
+            { variant: "destructive" },
           ),
         );
         if (confirmed._tag === "Failure" || !confirmed.value) return;
@@ -3034,6 +3035,7 @@ export default function Sidebar() {
                     `Delete thread "${thread.title}"?`,
                     "This permanently clears conversation history for this thread.",
                   ].join("\n"),
+                  { variant: "destructive" },
                 ),
               );
               if (confirmed._tag === "Failure" || !confirmed.value) return;
